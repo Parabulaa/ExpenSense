@@ -114,7 +114,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 4,
     paddingVertical: 9,
-    paddingHorizontal: 2,
+    // Every horizontal pixel here comes out of the label's width, so the tab
+    // keeps only enough inset to round its active background.
+    paddingHorizontal: 1,
     borderRadius: 20,
     minWidth: 0,
   },
@@ -141,7 +143,10 @@ const styles = StyleSheet.create({
   label: {
     color: colors.muted,
     fontFamily: 'JakartaMedium',
-    fontSize: 10.5,
+    // "Transactions" is the longest tab label; at this size it fits a 320px
+    // screen without being truncated to "Transacti...".
+    fontSize: 9.5,
+    letterSpacing: -0.1,
     textAlign: 'center',
   },
   activeText: {

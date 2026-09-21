@@ -81,25 +81,35 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
     minHeight: 48,
   },
+  // All three controls sit on their own surface with an outline: the organic
+  // background runs right under this bar, and a bare icon disappears against a
+  // dark shape.
   avatar: {
     width: 46,
     height: 46,
     borderRadius: 23,
     backgroundColor: '#DDEBDD',
+    borderWidth: 1.5,
+    borderColor: colors.softGreen,
     alignItems: 'center',
     justifyContent: 'center',
+    ...shadow,
   },
-  avatarHovered: { backgroundColor: '#CFE2C9' },
+  avatarHovered: { backgroundColor: '#CFE2C9', borderColor: colors.forest },
   avatarText: { color: colors.deepForest },
-  actions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   action: {
     width: 44,
     height: 44,
     borderRadius: 22,
+    backgroundColor: 'rgba(255,253,247,.97)',
+    borderWidth: 1.5,
+    borderColor: '#C6D3C1',
     alignItems: 'center',
     justifyContent: 'center',
+    ...shadow,
   },
-  actionHovered: { backgroundColor: colors.pale },
+  actionHovered: { backgroundColor: colors.pale, borderColor: colors.forest },
   badge: {
     position: 'absolute',
     top: 9,
@@ -108,8 +118,8 @@ const s = StyleSheet.create({
     height: 11,
     borderRadius: radii.pill,
     backgroundColor: colors.success,
+    // Matches the button surface it sits on so the dot reads as a badge.
     borderWidth: 2,
-    borderColor: colors.cream,
-    ...shadow,
+    borderColor: colors.surface,
   },
 });

@@ -9,7 +9,7 @@ import { useToast } from '@/components/common/toast';
 import { AppIcon, AppText, BackButton, Card, FormInput, PrimaryButton, ProgressBar, SecondaryButton, StatusChip } from '@/components/common/ui';
 import { AppHeader } from '@/components/navigation/app-header';
 import { BottomNavigation, useBottomNavInset } from '@/components/navigation/bottom-navigation';
-import { assets, colors, radii, shadow } from '@/constants/theme';
+import { assets, colors, radii, shadow, spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { analyticsForMonth, buildInsights, previousMonth } from '@/features/analytics/analytics';
 import { DonutChart } from '@/features/analytics/DonutChart';
@@ -24,6 +24,7 @@ import { useExpenses } from '@/features/expenses/ExpensesProvider';
 import { useProfile } from '@/features/profile/ProfileProvider';
 import type { Expense, ExpenseFormErrors, ExpenseFormValues } from '@/features/expenses/types';
 import { formatExpenseDate, normalizeAmountInput, todayLocalDate, validateExpenseForm } from '@/features/expenses/validation';
+import { formatPercent, formatPeso, percentOf } from '@/lib/format';
 import { selectionFeedback, warningFeedback } from '@/lib/haptics';
 
 const CATEGORY_LIMIT_MESSAGE = 'Dashboard category limit reached. Remove one before adding another.';
@@ -105,9 +106,9 @@ export function TransactionsScreen() {
           <TextInput accessibilityLabel="Search transactions" placeholder="Search transactions" placeholderTextColor={colors.muted} value={query} onChangeText={setQuery} style={s.searchInput} />
         </View>
         <View style={s.filters}>
-          <FilterButton label={DATE_LABELS[dateFilter]} active={dateFilter !== 'all'} onPress={() => setPicker('date')} />
-          <FilterButton label={categoryFilter === 'all' ? 'Category' : categories.find((item) => item.id === categoryFilter)?.label ?? 'Category'} active={categoryFilter !== 'all'} onPress={() => setPicker('category')} />
-          <FilterButton label={SORT_LABELS[sort]} active={sort !== 'newest'} onPress={() => setPicker('sort')} />
+          <FilterButton label={DATE_LABELS[dateFilter]} active={dateFilter !== 'all'} flex={0.9} onPress={() => setPicker('date')} />
+          <FilterButton label={categoryFilter === 'all' ? 'Category' : categories.find((item) => item.id === categoryFilter)?.label ?? 'Category'} active={categoryFilter !== 'all'} flex={1.25} onPress={() => setPicker('category')} />
+          <FilterButton label={SORT_LABELS[sort]} active={sort !== 'newest'} flex={0.9} onPress={() => setPicker('sort')} />
         </View>
         {hasFilters ? <Pressable accessibilityRole="button" accessibilityLabel="Clear transaction filters" onPress={clearFilters} style={s.clearFilters}><AppIcon name="filter-remove-outline" size={17} /><AppText variant="small" style={s.clearFiltersText}>Clear filters</AppText></Pressable> : null}
 
@@ -157,8 +158,11 @@ function compactCurrency(cents: number) {
   return `₱${(cents / 100).toLocaleString('en-PH', { maximumFractionDigits: cents % 100 ? 2 : 0 })}`;
 }
 
-function FilterButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  return <PressableScale accessibilityRole="button" accessibilityLabel={`${label} filter`} accessibilityState={{ selected: active }} onPress={onPress} style={[s.filter, active && s.filterActive]}><AppText variant="bodyMedium" numberOfLines={1} style={active ? s.filterActiveText : undefined}>{label}</AppText><AppIcon name="chevron-down" size={18} color={active ? colors.surface : colors.deepForest} /></PressableScale>;
+function FilterButton({ label, active, flex = 1, onPress }: { label: string; active: boolean; flex?: number; onPress: () => void }) {
+  // `flex` is weighted per control: "Category" is the longest label, so it gets
+  // more of the row than "Date"/"Sort" instead of all three being equal and
+  // clipping the middle one.
+  return <PressableScale accessibilityRole="button" accessibilityLabel={`${label} filter`} accessibilityState={{ selected: active }} onPress={onPress} style={[s.filter, { flex }, active && s.filterActive]}><AppText variant="bodyMedium" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={[s.filterLabel, active && s.filterActiveText]}>{label}</AppText><AppIcon name="chevron-down" size={16} color={active ? colors.surface : colors.deepForest} /></PressableScale>;
 }
 
 function TransactionPicker({ kind, dateFilter, categoryFilter, sort, onDate, onCategory, onSort, onClose }: { kind: PickerKind; dateFilter: DateFilter; categoryFilter: string; sort: SortOption; onDate: (value: DateFilter) => void; onCategory: (value: string) => void; onSort: (value: SortOption) => void; onClose: () => void }) {
@@ -316,8 +320,10 @@ export function BudgetScreen() {
   const monthExpenses = expenses.filter((item) => item.transactionDate.startsWith(month));
   const spentCents = monthExpenses.reduce((sum, item) => sum + item.amountCents, 0);
   const remainingCents = (budget?.amountCents ?? 0) - spentCents;
-  const percentage = budget ? Math.round((spentCents / budget.amountCents) * 100) : 0;
-  const currency = (cents: number) => `₱${(Math.abs(cents) / 100).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // Null when no budget exists or it's zero, so a missing budget can never
+  // produce an Infinity/NaN percentage.
+  const percentage = percentOf(spentCents, budget?.amountCents) ?? 0;
+  const currency = (cents: number) => formatPeso(Math.abs(cents), { alwaysShowDecimals: true });
   const monthLabel = new Intl.DateTimeFormat('en-PH', { month: 'long', year: 'numeric' }).format(new Date(`${month}-01T12:00:00`));
   const status = percentage >= 100 ? 'Budget exceeded' : percentage >= 90 ? 'Near budget limit' : percentage >= 70 ? 'Approaching limit' : 'On track';
 
@@ -353,7 +359,7 @@ export function BudgetScreen() {
         {categories.map((category) => {
           const limit = budget?.categoryBudgets.find((item) => item.categoryId === category.id);
           const categorySpent = monthExpenses.filter((item) => item.categoryId === category.id).reduce((sum, item) => sum + item.amountCents, 0);
-          const categoryPercent = limit ? Math.round(categorySpent / limit.amountCents * 100) : 0;
+          const categoryPercent = percentOf(categorySpent, limit?.amountCents) ?? 0;
           const categoryRemaining = limit ? limit.amountCents - categorySpent : null;
           return (
           <PressableScale
@@ -369,11 +375,12 @@ export function BudgetScreen() {
               <AppIcon name={category.icon} size={22} color={category.color ?? CATEGORY_TONES[category.id]?.foreground ?? colors.deepForest} />
             </View>
             <View style={s.budgetInfo}>
-              <AppText variant="h3" numberOfLines={1}>{category.fullLabel}</AppText>
+              {/* Two lines so "Food & Dining" wraps instead of becoming "Food &...". */}
+              <AppText variant="h3" numberOfLines={2}>{category.fullLabel}</AppText>
               <ProgressBar value={Math.min(100, categoryPercent)} height={9} />
             </View>
             <View style={s.budgetValues}>
-              <AppText variant="h3" numberOfLines={1}>{limit ? currency(limit.amountCents) : 'Set limit'}</AppText>
+              <AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{limit ? currency(limit.amountCents) : 'Set limit'}</AppText>
               <AppText variant="small" style={{ color: categoryPercent >= 100 ? colors.danger : colors.deepForest }} numberOfLines={1}>{currency(categorySpent)} spent</AppText>
               {categoryRemaining !== null ? <AppText variant="small" style={{ color: categoryRemaining < 0 ? colors.danger : colors.muted }} numberOfLines={1}>{currency(categoryRemaining)} {categoryRemaining < 0 ? 'over' : 'left'}</AppText> : null}
             </View>
@@ -413,7 +420,7 @@ export function AnalyticsScreen() {
           <PressableScale onPress={() => setMode('spending')} style={[s.segmentHalf, mode === 'spending' && s.segmentActive]}><AppText variant="h3" style={mode === 'spending' ? s.segmentActiveText : s.muted}>Spending</AppText></PressableScale>
           <PressableScale onPress={() => setMode('trends')} style={[s.segmentHalf, mode === 'trends' && s.segmentActive]}><AppText variant="h3" style={mode === 'trends' ? s.segmentActiveText : s.muted}>Trends</AppText></PressableScale>
         </View>
-        {loading && expenses.length === 0 ? <Card style={s.analyticsLoading}><ActivityIndicator color={colors.deepForest} /><View style={s.analyticsSkeletonCircle} /><View style={s.skeletonLineWide} /></Card> : loadError ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load analytics.</AppText><AppText style={[s.muted, s.center]}>Check your connection and try again.</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : analytics.expenses.length === 0 ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="chart-donut" size={30} /></View><AppText variant="h2">No spending data yet</AppText><AppText style={[s.muted, s.center]}>Add expenses to start seeing your spending patterns.</AppText><PrimaryButton title="Add Expense" onPress={() => router.push('/add-expense')} /></Card> : mode === 'spending' ? <Card style={s.analyticsCard}><DonutChart slices={analytics.categorySlices} refreshKey={month}><AppText variant="title" adjustsFontSizeToFit numberOfLines={1}>{compactCurrency(analytics.totalCents)}</AppText><AppText style={s.muted}>Total Spending</AppText></DonutChart><View style={s.legendList}>{analytics.categorySlices.map((slice) => <View style={s.legend} key={slice.id}><View style={[s.legendDot, { backgroundColor: slice.color }]} /><AppText style={[s.muted, { flex: 1 }]} numberOfLines={1}>{slice.label}</AppText><AppText style={s.muted}>{Math.round(slice.percentage)}%</AppText></View>)}</View></Card> : <Card style={s.trendsCard}><View style={s.rowBetween}><View><AppText style={s.muted}>This month</AppText><AppText variant="title">{compactCurrency(analytics.totalCents)}</AppText></View><View style={s.trendChange}><AppIcon name={change !== null && change > 0 ? 'trending-up' : 'trending-down'} size={20} color={change !== null && change > 0 ? colors.danger : colors.success} /><AppText variant="h3" style={{ color: change !== null && change > 0 ? colors.danger : colors.success }}>{change === null ? 'No comparison' : `${change > 0 ? '+' : ''}${change}%`}</AppText></View></View>{previous.totalCents === 0 || analytics.expenses.length < 2 ? <View style={s.trendEmpty}><AppText variant="h2">Not enough history yet</AppText><AppText style={[s.muted, s.center]}>Keep tracking expenses and your trends will appear here.</AppText></View> : <><View style={s.barChart}>{analytics.dailyTotals.map((item) => <View key={item.day} style={s.barColumn}><View style={[s.bar, { height: Math.max(8, Math.round((item.amountCents / maxDay) * 130)) }]} /><AppText variant="small" style={s.muted}>{item.day}</AppText></View>)}</View><View style={s.trendMetrics}><TrendMetric label={`${formatMonth(priorMonth)} total`} value={compactCurrency(previous.totalCents)} /><TrendMetric label="Daily average" value={compactCurrency(analytics.averageDailyCents)} /><TrendMetric label="Highest-spend day" value={analytics.highestDay ? `${monthLabel.split(' ')[0]} ${analytics.highestDay.day} · ${compactCurrency(analytics.highestDay.amountCents)}` : '—'} /></View></>}</Card>}
+        {loading && expenses.length === 0 ? <Card style={s.analyticsLoading}><ActivityIndicator color={colors.deepForest} /><View style={s.analyticsSkeletonCircle} /><View style={s.skeletonLineWide} /></Card> : loadError ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load analytics.</AppText><AppText style={[s.muted, s.center]}>Check your connection and try again.</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : analytics.expenses.length === 0 ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="chart-donut" size={30} /></View><AppText variant="h2">No spending data yet</AppText><AppText style={[s.muted, s.center]}>Add expenses to start seeing your spending patterns.</AppText><PrimaryButton title="Add Expense" onPress={() => router.push('/add-expense')} /></Card> : mode === 'spending' ? <Card style={s.analyticsCard}><DonutChart slices={analytics.categorySlices} refreshKey={month}><AppText variant="title" adjustsFontSizeToFit numberOfLines={1}>{compactCurrency(analytics.totalCents)}</AppText><AppText style={s.muted}>Total Spending</AppText></DonutChart><View style={s.legendList}>{analytics.categorySlices.map((slice) => <View style={s.legend} key={slice.id}><View style={[s.legendDot, { backgroundColor: slice.color }]} /><AppText style={[s.muted, s.legendLabel]} numberOfLines={1}>{slice.label}</AppText><AppText style={[s.muted, s.legendValue]}>{formatPercent(slice.percentage)}</AppText></View>)}</View></Card> : <Card style={s.trendsCard}><View style={s.rowBetween}><View><AppText style={s.muted}>This month</AppText><AppText variant="title">{compactCurrency(analytics.totalCents)}</AppText></View><View style={s.trendChange}><AppIcon name={change !== null && change > 0 ? 'trending-up' : 'trending-down'} size={20} color={change !== null && change > 0 ? colors.danger : colors.success} /><AppText variant="h3" style={{ color: change !== null && change > 0 ? colors.danger : colors.success }}>{change === null ? 'No comparison' : `${change > 0 ? '+' : ''}${change}%`}</AppText></View></View>{previous.totalCents === 0 || analytics.expenses.length < 2 ? <View style={s.trendEmpty}><AppText variant="h2">Not enough history yet</AppText><AppText style={[s.muted, s.center]}>Keep tracking expenses and your trends will appear here.</AppText></View> : <><View style={s.barChart}>{analytics.dailyTotals.map((item) => <View key={item.day} style={s.barColumn}><View style={[s.bar, { height: Math.max(8, Math.round((item.amountCents / maxDay) * 130)) }]} /><AppText variant="small" style={s.muted}>{item.day}</AppText></View>)}</View><View style={s.trendMetrics}><TrendMetric label={`${formatMonth(priorMonth)} total`} value={compactCurrency(previous.totalCents)} /><TrendMetric label="Daily average" value={compactCurrency(analytics.averageDailyCents)} /><TrendMetric label="Highest-spend day" value={analytics.highestDay ? `${monthLabel.split(' ')[0]} ${analytics.highestDay.day} · ${compactCurrency(analytics.highestDay.amountCents)}` : '—'} /></View></>}</Card>}
         {analytics.expenses.length > 0 ? <InsightsLink month={month} /> : null}
       </View>
       <MonthPickerModal visible={monthPicker} title="Choose Analytics Month" value={monthDraft} onChange={setMonthDraft} onClose={() => setMonthPicker(false)} onConfirm={(value) => { setMonth(value.slice(0, 7)); setMonthPicker(false); }} />
@@ -661,7 +668,6 @@ export function ProfileScreen() {
   // stays live while sign-out is in flight (a stored config would be stale).
   const [logoutDialog, setLogoutDialog] = useState<'confirm' | 'error' | null>(null);
   const [signingOut, setSigningOut] = useState(false);
-  const bottomInset = useBottomNavInset();
 
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
 
@@ -684,11 +690,18 @@ export function ProfileScreen() {
     setLogoutDialog(null);
   };
 
+  // Profile is a drill-down from the header avatar, not a tab — so it carries a
+  // back arrow and no bottom navbar, matching its own settings sub-pages.
   return (
-    <Screen bottomInset={bottomInset} variant={13} fixed={<BottomNavigation />}>
+    <Screen bottomInset={48} variant={13}>
       <View style={s.page}>
-        <AppText variant="title">Profile &amp; Settings</AppText>
-        <AppText style={s.muted}>Manage your account and preferences.</AppText>
+        <View style={s.profileHeader}>
+          <BackButton />
+          <View style={s.profileHeaderCopy}>
+            <AppText variant="title">Profile &amp; Settings</AppText>
+            <AppText style={s.muted}>Manage your account and preferences.</AppText>
+          </View>
+        </View>
 
         <FadeSlideIn index={0}>
           <Card style={s.profileCard}>
@@ -783,7 +796,9 @@ const s = StyleSheet.create({
   search: { height: 54, backgroundColor: 'rgba(232,238,227,.88)', borderRadius: radii.md, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 10 },
   searchInput: { flex: 1, fontFamily: 'JakartaRegular', fontSize: 15, color: colors.text },
   filters: { flexDirection: 'row', gap: 8 },
-  filter: { flex: 1, minWidth: 0, height: 48, paddingHorizontal: 10, gap: 5, flexDirection: 'row', borderRadius: radii.md, backgroundColor: 'rgba(255,253,247,.96)', borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
+  // Tighter internal padding buys label width before any font scaling does.
+  filter: { minWidth: 0, height: 48, paddingHorizontal: 8, gap: 3, flexDirection: 'row', borderRadius: radii.md, backgroundColor: 'rgba(255,253,247,.96)', borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
+  filterLabel: { flexShrink: 1, minWidth: 0, textAlign: 'center' },
   filterActive: { backgroundColor: colors.deepForest, borderColor: colors.deepForest },
   filterActiveText: { color: colors.surface },
   clearFilters: { alignSelf: 'flex-end', minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 4 },
@@ -839,19 +854,26 @@ const s = StyleSheet.create({
   analyticsSkeletonCircle: { width: 190, height: 190, borderRadius: 95, borderWidth: 25, borderColor: '#DDE5D9' },
   legendList: { width: '100%', marginTop: 14 },
   legend: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
-  legendDot: { width: 12, height: 12, borderRadius: 6 },
-  // alignSelf keeps the row's left edge on the page frame's padding while the
-  // row itself only grows as wide as its content, so the arrow trails the text.
+  // Name takes the slack; the percentage keeps its width and stays right-aligned.
+  legendLabel: { flex: 1, minWidth: 0 },
+  legendValue: { flexGrow: 0, flexShrink: 0, minWidth: 44, textAlign: 'right' },
+  legendDot: { flexGrow: 0, flexShrink: 0, width: 12, height: 12, borderRadius: 6 },
+  // A deliberate secondary CTA rather than a floating text link: full content
+  // width, centred label and arrow, on its own pale surface.
   insightsLink: {
-    alignSelf: 'flex-start',
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
-    minHeight: 44,
-    paddingRight: 8,
-    borderRadius: radii.sm,
+    minHeight: 52,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.md,
+    backgroundColor: '#E7F0E2',
+    borderWidth: 1.5,
+    borderColor: '#C6D9BF',
   },
-  insightsLinkHovered: { opacity: 0.7 },
+  insightsLinkHovered: { backgroundColor: '#DBE9D4', borderColor: colors.forest },
   insightsLinkText: { color: colors.deepForest, fontFamily: 'JakartaSemiBold', fontSize: 16, lineHeight: 22 },
   trendsCard: { gap: 22, paddingVertical: 24 },
   trendChange: { alignItems: 'flex-end', gap: 3 },
@@ -868,6 +890,8 @@ const s = StyleSheet.create({
   iconSoft: { width: 52, height: 52, borderRadius: 16, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' },
   // Profile & Settings — mirrors 11_ProfileSettingsScreen: a tall avatar card,
   // then evenly weighted rows with pale-green icon circles and a chevron.
+  profileHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
+  profileHeaderCopy: { flex: 1, minWidth: 0, gap: 2 },
   profileCard: { alignItems: 'center', gap: 6, paddingVertical: 26, borderRadius: radii.lg },
   profileAvatar: { width: 96, height: 96, borderRadius: 48, backgroundColor: colors.deepForest, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
   profileAvatarSkeleton: { backgroundColor: colors.pale },
@@ -964,9 +988,14 @@ const s = StyleSheet.create({
     minWidth: 0,
     gap: 6,
   },
+  // Capped as a share of the row so a large amount can't starve the category
+  // name next to it. Percentage rather than pixels keeps it responsive.
   budgetValues: {
     alignItems: 'flex-end',
+    flexGrow: 0,
+    flexShrink: 0,
     minWidth: 72,
+    maxWidth: '44%',
     gap: 2,
   },
 });

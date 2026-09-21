@@ -1,3 +1,4 @@
+import { formatPercent, percentOf } from '@/lib/format';
 import type { MonthlyBudget } from '@/features/budget/types';
 import type { DashboardCategory } from '@/features/dashboard/dashboard-data';
 import type { Expense } from '@/features/expenses/types';
@@ -111,9 +112,11 @@ export function buildInsights(
 
   const topCategory = categories.find((category) => category.id === top?.id);
   const categoryLimit = budget?.categoryBudgets.find((item) => item.categoryId === top?.id);
-  if (top && categoryLimit) {
-    const used = Math.round((top.amountCents / categoryLimit.amountCents) * 100);
-    insights.push({ id: 'recommendation', label: 'Recommendation', title: `${top.label} budget is ${used}% used`, detail: used >= 100 ? 'This category is over its limit. Review the budget or recent expenses.' : 'Keep an eye on this category as the month continues.', icon: 'briefcase-outline', destination: '/budget' });
+  // A limit of zero isn't a limit — percentOf returns null and we fall through
+  // to the "set a budget" branch rather than dividing by it.
+  const limitUsed = top && categoryLimit ? percentOf(top.amountCents, categoryLimit.amountCents) : null;
+  if (top && limitUsed !== null) {
+    insights.push({ id: 'recommendation', label: 'Recommendation', title: `${top.label} budget is ${formatPercent(limitUsed)} used`, detail: limitUsed >= 100 ? 'This category is over its limit. Review the budget or recent expenses.' : 'Keep an eye on this category as the month continues.', icon: 'briefcase-outline', destination: '/budget' });
   } else if (top) {
     insights.push({ id: 'recommendation', label: 'Recommendation', title: `Set a ${topCategory?.fullLabel ?? top.label} budget`, detail: 'Your largest spending category does not have a category limit yet.', icon: 'briefcase-outline', destination: '/budget' });
   }
@@ -143,7 +146,7 @@ export function mascotInsight(
   const insights = buildInsights(current, previous, categories, budget);
 
   // An overspend or a near-limit category is the most actionable thing to say.
-  if (budget) {
+  if (budget && budget.amountCents > 0) {
     const remaining = budget.amountCents - current.totalCents;
     if (remaining < 0) return `You’re ${formatPeso(Math.abs(remaining))} over this month’s budget.`;
 
@@ -153,19 +156,28 @@ export function mascotInsight(
           .filter((expense) => expense.categoryId === limit.categoryId)
           .reduce((sum, expense) => sum + expense.amountCents, 0);
         const category = categories.find((item) => item.id === limit.categoryId);
-        return { label: category?.label ?? 'category', percent: limit.amountCents ? Math.round((spent / limit.amountCents) * 100) : 0 };
+        // Categories without a real limit are skipped rather than reported as 0%.
+        return { label: category?.label ?? 'category', spent, limit: limit.amountCents, percent: percentOf(spent, limit.amountCents) };
       })
+      .filter((item): item is typeof item & { percent: number } => item.percent !== null)
       .sort((a, b) => b.percent - a.percent)[0];
 
-    if (pressured && pressured.percent >= 70) {
-      return `You’ve used ${pressured.percent}% of your ${pressured.label} budget.`;
+    if (pressured) {
+      // Past the limit, the overspend amount is clearer and shorter than a
+      // percentage that can run into the hundreds.
+      if (pressured.percent > 100) {
+        return `You’re ${formatPeso(pressured.spent - pressured.limit)} over your ${pressured.label} budget.`;
+      }
+      if (pressured.percent >= 70) {
+        return `You’ve used ${formatPercent(pressured.percent)} of your ${pressured.label} budget.`;
+      }
     }
   }
 
   const unusual = insights.find((insight) => insight.id === 'unusual');
   if (unusual) return `Your spending is ${unusual.title} than last month.`;
 
-  if (budget) {
+  if (budget && budget.amountCents > 0) {
     const remaining = budget.amountCents - current.totalCents;
     return `You have ${formatPeso(remaining)} left in this month’s budget.`;
   }
