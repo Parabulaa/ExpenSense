@@ -84,9 +84,13 @@ const SWIPE_DISTANCE_RATIO = 0.22;
 const SNAP_DURATION = 280;
 const SHELL_MAX_WIDTH = 430;
 const HEADER_HEIGHT = 64;
-const ESTIMATED_CONTROLS_HEIGHT = 156;
+// First-frame estimate only; onLayout replaces it with the measured value.
+// Tracks the controls' padding so the hero doesn't jump on mount.
+const ESTIMATED_CONTROLS_HEIGHT = 206;
 
 const snapEasing = Easing.out(Easing.cubic);
+
+const AnimatedExpoImage = Animated.createAnimatedComponent(Image);
 
 export default function OnboardingExperience() {
   const windowSize = useWindowDimensions();
@@ -198,6 +202,11 @@ export default function OnboardingExperience() {
                   height={heroHeight}
                   reducedMotion={reducedMotion}
                 />
+                <HeroMascotLayer
+                  translateX={translateX}
+                  width={viewport.width}
+                  heroHeight={heroHeight}
+                />
 
                 <Animated.View
                   style={[
@@ -249,8 +258,6 @@ function OnboardingPage({
   heroHeight: number;
   compact: boolean;
 }) {
-  const mascotWidth = Math.min(width * 0.65, 250);
-
   return (
     <ScrollView
       style={[styles.page, { width, flexBasis: width }]}
@@ -264,20 +271,9 @@ function OnboardingPage({
       bounces={false}
       scrollEnabled={compact}
     >
-      <View style={[styles.hero, styles.nonInteractive, { height: heroHeight }]}>
-        <Image
-          source={page.mascot}
-          contentFit="contain"
-          style={[
-            styles.mascot,
-            {
-              width: mascotWidth,
-              height: heroHeight * 0.9,
-              marginLeft: -mascotWidth / 2,
-            },
-          ]}
-        />
-      </View>
+      {/* Spacer only: the mascot now lives in a fixed layer above the track so
+          it can't slide away with the page. */}
+      <View style={[styles.hero, styles.nonInteractive, { height: heroHeight }]} />
 
       <View style={[styles.copy, compact && styles.copyCompact]}>
         <AppText variant="title" style={[styles.title, compact && styles.titleCompact]}>
@@ -496,7 +492,116 @@ function AnimatedBackgroundLayer({ reducedMotion }: { reducedMotion: boolean }) 
         baseRotation={154}
         reducedMotion={reducedMotion}
       />
+
+      {/* Bottom band. Anchored past the bottom edge and clipped by the shell,
+          so it reads as ground filling the space under the CTAs rather than a
+          floating blob. Slower and smaller-amplitude than the upper shapes so
+          it doesn't pull attention from the buttons sitting on top of it. */}
+      <FloatingShape
+        source={assets.shape5}
+        style={styles.bottomLandscape}
+        duration={12_400}
+        driftX={16}
+        driftY={-10}
+        rotation={1.4}
+        scale={0.02}
+        baseRotation={-4}
+        reducedMotion={reducedMotion}
+      />
+      <FloatingShape
+        source={assets.shape4}
+        style={styles.bottomLandscapeFront}
+        duration={10_600}
+        driftX={-18}
+        driftY={12}
+        rotation={-1.8}
+        scale={0.025}
+        baseRotation={6}
+        reducedMotion={reducedMotion}
+      />
+      <FloatingShape
+        source={assets.shape3}
+        style={styles.bottomAccent}
+        duration={8_300}
+        driftX={12}
+        driftY={-14}
+        rotation={3}
+        scale={0.04}
+        baseRotation={-38}
+        reducedMotion={reducedMotion}
+      />
     </View>
+  );
+}
+
+// The mascot sits outside the swiping track: all three are mounted at once and
+// cross-fade as the track moves, so swiping never leaves an empty hero. It also
+// rides lower than the scenery blobs so it reads as standing in front of them
+// rather than covering them.
+function HeroMascotLayer({
+  translateX,
+  width,
+  heroHeight,
+}: {
+  translateX: SharedValue<number>;
+  width: number;
+  heroHeight: number;
+}) {
+  return (
+    <View style={[styles.mascotLayer, { height: heroHeight }]} accessible={false}>
+      {pages.map((page, index) => (
+        <HeroMascot
+          key={page.id}
+          source={page.mascot}
+          index={index}
+          translateX={translateX}
+          width={width}
+          heroHeight={heroHeight}
+        />
+      ))}
+    </View>
+  );
+}
+
+function HeroMascot({
+  source,
+  index,
+  translateX,
+  width,
+  heroHeight,
+}: {
+  source: ImageSource;
+  index: number;
+  translateX: SharedValue<number>;
+  width: number;
+  heroHeight: number;
+}) {
+  const mascotWidth = Math.min(width * 0.6, 236);
+
+  const fadeStyle = useAnimatedStyle(() => {
+    const page = width > 0 ? -translateX.value / width : 0;
+    const distance = Math.abs(page - index);
+    return {
+      opacity: interpolate(distance, [0, 0.85], [1, 0], Extrapolation.CLAMP),
+      transform: [{ scale: interpolate(distance, [0, 1], [1, 0.94], Extrapolation.CLAMP) }],
+    };
+  });
+
+  return (
+    <AnimatedExpoImage
+      source={source}
+      contentFit="contain"
+      style={[
+        styles.mascot,
+        {
+          width: mascotWidth,
+          height: heroHeight * 0.78,
+          marginLeft: -mascotWidth / 2,
+          bottom: -heroHeight * 0.14,
+        },
+        fadeStyle,
+      ]}
+    />
   );
 }
 
@@ -628,6 +733,30 @@ const styles = StyleSheet.create({
     bottom: 116,
     opacity: 0.24,
   },
+  bottomLandscape: {
+    position: 'absolute',
+    width: '150%',
+    height: 260,
+    left: '-25%',
+    bottom: -96,
+    opacity: 0.55,
+  },
+  bottomLandscapeFront: {
+    position: 'absolute',
+    width: '132%',
+    height: 215,
+    left: '-16%',
+    bottom: -104,
+    opacity: 0.42,
+  },
+  bottomAccent: {
+    position: 'absolute',
+    width: 150,
+    height: 150,
+    right: -46,
+    bottom: -30,
+    opacity: 0.30,
+  },
   header: {
     height: HEADER_HEIGHT,
     alignItems: 'center',
@@ -667,10 +796,17 @@ const styles = StyleSheet.create({
   nonInteractive: {
     pointerEvents: 'none',
   },
+  mascotLayer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    overflow: 'visible',
+    pointerEvents: 'none',
+  },
   mascot: {
     position: 'absolute',
     left: '50%',
-    bottom: 4,
   },
   scenery: {
     position: 'absolute',
@@ -698,12 +834,12 @@ const styles = StyleSheet.create({
   copy: {
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingTop: 22,
     gap: 12,
   },
   copyCompact: {
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 12,
     gap: 7,
   },
   title: {
@@ -779,19 +915,23 @@ const styles = StyleSheet.create({
   },
   controls: {
     paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 4,
-    gap: 9,
-    backgroundColor: 'rgba(245, 242, 232, 0.97)',
+    paddingTop: 10,
+    paddingBottom: 52,
+    gap: 10,
+    // Transparent so the bottom scenery reads through behind the CTAs. The
+    // buttons carry their own solid fills, so contrast is unaffected.
+    backgroundColor: 'transparent',
     zIndex: 4,
   },
   controlsCompact: {
     paddingHorizontal: 16,
     paddingTop: 5,
+    paddingBottom: 32,
     gap: 7,
   },
   pagination: {
     height: 22,
+    marginBottom: -6,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

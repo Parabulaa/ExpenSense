@@ -1,155 +1,274 @@
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Keyboard, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Calendar } from '@/components/common/calendar';
+import { FadeSlideIn, PressableScale } from '@/components/common/motion';
 import { Screen } from '@/components/common/screen';
-import { AppIcon, AppText, BackButton, Card, PrimaryButton, ProgressBar, StatusChip } from '@/components/common/ui';
-import { BottomNavigation } from '@/components/navigation/bottom-navigation';
-import { assets, colors, radii } from '@/constants/theme';
-import { budgets, categories, transactions } from '@/data/mockData';
+import { useToast } from '@/components/common/toast';
+import { AppIcon, AppText, BackButton, Card, FormInput, PrimaryButton, ProgressBar, SecondaryButton, StatusChip } from '@/components/common/ui';
+import { BottomNavigation, useBottomNavInset } from '@/components/navigation/bottom-navigation';
+import { assets, colors, radii, shadow } from '@/constants/theme';
+import { useAuth } from '@/features/auth/AuthProvider';
+import { analyticsForMonth, buildInsights, previousMonth } from '@/features/analytics/analytics';
+import { DonutChart } from '@/features/analytics/DonutChart';
+import { AuthDialog } from '@/features/auth/components/AuthDialog';
+import { authCopy } from '@/features/auth/copy';
+import { useBudgets } from '@/features/budget/BudgetProvider';
+import { parseBudgetAmount } from '@/features/budget/validation';
+import { useCategories } from '@/features/categories/CategoriesProvider';
+import { MAX_DASHBOARD_CATEGORIES } from '@/features/dashboard/dashboard-data';
+import { useDashboardCategories } from '@/features/dashboard/DashboardCategoriesProvider';
+import { useExpenses } from '@/features/expenses/ExpensesProvider';
+import type { Expense, ExpenseFormErrors, ExpenseFormValues } from '@/features/expenses/types';
+import { formatExpenseDate, normalizeAmountInput, todayLocalDate, validateExpenseForm } from '@/features/expenses/validation';
+import { selectionFeedback, warningFeedback } from '@/lib/haptics';
 
-export function HomeScreen() {
-  return (
-    <Screen bottomInset={115} variant={4}>
-      <View style={s.page}>
-        <Pressable onPress={() => router.push('/profile')} style={s.avatar}>
-          <AppText variant="h2">R</AppText>
-        </Pressable>
-        <View style={s.heroRow}>
-          <View style={{ flex: 1 }}>
-            <AppText variant="h3">Good afternoon,</AppText>
-            <AppText variant="title">Ryan!</AppText>
-            <AppText style={s.muted}>A clearer view of your spending.</AppText>
-          </View>
-          <Image source={assets.mascotTip} contentFit="contain" style={s.heroMascot} />
-        </View>
-        <Card>
-          <View style={s.rowBetween}>
-            <AppText variant="h3" numberOfLines={1}>September 2026</AppText>
-            <StatusChip>This Month</StatusChip>
-          </View>
-          <AppText style={s.muted}>Total Spent</AppText>
-          <AppText variant="title">₱8,420</AppText>
-          <AppText style={s.muted}>of ₱15,000 budget</AppText>
-          <View style={[s.row, { marginTop: 12 }]}>
-            <ProgressBar value={56} />
-            <AppText variant="h3" style={{ color: colors.deepForest }}>56% used</AppText>
-          </View>
-        </Card>
-        <View style={s.metricRow}>
-          {([['chart-donut', '56%', 'Budget used'], ['wallet-outline', '₱6,580', 'Remaining'], ['receipt-text-outline', '28', 'Transactions']] as const).map(x => (
-            <Card key={x[2]} style={s.metric}>
-              <AppIcon name={x[0]} size={21} />
-              <AppText variant="h3">{x[1]}</AppText>
-              <AppText variant="small" style={s.muted}>{x[2]}</AppText>
-            </Card>
-          ))}
-        </View>
-        <View style={s.rowBetween}>
-          <AppText variant="h2" style={{ flex: 1 }}>Your Budget Categories</AppText>
-          <Pressable onPress={() => router.push('/categories')}>
-            <AppText variant="bodyMedium" style={{ color: colors.deepForest }}>See all →</AppText>
-          </Pressable>
-        </View>
-        <View style={s.categoryGrid}>
-          {categories.slice(0, 6).map(c => (
-            <Card key={c[1]} style={s.categoryTile}>
-              <AppIcon name={c[0]} size={22} />
-              <AppText variant="small" style={s.center}>{c[1].replace('Food & Dining', 'Food').replace('Transportation', 'Transport')}</AppText>
-            </Card>
-          ))}
-          <Pressable onPress={() => router.push('/categories')} style={s.addTile}>
-            <AppIcon name="plus" size={26} />
-            <AppText variant="small">Add / Edit</AppText>
-          </Pressable>
-        </View>
-      </View>
-      <BottomNavigation />
-    </Screen>
-  );
-}
+const CATEGORY_LIMIT_MESSAGE = 'Dashboard category limit reached. Remove one before adding another.';
+const CATEGORY_TONES: Record<string, { background: string; foreground: string }> = {
+  food: { background: '#FCE1DC', foreground: '#C92525' }, transport: { background: '#DDEBDD', foreground: '#28704B' },
+  shopping: { background: '#FFE8CE', foreground: '#E45C0A' }, bills: { background: '#DCEBFA', foreground: '#3477B8' },
+  health: { background: '#FADFE2', foreground: '#DB3545' }, school: { background: '#FFE7CE', foreground: '#E45C0A' },
+  entertainment: { background: '#DCEBFA', foreground: '#3477B8' }, groceries: { background: '#DDEBDD', foreground: '#28704B' },
+  travel: { background: '#E6E4F3', foreground: '#4B527A' },
+};
+
+export { HomeScreen } from './home-screen';
 
 export function TransactionsScreen() {
+  const { categories } = useCategories();
+  const { expenses, loading, loadError, refresh } = useExpenses();
+  const bottomInset = useBottomNavInset();
+  const [query, setQuery] = useState('');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [sort, setSort] = useState<SortOption>('newest');
+  const [picker, setPicker] = useState<PickerKind>(null);
+
+  useFocusEffect(useCallback(() => {
+    void refresh();
+  }, [refresh]));
+
+  const visibleExpenses = useMemo(() => {
+    const needle = query.trim().toLocaleLowerCase();
+    const today = todayLocalDate();
+    const now = new Date(`${today}T12:00:00`);
+    const cutoff = new Date(now);
+    cutoff.setDate(cutoff.getDate() - (dateFilter === 'last7' ? 6 : 29));
+    const cutoffValue = localDateString(cutoff);
+    const month = today.slice(0, 7);
+    const filtered = expenses.filter((expense) => {
+      const category = categories.find((item) => item.id === expense.categoryId);
+      const matchesQuery = !needle || `${expense.merchant} ${category?.fullLabel ?? ''} ${expense.notes ?? ''}`.toLocaleLowerCase().includes(needle);
+      const matchesCategory = categoryFilter === 'all' || expense.categoryId === categoryFilter;
+      const matchesDate = dateFilter === 'all' ||
+        (dateFilter === 'today' && expense.transactionDate === today) ||
+        (dateFilter === 'month' && expense.transactionDate.startsWith(month)) ||
+        ((dateFilter === 'last7' || dateFilter === 'last30') && expense.transactionDate >= cutoffValue && expense.transactionDate <= today);
+      return matchesQuery && matchesCategory && matchesDate;
+    });
+    return [...filtered].sort((a, b) => {
+      if (sort === 'oldest') return a.transactionDate.localeCompare(b.transactionDate) || a.createdAt.localeCompare(b.createdAt);
+      if (sort === 'highest') return b.amountCents - a.amountCents;
+      if (sort === 'lowest') return a.amountCents - b.amountCents;
+      return b.transactionDate.localeCompare(a.transactionDate) || b.createdAt.localeCompare(a.createdAt);
+    });
+  }, [categories, categoryFilter, dateFilter, expenses, query, sort]);
+
+  const groups = useMemo(() => groupExpensesByDate(visibleExpenses), [visibleExpenses]);
+  const hasFilters = Boolean(query.trim()) || dateFilter !== 'all' || categoryFilter !== 'all' || sort !== 'newest';
+  const clearFilters = () => { setQuery(''); setDateFilter('all'); setCategoryFilter('all'); setSort('newest'); };
+
   return (
-    <Screen bottomInset={110} variant={4}>
+    <Screen bottomInset={bottomInset} variant={7} fixed={<BottomNavigation />} refreshing={loading && expenses.length > 0} onRefresh={() => void refresh()}>
       <View style={s.page}>
         <AppText variant="hero">Transactions</AppText>
         <View style={s.search}>
-          <AppText variant="h2">⌕</AppText>
-          <TextInput placeholder="Search transactions" placeholderTextColor={colors.muted} style={s.searchInput} />
+          <AppIcon name="magnify" size={22} color={colors.muted} />
+          <TextInput accessibilityLabel="Search transactions" placeholder="Search transactions" placeholderTextColor={colors.muted} value={query} onChangeText={setQuery} style={s.searchInput} />
         </View>
         <View style={s.filters}>
-          {['Date⌄', 'Category⌄', 'Sort⌄'].map(x => (
-            <Pressable style={s.filter} key={x}>
-              <AppText>{x}</AppText>
-            </Pressable>
-          ))}
+          <FilterButton label={DATE_LABELS[dateFilter]} active={dateFilter !== 'all'} onPress={() => setPicker('date')} />
+          <FilterButton label={categoryFilter === 'all' ? 'Category' : categories.find((item) => item.id === categoryFilter)?.label ?? 'Category'} active={categoryFilter !== 'all'} onPress={() => setPicker('category')} />
+          <FilterButton label={SORT_LABELS[sort]} active={sort !== 'newest'} onPress={() => setPicker('sort')} />
         </View>
-        {transactions.map((t, index) => {
-          const show = index === 0 || t.day !== transactions[index - 1].day;
-          return (
-            <View key={t.id}>
-              {show && <AppText variant="h2" style={s.group}>{t.day}</AppText>}
-              <Pressable onPress={() => router.push(`/transaction/${t.id}` as never)}>
-                <Card style={s.transaction}>
-                  <View style={[s.roundIcon, { backgroundColor: t.color }]}>
-                    <AppText variant="h3" style={{ color: colors.surface }}>{t.icon}</AppText>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <AppText variant="h3">{t.merchant}</AppText>
-                    <AppText style={s.muted}>{t.category}</AppText>
-                  </View>
-                  <AppText variant="h2">-₱{t.amount}</AppText>
-                </Card>
-              </Pressable>
-            </View>
-          );
-        })}
+        {hasFilters ? <Pressable accessibilityRole="button" accessibilityLabel="Clear transaction filters" onPress={clearFilters} style={s.clearFilters}><AppIcon name="filter-remove-outline" size={17} /><AppText variant="small" style={s.clearFiltersText}>Clear filters</AppText></Pressable> : null}
+
+        {loading && expenses.length === 0 ? (
+          <View style={s.skeletonList}>{[0, 1, 2].map((item) => <View key={item} style={s.skeletonCard}><View style={s.skeletonIcon} /><View style={s.skeletonCopy}><View style={s.skeletonLineWide} /><View style={s.skeletonLine} /></View></View>)}</View>
+        ) : loadError && expenses.length === 0 ? (
+          <Card style={s.emptyCard}>
+            <View style={s.emptyIcon}><AppIcon name="cloud-alert-outline" size={30} /></View>
+            <AppText variant="h2">Couldn&apos;t load transactions</AppText>
+            <AppText style={[s.muted, s.center]}>{loadError}</AppText>
+            <SecondaryButton title="Try Again" onPress={() => void refresh()} />
+          </Card>
+        ) : groups.length === 0 ? (
+          <Card style={s.emptyCard}>
+            <View style={s.emptyIcon}><AppIcon name="receipt-text-outline" size={31} /></View>
+            <AppText variant="h2">{hasFilters ? 'No matching transactions' : 'No transactions yet'}</AppText>
+            <AppText style={[s.muted, s.center]}>{hasFilters ? 'No transactions match these filters.' : 'Add your first expense to start tracking your spending.'}</AppText>
+            {hasFilters ? <SecondaryButton title="Clear Filters" onPress={clearFilters} /> : <PrimaryButton title="Add Expense" icon="plus" onPress={() => router.push('/add-expense')} />}
+          </Card>
+        ) : groups.map((group) => (
+          <View key={group.date}>
+            <AppText variant="h2" style={s.group}>{group.label}</AppText>
+            {group.expenses.map((expense) => <ExpenseRow key={expense.id} expense={expense} />)}
+          </View>
+        ))}
       </View>
-      <BottomNavigation />
+      <TransactionPicker kind={picker} dateFilter={dateFilter} categoryFilter={categoryFilter} sort={sort} onDate={setDateFilter} onCategory={setCategoryFilter} onSort={setSort} onClose={() => setPicker(null)} />
     </Screen>
   );
 }
 
-export function TransactionDetailsScreen() {
+type DateFilter = 'all' | 'today' | 'last7' | 'month' | 'last30';
+type SortOption = 'newest' | 'oldest' | 'highest' | 'lowest';
+type PickerKind = 'date' | 'category' | 'sort' | null;
+const DATE_LABELS: Record<DateFilter, string> = { all: 'Date', today: 'Today', last7: 'Last 7 Days', month: 'This Month', last30: 'Last 30 Days' };
+const SORT_LABELS: Record<SortOption, string> = { newest: 'Sort', oldest: 'Oldest', highest: 'Highest', lowest: 'Lowest' };
+
+function localDateString(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function formatMonth(month: string) {
+  return new Intl.DateTimeFormat('en-PH', { month: 'long', year: 'numeric' }).format(new Date(`${month}-01T12:00:00`));
+}
+
+function compactCurrency(cents: number) {
+  return `₱${(cents / 100).toLocaleString('en-PH', { maximumFractionDigits: cents % 100 ? 2 : 0 })}`;
+}
+
+function FilterButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return <PressableScale accessibilityRole="button" accessibilityLabel={`${label} filter`} accessibilityState={{ selected: active }} onPress={onPress} style={[s.filter, active && s.filterActive]}><AppText variant="bodyMedium" numberOfLines={1} style={active ? s.filterActiveText : undefined}>{label}</AppText><AppIcon name="chevron-down" size={18} color={active ? colors.surface : colors.deepForest} /></PressableScale>;
+}
+
+function TransactionPicker({ kind, dateFilter, categoryFilter, sort, onDate, onCategory, onSort, onClose }: { kind: PickerKind; dateFilter: DateFilter; categoryFilter: string; sort: SortOption; onDate: (value: DateFilter) => void; onCategory: (value: string) => void; onSort: (value: SortOption) => void; onClose: () => void }) {
+  const { categories } = useCategories();
+  if (!kind) return null;
+  const options: { id: string; label: string; icon?: Parameters<typeof AppIcon>[0]['name'] }[] = kind === 'date'
+    ? (Object.entries(DATE_LABELS) as [DateFilter, string][]).map(([id, label]) => ({ id, label }))
+    : kind === 'sort'
+      ? (Object.entries(SORT_LABELS) as [SortOption, string][]).map(([id, label]) => ({ id, label }))
+      : [{ id: 'all', label: 'All Categories', icon: 'shape-outline' as const }, ...categories.map((item) => ({ id: item.id, label: item.fullLabel, icon: item.icon }))];
+  const selected = kind === 'date' ? dateFilter : kind === 'sort' ? sort : categoryFilter;
+  const choose = (id: string) => { selectionFeedback(); if (kind === 'date') onDate(id as DateFilter); else if (kind === 'sort') onSort(id as SortOption); else onCategory(id); onClose(); };
+  return <Modal visible transparent animationType="fade" onRequestClose={onClose}><View style={s.pickerBackdrop}><Pressable accessibilityLabel="Close filter" onPress={onClose} style={StyleSheet.absoluteFill} /><View style={s.filterSheet}><View style={s.sheetHandle} /><AppText variant="h2">{kind === 'date' ? 'Filter by Date' : kind === 'sort' ? 'Sort Transactions' : 'Filter by Category'}</AppText><View style={s.pickerOptions}>{options.map((option) => <PressableScale key={option.id} onPress={() => choose(option.id)} accessibilityRole="button" accessibilityState={{ selected: selected === option.id }} style={[s.pickerOption, selected === option.id && s.pickerOptionSelected]}>{option.icon ? <View style={s.pickerOptionIcon}><AppIcon name={option.icon} size={21} /></View> : null}<AppText variant="bodyMedium" style={s.pickerOptionCopy}>{option.label}</AppText>{selected === option.id ? <AppIcon name="check-circle" color={colors.deepForest} /> : null}</PressableScale>)}</View></View></View></Modal>;
+}
+
+function ExpenseRow({ expense }: { expense: Expense }) {
+  const { findCategory } = useCategories();
+  const category = findCategory(expense.categoryId);
   return (
-    <Screen variant={4}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${expense.merchant}, ${category?.fullLabel ?? 'Expense'}`} onPress={() => router.push(`/transaction/${expense.id}` as never)} style={({ pressed }) => pressed && { opacity: 0.78 }}>
+      <Card style={s.transaction}>
+        <View style={s.roundIcon}><AppIcon name={category?.icon ?? 'receipt-text-outline'} size={24} color={colors.deepForest} /></View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <AppText variant="h3" numberOfLines={1}>{expense.merchant}</AppText>
+          <AppText style={s.muted} numberOfLines={1}>{category?.fullLabel ?? expense.categoryId}</AppText>
+        </View>
+        <AppText variant="h3" numberOfLines={1}>−₱{(expense.amountCents / 100).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</AppText>
+      </Card>
+    </Pressable>
+  );
+}
+
+function groupExpensesByDate(expenses: Expense[]) {
+  const today = todayLocalDate();
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterday = `${yesterdayDate.getFullYear()}-${String(yesterdayDate.getMonth() + 1).padStart(2, '0')}-${String(yesterdayDate.getDate()).padStart(2, '0')}`;
+  const groups = new Map<string, Expense[]>();
+  expenses.forEach((expense) => groups.set(expense.transactionDate, [...(groups.get(expense.transactionDate) ?? []), expense]));
+  return [...groups.entries()].map(([date, items]) => ({ date, label: date === today ? 'Today' : date === yesterday ? 'Yesterday' : formatExpenseDate(date), expenses: items }));
+}
+
+export function TransactionDetailsScreen() {
+  const { findCategory } = useCategories();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { expenses, loading, deleteExpense } = useExpenses();
+  const { showToast } = useToast();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const expense = expenses.find((item) => item.id === id);
+  const category = findCategory(expense?.categoryId);
+
+  const remove = async () => {
+    if (!expense || deleting) return;
+    setDeleting(true);
+    const result = await deleteExpense(expense.id);
+    setDeleting(false);
+    if (!result.ok) { showToast(result.message, { tone: 'warning' }); return; }
+    warningFeedback();
+    showToast('Transaction deleted.');
+    setConfirmDelete(false);
+    router.replace('/transactions');
+  };
+
+  if (loading && !expense) {
+    return <Screen variant={8}><View style={s.page}><BackButton /><Card style={s.loadingCard}><ActivityIndicator color={colors.deepForest} /><AppText style={s.muted}>Loading expense...</AppText></Card></View></Screen>;
+  }
+
+  if (!expense) {
+    return <Screen variant={8}><View style={s.page}><BackButton /><Card style={s.emptyCard}><AppText variant="h2">Expense not found</AppText><AppText style={[s.muted, s.center]}>It may have been removed or is no longer available.</AppText></Card></View></Screen>;
+  }
+
+  return (
+    <Screen variant={8}>
       <View style={s.page}>
         <BackButton />
-        <View style={s.detailHead}>
-          <View style={[s.roundIcon, { width: 78, height: 78, borderRadius: 39, backgroundColor: '#F9D0D0' }]}>
-            <AppText variant="title">🍗</AppText>
+        <FadeSlideIn style={s.detailHead}>
+          <View style={[s.roundIcon, { width: 78, height: 78, borderRadius: 39 }]}>
+            <AppIcon name={category?.icon ?? 'receipt-text-outline'} size={35} />
           </View>
-          <AppText variant="h2">Jollibee</AppText>
-          <AppText variant="hero">₱230.00</AppText>
-          <AppText style={s.muted}>Sep 14, 2024 • 2:14 PM</AppText>
-          <StatusChip>✓  Verified</StatusChip>
-        </View>
-        <Card style={{ gap: 12 }}>
-          <InfoRow label="🍴  Category" value="Food & Dining" />
-          <InfoRow label="▣  Payment Method" value="Cash" />
+          <AppText variant="h2">{expense.merchant}</AppText>
+          <AppText variant="hero">₱{(expense.amountCents / 100).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</AppText>
+          <AppText style={s.muted}>{formatExpenseDate(expense.transactionDate)}</AppText>
+          {expense.source === 'receipt' ? <StatusChip>Verified</StatusChip> : <StatusChip>Manual entry</StatusChip>}
+        </FadeSlideIn>
+        <FadeSlideIn delay={80}><Card style={{ gap: 12 }}>
+          <InfoRow label="Category" value={category?.fullLabel ?? expense.categoryId} />
+          <InfoRow label="Source" value={expense.source === 'receipt' ? 'Receipt' : 'Manual'} />
           <View style={s.divider} />
-          <AppText style={s.muted}>Items</AppText>
-          <InfoRow label="1  ×  Chicken Meal" value="₱230" />
-          <View style={s.divider} />
-          <InfoRow label="Total" value="₱230" bold />
-        </Card>
-        <Card>
-          <AppText style={s.muted}>Receipt</AppText>
-          <View style={s.receiptPreview}>
-            <Image source={assets.receipt} contentFit="contain" style={{ width: 110, height: 130 }} />
-          </View>
-        </Card>
-        <View style={s.actions}>
-          <Pressable style={s.edit}>
-            <AppText variant="h3" style={{ color: colors.deepForest }}>✎  Edit</AppText>
-          </Pressable>
-          <Pressable style={s.delete}>
-            <AppText variant="h3" style={{ color: colors.danger }}>▰  Delete</AppText>
-          </Pressable>
-        </View>
+          <InfoRow label="Total" value={`₱${(expense.amountCents / 100).toFixed(2)}`} bold />
+          {expense.notes ? <><View style={s.divider} /><AppText style={s.muted}>Notes</AppText><AppText>{expense.notes}</AppText></> : null}
+        </Card></FadeSlideIn>
+        <FadeSlideIn delay={150} style={s.actions}>
+          <PressableScale accessibilityRole="button" accessibilityLabel="Edit transaction" onPress={() => router.push(`/transaction/${expense.id}/edit` as never)} style={s.edit}><AppIcon name="pencil-outline" color={colors.deepForest} /><AppText variant="h3" style={{ color: colors.deepForest }}>Edit</AppText></PressableScale>
+          <PressableScale accessibilityRole="button" accessibilityLabel="Delete transaction" onPress={() => setConfirmDelete(true)} style={s.delete}><AppIcon name="delete-outline" color={colors.danger} /><AppText variant="h3" style={{ color: colors.danger }}>Delete</AppText></PressableScale>
+        </FadeSlideIn>
       </View>
+      <AuthDialog visible={confirmDelete} title="Delete transaction?" message="This transaction will be permanently removed from your expense history." primaryAction={{ label: 'Delete', destructive: true, loading: deleting, onPress: () => void remove() }} secondaryAction={{ label: 'Cancel', onPress: () => setConfirmDelete(false) }} onRequestClose={() => setConfirmDelete(false)} />
     </Screen>
   );
+}
+
+export function EditTransactionScreen() {
+  const { categories } = useCategories();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { expenses, updateExpense } = useExpenses();
+  const { showToast } = useToast();
+  const expense = expenses.find((item) => item.id === id);
+  const submitting = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<ExpenseFormErrors>({});
+  const [values, setValues] = useState<ExpenseFormValues>(() => expense ? { amount: (expense.amountCents / 100).toFixed(2), merchant: expense.merchant, categoryId: expense.categoryId, transactionDate: expense.transactionDate, notes: expense.notes ?? '' } : { amount: '', merchant: '', categoryId: '', transactionDate: todayLocalDate(), notes: '' });
+  if (!expense) return <Screen variant={8}><View style={s.page}><BackButton /><Card style={s.emptyCard}><AppText variant="h2">Transaction not found</AppText></Card></View></Screen>;
+  const update = <K extends keyof ExpenseFormValues>(key: K, value: ExpenseFormValues[K]) => { setValues((current) => ({ ...current, [key]: value })); setErrors((current) => ({ ...current, [key]: undefined })); };
+  const save = async () => {
+    if (submitting.current) return;
+    Keyboard.dismiss();
+    const validation = validateExpenseForm(values);
+    setErrors(validation.errors);
+    if (!validation.input) return;
+    submitting.current = true; setSaving(true);
+    const result = await updateExpense({ id: expense.id, ...validation.input });
+    submitting.current = false; setSaving(false);
+    if (!result.ok) { showToast(result.message, { tone: 'warning' }); return; }
+    selectionFeedback(); showToast('Transaction updated.'); router.replace(`/transaction/${expense.id}` as never);
+  };
+  return <Screen variant={8} bottomInset={40}><View style={s.page}><View style={s.editHeader}><BackButton /><View><AppText variant="title">Edit Transaction</AppText><AppText style={s.muted}>Update the saved expense.</AppText></View></View><FormInput label="Amount" icon="currency-php" value={values.amount} onChangeText={(value) => update('amount', normalizeAmountInput(value, values.amount))} keyboardType="decimal-pad" error={errors.amount} /><FormInput label="Merchant / Description" value={values.merchant} onChangeText={(value) => update('merchant', value)} error={errors.merchant} /><AppText variant="bodyMedium">Category</AppText><View style={s.editCategories}>{categories.map((category) => <PressableScale key={category.id} onPress={() => update('categoryId', category.id)} style={[s.editCategory, values.categoryId === category.id && s.editCategoryActive]}><AppIcon name={category.icon} size={18} color={values.categoryId === category.id ? colors.surface : colors.deepForest} /><AppText variant="small" style={values.categoryId === category.id ? s.editCategoryTextActive : undefined}>{category.label}</AppText></PressableScale>)}</View>{errors.categoryId ? <AppText variant="small" style={s.errorText}>{errors.categoryId}</AppText> : null}<FormInput label="Date" placeholder="YYYY-MM-DD" value={values.transactionDate} onChangeText={(value) => update('transactionDate', value)} error={errors.transactionDate} /><FormInput label="Notes (optional)" value={values.notes} onChangeText={(value) => update('notes', value)} multiline style={s.editNotes} error={errors.notes} /><PrimaryButton title={saving ? 'Saving Changes…' : 'Save Changes'} disabled={saving} onPress={() => void save()} /></View></Screen>;
 }
 
 function InfoRow({ label, value, bold = false }: { label: string; value: string; bold?: boolean }) {
@@ -162,157 +281,342 @@ function InfoRow({ label, value, bold = false }: { label: string; value: string;
 }
 
 export function BudgetScreen() {
+  const { categories } = useCategories();
+  const categoryLibrary = categories;
+  const bottomInset = useBottomNavInset();
+  const { expenses } = useExpenses();
+  const { budgets: monthlyBudgets, loading, error, refresh, saveMonthlyBudget, saveCategoryBudget, removeCategoryBudget } = useBudgets();
+  const { showToast } = useToast();
+  const currentMonth = todayLocalDate().slice(0, 7);
+  const [month, setMonth] = useState(currentMonth);
+  const [monthPicker, setMonthPicker] = useState(false);
+  const [monthDraft, setMonthDraft] = useState(`${currentMonth}-01`);
+  const [editor, setEditor] = useState<{ type: 'monthly' } | { type: 'category'; categoryId: string } | null>(null);
+  const [amount, setAmount] = useState('');
+  const [amountError, setAmountError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const budget = monthlyBudgets.find((item) => item.month === month);
+  const monthExpenses = expenses.filter((item) => item.transactionDate.startsWith(month));
+  const spentCents = monthExpenses.reduce((sum, item) => sum + item.amountCents, 0);
+  const remainingCents = (budget?.amountCents ?? 0) - spentCents;
+  const percentage = budget ? Math.round((spentCents / budget.amountCents) * 100) : 0;
+  const currency = (cents: number) => `₱${(Math.abs(cents) / 100).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const monthLabel = new Intl.DateTimeFormat('en-PH', { month: 'long', year: 'numeric' }).format(new Date(`${month}-01T12:00:00`));
+  const status = percentage >= 100 ? 'Budget exceeded' : percentage >= 90 ? 'Near budget limit' : percentage >= 70 ? 'Approaching limit' : 'On track';
+
+  const openMonthly = () => { setAmount(budget ? (budget.amountCents / 100).toFixed(2) : ''); setAmountError(null); setEditor({ type: 'monthly' }); };
+  const openCategory = (categoryId: string) => { const limit = budget?.categoryBudgets.find((item) => item.categoryId === categoryId); setAmount(limit ? (limit.amountCents / 100).toFixed(2) : ''); setAmountError(null); setEditor({ type: 'category', categoryId }); };
+  const save = async () => {
+    if (!editor || saving) return;
+    const cents = parseBudgetAmount(amount);
+    if (!cents) { setAmountError('Enter a valid amount greater than zero.'); return; }
+    setSaving(true);
+    const result = editor.type === 'monthly' ? await saveMonthlyBudget(month, cents) : budget ? await saveCategoryBudget(budget.id, editor.categoryId, cents) : { ok: false as const, message: 'Set a monthly budget first.' };
+    setSaving(false);
+    if (!result.ok) { showToast(result.message, { tone: 'warning' }); return; }
+    selectionFeedback(); showToast(editor.type === 'monthly' ? 'Monthly budget saved.' : 'Category limit saved.'); setEditor(null);
+  };
+  const removeLimit = async () => {
+    if (!budget || editor?.type !== 'category') return;
+    const limit = budget.categoryBudgets.find((item) => item.categoryId === editor.categoryId);
+    if (!limit) return;
+    setSaving(true); const result = await removeCategoryBudget(budget.id, limit.id); setSaving(false);
+    if (!result.ok) { showToast(result.message, { tone: 'warning' }); return; }
+    showToast('Category limit removed.'); setEditor(null);
+  };
   return (
-    <Screen bottomInset={110} variant={4}>
+    <Screen bottomInset={bottomInset} variant={9} fixed={<BottomNavigation />} refreshing={loading} onRefresh={() => void refresh()}>
       <View style={s.page}>
         <AppText variant="hero">Budget</AppText>
-        <Card style={s.select}>
-          <AppText>September 2024</AppText>
-          <AppText>⌄</AppText>
-        </Card>
-        <Card style={{ gap: 10 }}>
-          <AppText variant="h3">Monthly Budget</AppText>
-          <AppText variant="hero">₱10,000</AppText>
-          <View style={s.rowBetween}>
-            <AppText variant="h3" style={{ color: colors.deepForest }}>₱4,280 spent</AppText>
-            <AppText variant="h3" style={{ color: colors.deepForest }}>₱5,720 left</AppText>
-          </View>
-          <View style={s.row}>
-            <ProgressBar value={43} />
-            <AppText variant="h3">43%</AppText>
-          </View>
-        </Card>
+        <PressableScale accessibilityRole="button" accessibilityLabel={`Selected budget month: ${monthLabel}`} onPress={() => { setMonthDraft(`${month}-01`); setMonthPicker(true); }} style={s.budgetMonth}><AppText variant="h3">{monthLabel}</AppText><AppIcon name="calendar-month-outline" /></PressableScale>
+        {loading && monthlyBudgets.length === 0 ? <View style={s.skeletonCard} /> : error && monthlyBudgets.length === 0 ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load budgets</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : !budget ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="wallet-plus-outline" size={30} /></View><AppText variant="h2">No budget yet</AppText><AppText style={[s.muted, s.center]}>Set a monthly budget to start tracking your spending limits.</AppText><PrimaryButton title="Set Budget" onPress={openMonthly} /></Card> : <PressableScale accessibilityRole="button" accessibilityLabel={`Monthly budget ${currency(budget.amountCents)}, ${percentage}% used`} onPress={openMonthly}><Card style={s.monthlyBudgetCard}><View style={s.rowBetween}><AppText variant="h3">Monthly Budget</AppText><AppIcon name="pencil-outline" size={20} color={colors.muted} /></View><AppText variant="hero" adjustsFontSizeToFit numberOfLines={1}>{currency(budget.amountCents)}</AppText><View style={s.rowBetween}><AppText variant="h3" style={{ color: colors.deepForest }}>{currency(spentCents)} spent</AppText><AppText variant="h3" style={{ color: remainingCents < 0 ? colors.danger : colors.deepForest }}>{currency(remainingCents)} {remainingCents < 0 ? 'over' : 'left'}</AppText></View><View style={s.row}><ProgressBar value={Math.min(100, percentage)} /><AppText variant="h3">{percentage}%</AppText></View><StatusChip warning={percentage >= 90}>{status}</StatusChip></Card></PressableScale>}
         <AppText variant="h2">Category Budgets</AppText>
-        {budgets.map(b => (
-          <Card key={b[1]} style={s.budgetRow}>
-            <View style={s.budgetIcon}>
-              <AppIcon name={b[0]} size={22} color={colors.deepForest} />
+        {!budget ? <AppText style={s.muted}>Set a monthly budget before adding category limits.</AppText> : budget.categoryBudgets.length === 0 ? <Card style={s.noLimits}><AppText variant="h3">No category limits yet</AppText><AppText style={s.muted}>Tap a category below to add one.</AppText></Card> : null}
+        {categories.map((category) => {
+          const limit = budget?.categoryBudgets.find((item) => item.categoryId === category.id);
+          const categorySpent = monthExpenses.filter((item) => item.categoryId === category.id).reduce((sum, item) => sum + item.amountCents, 0);
+          const categoryPercent = limit ? Math.round(categorySpent / limit.amountCents * 100) : 0;
+          const categoryRemaining = limit ? limit.amountCents - categorySpent : null;
+          return (
+          <PressableScale
+            key={category.id}
+            accessibilityRole="button"
+            accessibilityLabel={`${limit ? 'Edit' : 'Set'} ${category.fullLabel} budget`}
+            accessibilityHint={budget ? 'Opens the category budget editor' : 'Set a monthly budget first'}
+            hitSlop={4}
+            onPress={() => budget ? openCategory(category.id) : openMonthly()}
+            style={s.budgetRow}
+          >
+            <View style={[s.budgetIcon, { backgroundColor: category.color ? `${category.color}22` : CATEGORY_TONES[category.id]?.background ?? colors.pale }]}>
+              <AppIcon name={category.icon} size={22} color={category.color ?? CATEGORY_TONES[category.id]?.foreground ?? colors.deepForest} />
             </View>
             <View style={s.budgetInfo}>
-              <AppText variant="h3" numberOfLines={1}>{b[1]}</AppText>
-              <ProgressBar value={b[3] / b[2] * 100} height={10} />
+              <AppText variant="h3" numberOfLines={1}>{category.fullLabel}</AppText>
+              <ProgressBar value={Math.min(100, categoryPercent)} height={9} />
             </View>
             <View style={s.budgetValues}>
-              <AppText variant="h3" numberOfLines={1}>₱{b[2].toLocaleString()}</AppText>
-              <AppText variant="small" style={{ color: colors.deepForest }} numberOfLines={1}>₱{b[3].toLocaleString()} spent</AppText>
+              <AppText variant="h3" numberOfLines={1}>{limit ? currency(limit.amountCents) : 'Set limit'}</AppText>
+              <AppText variant="small" style={{ color: categoryPercent >= 100 ? colors.danger : colors.deepForest }} numberOfLines={1}>{currency(categorySpent)} spent</AppText>
+              {categoryRemaining !== null ? <AppText variant="small" style={{ color: categoryRemaining < 0 ? colors.danger : colors.muted }} numberOfLines={1}>{currency(categoryRemaining)} {categoryRemaining < 0 ? 'over' : 'left'}</AppText> : null}
             </View>
             <AppIcon name="chevron-right" size={20} color={colors.muted} />
-          </Card>
-        ))}
+          </PressableScale>);
+        })}
       </View>
-      <BottomNavigation />
+      <Modal visible={monthPicker} transparent animationType="fade" onRequestClose={() => setMonthPicker(false)}><View style={s.pickerBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setMonthPicker(false)} /><View style={s.filterSheet}><View style={s.sheetHandle} /><AppText variant="h2">Choose Budget Month</AppText><Calendar value={monthDraft} onSelect={setMonthDraft} /><AppText style={s.selectedMonthPreview}>{formatMonth(monthDraft.slice(0, 7))}</AppText><PrimaryButton title="Use This Month" onPress={() => { setMonth(monthDraft.slice(0, 7)); setMonthPicker(false); }} /></View></View></Modal>
+      <Modal visible={Boolean(editor)} transparent animationType="fade" onRequestClose={() => !saving && setEditor(null)}><View style={s.pickerBackdrop}><Pressable style={StyleSheet.absoluteFill} disabled={saving} onPress={() => setEditor(null)} /><View style={s.filterSheet}><View style={s.sheetHandle} /><AppText variant="h2">{editor?.type === 'monthly' ? `${budget ? 'Edit' : 'Set'} Monthly Budget` : `Set ${categoryLibrary.find((item) => item.id === (editor?.type === 'category' ? editor.categoryId : ''))?.fullLabel ?? 'Category'} Limit`}</AppText><FormInput label="Amount" icon="currency-php" placeholder="0.00" value={amount} onChangeText={(value) => { setAmount(normalizeAmountInput(value, amount)); setAmountError(null); }} keyboardType="decimal-pad" error={amountError ?? undefined} /><PrimaryButton title={saving ? 'Saving…' : 'Save Budget'} disabled={saving} onPress={() => void save()} />{editor?.type === 'category' && budget?.categoryBudgets.some((item) => item.categoryId === editor.categoryId) ? <SecondaryButton title="Remove Category Limit" disabled={saving} onPress={() => void removeLimit()} /> : null}</View></View></Modal>
     </Screen>
   );
 }
 
 export function AnalyticsScreen() {
+  const { expenses, loading, loadError, refresh } = useExpenses();
+  const { allCategories } = useCategories();
+  const bottomInset = useBottomNavInset();
+  const [month, setMonth] = useState(todayLocalDate().slice(0, 7));
+  const [monthDraft, setMonthDraft] = useState(`${month}-01`);
+  const [monthPicker, setMonthPicker] = useState(false);
+  const [mode, setMode] = useState<'spending' | 'trends'>('spending');
+  useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
+  const analytics = useMemo(() => analyticsForMonth(expenses, allCategories, month), [allCategories, expenses, month]);
+  const priorMonth = previousMonth(month);
+  const previous = useMemo(() => analyticsForMonth(expenses, allCategories, priorMonth), [allCategories, expenses, priorMonth]);
+  const monthLabel = formatMonth(month);
+  const maxDay = Math.max(...analytics.dailyTotals.map((item) => item.amountCents), 1);
+  const change = previous.totalCents ? Math.round(((analytics.totalCents - previous.totalCents) / previous.totalCents) * 100) : null;
   return (
-    <Screen bottomInset={110} variant={3}>
+    <Screen bottomInset={bottomInset} variant={11} fixed={<BottomNavigation />} refreshing={loading && expenses.length > 0} onRefresh={() => void refresh()}>
       <View style={s.page}>
         <AppText variant="hero">Analytics</AppText>
         <AppText style={s.muted}>A clearer view of your spending.</AppText>
-        <Card style={s.select}>
-          <AppText variant="h2">September 2026</AppText>
-          <AppText>⌄</AppText>
-        </Card>
+        <PressableScale accessibilityRole="button" accessibilityLabel={`Selected analytics month: ${monthLabel}`} onPress={() => { setMonthDraft(`${month}-01`); setMonthPicker(true); }} style={s.analyticsMonth}><AppText variant="h2">{monthLabel}</AppText><AppIcon name="calendar-month-outline" /></PressableScale>
         <View style={s.segment}>
-          <View style={s.segmentActive}>
-            <AppText variant="h3" style={{ color: colors.surface }}>Spending</AppText>
-          </View>
-          <Pressable onPress={() => router.push('/insights')} style={s.segmentHalf}>
-            <AppText variant="h3" style={s.muted}>Trends</AppText>
-          </Pressable>
+          <PressableScale onPress={() => setMode('spending')} style={[s.segmentHalf, mode === 'spending' && s.segmentActive]}><AppText variant="h3" style={mode === 'spending' ? s.segmentActiveText : s.muted}>Spending</AppText></PressableScale>
+          <PressableScale onPress={() => setMode('trends')} style={[s.segmentHalf, mode === 'trends' && s.segmentActive]}><AppText variant="h3" style={mode === 'trends' ? s.segmentActiveText : s.muted}>Trends</AppText></PressableScale>
         </View>
-        <Card style={{ alignItems: 'center' }}>
-          <View style={s.donut}>
-            <View style={s.donutInner}>
-              <AppText variant="title">₱4,280</AppText>
-              <AppText style={s.muted}>Total Spending</AppText>
-            </View>
-          </View>
-          {([['#145733', 'Food & Dining', '32%'], ['#3C8055', 'Transportation', '18%'], ['#70A16E', 'Shopping', '17%'], ['#98BA8D', 'Bills', '12%'], ['#C7D9BC', 'Others', '21%']] as const).map(x => (
-            <View style={s.legend} key={x[1]}>
-              <View style={[s.legendDot, { backgroundColor: x[0] }]} />
-              <AppText style={[s.muted, { flex: 1 }]}>{x[1]}</AppText>
-              <AppText style={s.muted}>{x[2]}</AppText>
-            </View>
-          ))}
-        </Card>
-        <Pressable onPress={() => router.push('/insights')}>
-          <AppText variant="h3" style={{ textAlign: 'right', color: colors.deepForest }}>View Spending Insights →</AppText>
-        </Pressable>
+        {loading && expenses.length === 0 ? <Card style={s.analyticsLoading}><ActivityIndicator color={colors.deepForest} /><View style={s.analyticsSkeletonCircle} /><View style={s.skeletonLineWide} /></Card> : loadError ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load analytics.</AppText><AppText style={[s.muted, s.center]}>Check your connection and try again.</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : analytics.expenses.length === 0 ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="chart-donut" size={30} /></View><AppText variant="h2">No spending data yet</AppText><AppText style={[s.muted, s.center]}>Add expenses to start seeing your spending patterns.</AppText><PrimaryButton title="Add Expense" onPress={() => router.push('/add-expense')} /></Card> : mode === 'spending' ? <Card style={s.analyticsCard}><DonutChart slices={analytics.categorySlices} refreshKey={month}><AppText variant="title" adjustsFontSizeToFit numberOfLines={1}>{compactCurrency(analytics.totalCents)}</AppText><AppText style={s.muted}>Total Spending</AppText></DonutChart><View style={s.legendList}>{analytics.categorySlices.map((slice) => <View style={s.legend} key={slice.id}><View style={[s.legendDot, { backgroundColor: slice.color }]} /><AppText style={[s.muted, { flex: 1 }]} numberOfLines={1}>{slice.label}</AppText><AppText style={s.muted}>{Math.round(slice.percentage)}%</AppText></View>)}</View></Card> : <Card style={s.trendsCard}><View style={s.rowBetween}><View><AppText style={s.muted}>This month</AppText><AppText variant="title">{compactCurrency(analytics.totalCents)}</AppText></View><View style={s.trendChange}><AppIcon name={change !== null && change > 0 ? 'trending-up' : 'trending-down'} size={20} color={change !== null && change > 0 ? colors.danger : colors.success} /><AppText variant="h3" style={{ color: change !== null && change > 0 ? colors.danger : colors.success }}>{change === null ? 'No comparison' : `${change > 0 ? '+' : ''}${change}%`}</AppText></View></View>{previous.totalCents === 0 || analytics.expenses.length < 2 ? <View style={s.trendEmpty}><AppText variant="h2">Not enough history yet</AppText><AppText style={[s.muted, s.center]}>Keep tracking expenses and your trends will appear here.</AppText></View> : <><View style={s.barChart}>{analytics.dailyTotals.map((item) => <View key={item.day} style={s.barColumn}><View style={[s.bar, { height: Math.max(8, Math.round((item.amountCents / maxDay) * 130)) }]} /><AppText variant="small" style={s.muted}>{item.day}</AppText></View>)}</View><View style={s.trendMetrics}><TrendMetric label={`${formatMonth(priorMonth)} total`} value={compactCurrency(previous.totalCents)} /><TrendMetric label="Daily average" value={compactCurrency(analytics.averageDailyCents)} /><TrendMetric label="Highest-spend day" value={analytics.highestDay ? `${monthLabel.split(' ')[0]} ${analytics.highestDay.day} · ${compactCurrency(analytics.highestDay.amountCents)}` : '—'} /></View></>}</Card>}
+        {analytics.expenses.length > 0 ? <PressableScale onPress={() => router.push(`/insights?month=${month}` as never)}><AppText variant="h3" style={s.insightsLink}>View Spending Insights <AppIcon name="arrow-right" size={18} color={colors.deepForest} /></AppText></PressableScale> : null}
       </View>
-      <BottomNavigation />
+      <MonthPickerModal visible={monthPicker} title="Choose Analytics Month" value={monthDraft} onChange={setMonthDraft} onClose={() => setMonthPicker(false)} onConfirm={(value) => { setMonth(value.slice(0, 7)); setMonthPicker(false); }} />
     </Screen>
   );
 }
 
 export function InsightsScreen() {
+  const params = useLocalSearchParams<{ month?: string }>();
+  const { expenses, loading, loadError, refresh } = useExpenses();
+  const { allCategories } = useCategories();
+  const { budgets } = useBudgets();
+  const bottomInset = useBottomNavInset();
+  const month = typeof params.month === 'string' && /^\d{4}-\d{2}$/.test(params.month) ? params.month : todayLocalDate().slice(0, 7);
+  useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
+  const current = useMemo(() => analyticsForMonth(expenses, allCategories, month), [allCategories, expenses, month]);
+  const previous = useMemo(() => analyticsForMonth(expenses, allCategories, previousMonth(month)), [allCategories, expenses, month]);
+  const insights = useMemo(() => buildInsights(current, previous, allCategories, budgets.find((item) => item.month === month)), [allCategories, budgets, current, month, previous]);
   return (
-    <Screen bottomInset={110} variant={4}>
+    <Screen bottomInset={bottomInset} variant={12} fixed={<BottomNavigation />} refreshing={loading && expenses.length > 0} onRefresh={() => void refresh()}>
       <View style={s.page}>
         <View style={s.insightHero}>
           <View style={{ flex: 1 }}>
             <AppText variant="title">Spending Insights</AppText>
-            <AppText style={s.muted}>Simple insights for a smarter you.</AppText>
+            <AppText style={s.muted}>Simple insights for a smarter you. · {formatMonth(month)}</AppText>
           </View>
-          <Image source={assets.mascotScanning} contentFit="contain" style={{ width: 135, height: 120 }} />
+          <Image source={assets.mascotScanning} contentFit="contain" style={s.insightMascot} />
         </View>
-        {([['🍴', 'Top Category', 'Food & Dining', 'accounts for 32% of your spending this month.'], ['🛒', 'Recurring Expenses', 'You have 2 recurring', 'merchants this month.'], ['☕', 'Unusual Spending', '45% higher', 'Your coffee shop spending is higher than usual.'], ['🎁', 'Recommendation', 'Food & Dining', 'Consider setting a budget to stay on track.']] as const).map(x => (
-          <Card key={x[1]} style={s.insightCard}>
-            <View style={s.iconSoft}>
-              <AppText variant="h2">{x[0]}</AppText>
-            </View>
-            <View style={{ flex: 1 }}>
-              <AppText style={s.muted}>{x[1]}</AppText>
-              <AppText variant="h2">{x[2]}</AppText>
-              <AppText style={s.muted}>{x[3]}</AppText>
-            </View>
-            <AppText variant="title">›</AppText>
-          </Card>
-        ))}
+        {loading && expenses.length === 0 ? <Card style={s.analyticsLoading}><ActivityIndicator color={colors.deepForest} /><View style={s.skeletonLineWide} /><View style={s.skeletonLine} /></Card> : loadError ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load insights.</AppText><AppText style={[s.muted, s.center]}>Check your connection and try again.</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : insights.length === 0 ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="lightbulb-outline" size={30} /></View><AppText variant="h2">No insights yet</AppText><AppText style={[s.muted, s.center]}>Add expenses for {formatMonth(month)} to reveal useful spending patterns.</AppText><PrimaryButton title="Add Expense" onPress={() => router.push('/add-expense')} /></Card> : insights.map((insight) => <PressableScale key={insight.id} disabled={!insight.destination} onPress={() => insight.destination && router.push(insight.destination)}><Card style={s.insightCard}><View style={s.insightIcon}><AppIcon name={insight.icon} size={32} color={colors.deepForest} /></View><View style={{ flex: 1 }}><AppText style={s.muted}>{insight.label}</AppText><AppText variant="h2">{insight.title}</AppText><AppText style={s.muted}>{insight.detail}</AppText></View>{insight.destination ? <AppIcon name="chevron-right" size={28} color={colors.deepForest} /> : null}</Card></PressableScale>)}
       </View>
-      <BottomNavigation />
     </Screen>
   );
 }
 
+function MonthPickerModal({ visible, title, value, onChange, onClose, onConfirm }: { visible: boolean; title: string; value: string; onChange: (value: string) => void; onClose: () => void; onConfirm: (value: string) => void }) {
+  return <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}><View style={s.pickerBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={onClose} /><View style={s.filterSheet}><View style={s.sheetHandle} /><AppText variant="h2">{title}</AppText><Calendar value={value} onSelect={onChange} /><AppText style={s.selectedMonthPreview}>{formatMonth(value.slice(0, 7))}</AppText><PrimaryButton title="Use This Month" onPress={() => onConfirm(value)} /></View></View></Modal>;
+}
+
+function TrendMetric({ label, value }: { label: string; value: string }) {
+  return <View style={s.trendMetric}><AppText style={s.muted}>{label}</AppText><AppText variant="h3">{value}</AppText></View>;
+}
+
 export function CategoriesScreen() {
+  const { categories, loading: categoriesLoading, error: categoriesError, refresh: refreshCategories, createCategory, updateCategory, archiveCategory } = useCategories();
+  const { categories: dashboardCategories, isFull, isOnDashboard, addCategory, removeCategory, addNextAvailable } =
+    useDashboardCategories();
+  const { showToast } = useToast();
+  const bottomInset = useBottomNavInset();
+  const [editor, setEditor] = useState<{ id?: string } | null>(null);
+  const [name, setName] = useState('');
+  const [icon, setIcon] = useState<Parameters<typeof AppIcon>[0]['name']>('shape-outline');
+  const [color, setColor] = useState('#315F43');
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [archiveId, setArchiveId] = useState<string | null>(null);
+  const iconChoices = ['shape-outline', 'coffee-outline', 'home-outline', 'paw-outline', 'music-note-outline', 'briefcase-outline'] as const;
+  const colorChoices = ['#315F43', '#C92525', '#E45C0A', '#3477B8', '#7057A3', '#28704B'] as const;
+
+  const openCreate = () => { setName(''); setIcon('shape-outline'); setColor('#315F43'); setFormError(null); setEditor({}); };
+  const openEdit = (id: string) => { const category = categories.find((item) => item.id === id); if (!category?.custom) return; setName(category.fullLabel); setIcon(category.icon); setColor(category.color ?? '#315F43'); setFormError(null); setEditor({ id }); };
+  const saveCategory = async () => {
+    if (!editor || saving) return;
+    const cleanName = name.trim();
+    if (!cleanName) { setFormError('Enter a category name.'); return; }
+    if (cleanName.length > 40) { setFormError('Use 40 characters or fewer.'); return; }
+    if (categories.some((item) => item.id !== editor.id && item.fullLabel.toLocaleLowerCase() === cleanName.toLocaleLowerCase())) { setFormError('A category with this name already exists.'); return; }
+    setSaving(true);
+    const input = { name: cleanName, icon: icon as (typeof categories)[number]['icon'], color };
+    const result = editor.id ? await updateCategory(editor.id, input) : await createCategory(input);
+    setSaving(false);
+    if (!result.ok) { setFormError(result.message); return; }
+    selectionFeedback(); showToast(editor.id ? 'Category updated.' : 'Category added.'); setEditor(null);
+  };
+  const archive = async () => {
+    if (!archiveId || saving) return;
+    setSaving(true); const result = await archiveCategory(archiveId); setSaving(false);
+    if (!result.ok) { showToast(result.message, { tone: 'warning' }); return; }
+    removeCategory(archiveId); showToast('Category archived. Historical transactions are preserved.'); setArchiveId(null); setEditor(null);
+  };
+
+  const reportLimit = () => {
+    warningFeedback();
+    showToast(CATEGORY_LIMIT_MESSAGE, { tone: 'warning' });
+  };
+
+  const toggleDashboard = (id: string, label: string) => {
+    if (isOnDashboard(id)) {
+      removeCategory(id);
+      selectionFeedback();
+      showToast(`${label} removed from your dashboard.`);
+      return;
+    }
+
+    if (addCategory(id)) {
+      selectionFeedback();
+      showToast(`${label} added to your dashboard.`);
+      return;
+    }
+
+    reportLimit();
+  };
+
   return (
-    <Screen bottomInset={110} variant={5}>
+    <Screen bottomInset={bottomInset} variant={10} fixed={<BottomNavigation />}>
       <View style={s.page}>
         <AppText variant="hero">Categories</AppText>
         <AppText style={s.muted}>Organize your spending, your way.</AppText>
-        {categories.map(c => (
-          <Pressable key={c[1]}>
-            <Card style={s.categoryRow}>
-              <View style={[s.roundIcon, { backgroundColor: c[2] }]}>
-                <AppIcon name={c[0]} />
-              </View>
-              <AppText variant="h3" style={{ flex: 1 }}>{c[1]}</AppText>
-              <AppIcon name="chevron-right" color={colors.muted} />
+        <AppText variant="small" style={s.muted}>
+          {dashboardCategories.length} of {MAX_DASHBOARD_CATEGORIES} shown on your dashboard
+        </AppText>
+        {categoriesLoading ? <View style={s.categoryLoading}><ActivityIndicator color={colors.deepForest} /><AppText style={s.muted}>Loading your categories…</AppText></View> : null}
+        {categoriesError ? <Card style={s.categoryError}><AppText style={s.muted}>Custom categories couldn&apos;t be loaded.</AppText><SecondaryButton title="Try Again" onPress={() => void refreshCategories()} /></Card> : null}
+
+        {categories.map(category => {
+          const onDashboard = isOnDashboard(category.id);
+          return (
+            /*
+              Plain container with two sibling press targets. Nesting the toggle
+              inside the row's pressable would render a <button> inside a
+              <button> on web.
+            */
+            <Card key={category.id} style={s.categoryRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${category.fullLabel}`}
+                onPress={() => router.push({ pathname: '/category/[id]', params: { id: category.id } })}
+                style={({ pressed }) => [s.categoryMain, pressed && { opacity: 0.7 }]}
+              >
+                <View style={[s.categoryIcon, { backgroundColor: category.color ? `${category.color}22` : CATEGORY_TONES[category.id]?.background ?? '#E1EBDD' }]}>
+                  <AppIcon name={category.icon} color={category.color ?? CATEGORY_TONES[category.id]?.foreground ?? colors.deepForest} />
+                </View>
+                <AppText variant="h3" style={{ flex: 1 }} numberOfLines={1}>
+                  {category.fullLabel}
+                </AppText>
+                <AppIcon name="chevron-right" color={colors.muted} />
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  onDashboard
+                    ? `Remove ${category.fullLabel} from dashboard`
+                    : `Add ${category.fullLabel} to dashboard`
+                }
+                accessibilityState={{ selected: onDashboard }}
+                hitSlop={6}
+                onPress={() => toggleDashboard(category.id, category.fullLabel)}
+                style={({ pressed }) => [
+                  s.dashboardToggle,
+                  onDashboard && s.dashboardToggleOn,
+                  !onDashboard && isFull && s.dashboardToggleBlocked,
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
+                <AppIcon
+                  name={onDashboard ? 'check' : 'plus'}
+                  size={17}
+                  color={onDashboard ? colors.surface : isFull ? colors.muted : colors.deepForest}
+                />
+              </Pressable>
+              {category.custom ? <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${category.fullLabel}`} hitSlop={6} onPress={() => openEdit(category.id)} style={({ pressed }) => [s.categoryEdit, pressed && { opacity: 0.7 }]}><AppIcon name="pencil-outline" size={18} /></Pressable> : null}
             </Card>
-          </Pressable>
-        ))}
-        <PrimaryButton title="Add Category" icon="plus" />
+          );
+        })}
+
+        <PrimaryButton
+          title="Add Custom Category"
+          icon="plus"
+          onPress={openCreate}
+        />
+        {!isFull ? <SecondaryButton title="Add Next to Dashboard" onPress={() => { if (addNextAvailable()) { selectionFeedback(); showToast('Category added to your dashboard.'); } }} /> : null}
       </View>
-      <BottomNavigation />
+      <Modal visible={Boolean(editor)} transparent animationType="fade" onRequestClose={() => !saving && setEditor(null)}>
+        <View style={s.pickerBackdrop}><Pressable style={StyleSheet.absoluteFill} disabled={saving} onPress={() => setEditor(null)} /><View style={s.filterSheet}><View style={s.sheetHandle} /><AppText variant="h2">{editor?.id ? 'Edit Category' : 'Add Category'}</AppText><FormInput label="Category name" placeholder="e.g. Pets" value={name} onChangeText={(value) => { setName(value); setFormError(null); }} maxLength={40} error={formError ?? undefined} /><AppText variant="bodyMedium">Icon</AppText><View style={s.choiceRow}>{iconChoices.map((value) => <PressableScale key={value} accessibilityLabel={`Use ${value} icon`} accessibilityState={{ selected: icon === value }} onPress={() => setIcon(value)} style={[s.choiceCircle, icon === value && s.choiceCircleActive]}><AppIcon name={value} color={icon === value ? colors.surface : colors.deepForest} /></PressableScale>)}</View><AppText variant="bodyMedium">Color</AppText><View style={s.choiceRow}>{colorChoices.map((value) => <PressableScale key={value} accessibilityLabel={`Use color ${value}`} accessibilityState={{ selected: color === value }} onPress={() => setColor(value)} style={[s.colorChoice, { backgroundColor: value }, color === value && s.colorChoiceActive]}>{color === value ? <AppIcon name="check" size={17} color={colors.surface} /> : null}</PressableScale>)}</View><PrimaryButton title={saving ? 'Saving…' : editor?.id ? 'Save Changes' : 'Add Category'} disabled={saving} onPress={() => void saveCategory()} />{editor?.id ? <SecondaryButton title="Archive Category" disabled={saving} onPress={() => setArchiveId(editor.id ?? null)} /> : null}</View></View>
+      </Modal>
+      <AuthDialog visible={Boolean(archiveId)} title="Archive category?" message="The category will be hidden from new expenses, but all historical transactions will keep their category." primaryAction={{ label: 'Archive', destructive: true, loading: saving, onPress: () => void archive() }} secondaryAction={{ label: 'Cancel', onPress: () => setArchiveId(null) }} onRequestClose={() => setArchiveId(null)} />
     </Screen>
   );
 }
 
 export function ProfileScreen() {
+  const { user, signOut } = useAuth();
+  const displayName = (user?.user_metadata?.full_name as string | undefined) || 'Account';
+  const displayEmail = user?.email ?? '';
+  const initial = displayName.charAt(0).toUpperCase() || '?';
+
+  // Local state rather than useAuthDialog so the confirm dialog's loading flag
+  // stays live while sign-out is in flight (a stored config would be stale).
+  const [logoutDialog, setLogoutDialog] = useState<'confirm' | 'error' | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
+  const bottomInset = useBottomNavInset();
+
+  const handleConfirmLogout = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+
+    // Clears only the Supabase auth session. No local data is touched.
+    const result = await signOut();
+    setSigningOut(false);
+
+    if (!result.ok) {
+      setLogoutDialog('error');
+      return;
+    }
+
+    // On success the session becomes null and useAuthGuard moves us to the
+    // public flow, so we don't navigate here — a manual replace on top of the
+    // guard's redirect is what causes the flicker.
+    setLogoutDialog(null);
+  };
+
   return (
-    <Screen bottomInset={110} variant={4}>
+    <Screen bottomInset={bottomInset} variant={4} fixed={<BottomNavigation />}>
       <View style={s.page}>
         <AppText variant="title">Profile & Settings</AppText>
         <AppText style={s.muted}>Manage your account and preferences.</AppText>
         <Card style={s.profileCard}>
           <View style={s.profileAvatar}>
-            <AppText variant="hero" style={{ color: colors.surface }}>R</AppText>
+            <AppText variant="hero" style={{ color: colors.surface }}>{initial}</AppText>
           </View>
-          <AppText variant="h2">Ryan</AppText>
-          <AppText style={s.muted}>ryan@example.com</AppText>
+          <AppText variant="h2">{displayName}</AppText>
+          <AppText style={s.muted}>{displayEmail}</AppText>
         </Card>
         {([['♙', 'Account Information'], ['▣', 'Change Password'], ['♧', 'Notifications'], ['◉', 'Appearance'], ['♢', 'Privacy & Data'], ['?', 'Help & Support'], ['ⓘ', 'About']] as const).map(x => (
           <Pressable key={x[1]}>
@@ -325,11 +629,51 @@ export function ProfileScreen() {
             </Card>
           </Pressable>
         ))}
-        <Pressable onPress={() => router.replace('/welcome')} style={s.logout}>
-          <AppText variant="h3" style={{ color: colors.danger }}>⇥  Logout</AppText>
+        <AppText variant="small" style={s.sectionLabel}>ACCOUNT</AppText>
+        <Pressable
+          onPress={() => setLogoutDialog('confirm')}
+          accessibilityRole="button"
+          accessibilityLabel="Log out"
+          style={({ pressed }) => pressed && { opacity: 0.85 }}
+        >
+          <Card style={s.logoutCard}>
+            <View style={s.logoutIcon}>
+              <AppIcon name="logout" size={22} color={colors.danger} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <AppText variant="h3" style={{ color: colors.danger }}>Log Out</AppText>
+              <AppText variant="small" style={s.muted}>Sign out of this device.</AppText>
+            </View>
+          </Card>
         </Pressable>
       </View>
-      <BottomNavigation />
+
+      {logoutDialog === 'confirm' && (
+        <AuthDialog
+          visible
+          title={authCopy.logoutConfirm.title}
+          message={authCopy.logoutConfirm.message}
+          primaryAction={{
+            label: 'Log Out',
+            destructive: true,
+            loading: signingOut,
+            onPress: handleConfirmLogout,
+          }}
+          secondaryAction={{ label: 'Cancel', onPress: () => setLogoutDialog(null) }}
+          onRequestClose={() => setLogoutDialog(null)}
+        />
+      )}
+
+      {logoutDialog === 'error' && (
+        <AuthDialog
+          visible
+          title={authCopy.logoutFailure.title}
+          message={authCopy.logoutFailure.message}
+          primaryAction={{ label: 'OK', onPress: () => setLogoutDialog(null) }}
+          onRequestClose={() => setLogoutDialog(null)}
+        />
+      )}
+
     </Screen>
   );
 }
@@ -351,40 +695,127 @@ const s = StyleSheet.create({
   search: { height: 54, backgroundColor: 'rgba(232,238,227,.88)', borderRadius: radii.md, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 10 },
   searchInput: { flex: 1, fontFamily: 'JakartaRegular', fontSize: 15, color: colors.text },
   filters: { flexDirection: 'row', gap: 8 },
-  filter: { flex: 1, height: 44, borderRadius: radii.md, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  filter: { flex: 1, minWidth: 0, height: 48, paddingHorizontal: 10, gap: 5, flexDirection: 'row', borderRadius: radii.md, backgroundColor: 'rgba(255,253,247,.96)', borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
+  filterActive: { backgroundColor: colors.deepForest, borderColor: colors.deepForest },
+  filterActiveText: { color: colors.surface },
+  clearFilters: { alignSelf: 'flex-end', minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 4 },
+  clearFiltersText: { color: colors.deepForest, fontFamily: 'JakartaBold' },
+  pickerBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: colors.overlay },
+  filterSheet: { width: '100%', maxWidth: 480, maxHeight: '82%', alignSelf: 'center', backgroundColor: colors.surface, borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 22, gap: 16 },
+  sheetHandle: { width: 44, height: 5, borderRadius: 3, backgroundColor: '#B8B6AF', alignSelf: 'center' },
+  pickerOptions: { gap: 7 },
+  monthDatePicker: { alignItems: 'center', justifyContent: 'center', minHeight: 74 },
+  selectedMonthPreview: { color: colors.muted, textAlign: 'center' },
+  pickerOption: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: radii.md, paddingHorizontal: 12, borderWidth: 1, borderColor: 'transparent' },
+  pickerOptionSelected: { backgroundColor: colors.pale, borderColor: colors.lightGreen },
+  pickerOptionIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#DCE8D8' },
+  pickerOptionCopy: { flex: 1 },
   group: { marginTop: 14, color: colors.muted },
   transaction: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 8 },
-  roundIcon: { width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center' },
+  roundIcon: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#E1EBDD', alignItems: 'center', justifyContent: 'center' },
+  loadingCard: { minHeight: 150, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  skeletonList: { gap: 10, marginTop: 8 },
+  skeletonCard: { minHeight: 86, borderRadius: radii.lg, backgroundColor: 'rgba(255,253,247,.9)', flexDirection: 'row', alignItems: 'center', padding: 15, gap: 14 },
+  skeletonIcon: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#DDE5D9' },
+  skeletonCopy: { flex: 1, gap: 9 },
+  skeletonLineWide: { width: '68%', height: 14, borderRadius: 7, backgroundColor: '#DDE5D9' },
+  skeletonLine: { width: '42%', height: 11, borderRadius: 6, backgroundColor: '#E7EBE3' },
+  emptyCard: { minHeight: 250, alignItems: 'center', justifyContent: 'center', gap: 13, paddingHorizontal: 28 },
+  emptyIcon: { width: 62, height: 62, borderRadius: 31, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' },
   detailHead: { alignItems: 'center', gap: 8 },
   divider: { height: 1, backgroundColor: colors.line },
   receiptPreview: { height: 140, borderRadius: radii.md, borderWidth: 1, borderColor: colors.line, marginTop: 10, alignItems: 'flex-start', paddingLeft: 20 },
   actions: { flexDirection: 'row', gap: 10 },
-  edit: { flex: 1, height: 56, borderRadius: radii.md, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' },
-  delete: { flex: 1, height: 56, borderRadius: radii.md, backgroundColor: colors.dangerSoft, alignItems: 'center', justifyContent: 'center' },
+  edit: { flex: 1, height: 58, gap: 8, flexDirection: 'row', borderRadius: radii.md, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' },
+  delete: { flex: 1, height: 58, gap: 8, flexDirection: 'row', borderRadius: radii.md, backgroundColor: colors.dangerSoft, alignItems: 'center', justifyContent: 'center' },
+  editHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
+  editCategories: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  editCategory: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 11, borderRadius: 21, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
+  editCategoryActive: { backgroundColor: colors.deepForest, borderColor: colors.deepForest },
+  editCategoryTextActive: { color: colors.surface },
+  editNotes: { minHeight: 96, alignItems: 'flex-start' },
+  errorText: { color: colors.danger, marginTop: -8 },
   select: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  analyticsMonth: { minHeight: 68, borderRadius: radii.lg, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,253,247,.97)', ...shadow },
+  budgetMonth: { minHeight: 62, borderRadius: radii.lg, backgroundColor: 'rgba(255,253,247,.96)', borderWidth: 1, borderColor: colors.line, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  monthlyBudgetCard: { gap: 13, paddingVertical: 22 },
+  noLimits: { gap: 4, backgroundColor: 'rgba(255,253,247,.9)' },
   segment: { flexDirection: 'row', borderRadius: radii.md, backgroundColor: colors.pale, padding: 4 },
   segmentActive: { flex: 1, height: 42, borderRadius: radii.sm, backgroundColor: colors.deepForest, alignItems: 'center', justifyContent: 'center' },
+  segmentActiveText: { color: colors.surface },
   segmentHalf: { flex: 1, height: 42, borderRadius: radii.sm, alignItems: 'center', justifyContent: 'center' },
   donut: { width: 200, height: 200, borderRadius: 100, borderWidth: 18, borderColor: colors.deepForest, alignItems: 'center', justifyContent: 'center', marginVertical: 12 },
   donutInner: { alignItems: 'center' },
+  analyticsCard: { alignItems: 'center', paddingVertical: 22 },
+  analyticsLoading: { minHeight: 350, alignItems: 'center', justifyContent: 'center', gap: 18 },
+  analyticsSkeletonCircle: { width: 190, height: 190, borderRadius: 95, borderWidth: 25, borderColor: '#DDE5D9' },
+  legendList: { width: '100%', marginTop: 14 },
   legend: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
   legendDot: { width: 12, height: 12, borderRadius: 6 },
-  insightHero: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  insightCard: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  insightsLink: { textAlign: 'right', color: colors.deepForest },
+  trendsCard: { gap: 22, paddingVertical: 24 },
+  trendChange: { alignItems: 'flex-end', gap: 3 },
+  trendEmpty: { minHeight: 210, alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 16 },
+  barChart: { minHeight: 170, flexDirection: 'row', alignItems: 'flex-end', gap: 5, borderBottomWidth: 1, borderBottomColor: colors.line, paddingHorizontal: 4 },
+  barColumn: { flex: 1, minWidth: 7, alignItems: 'center', justifyContent: 'flex-end', gap: 5 },
+  bar: { width: '72%', maxWidth: 24, borderTopLeftRadius: 8, borderTopRightRadius: 8, backgroundColor: colors.forest },
+  trendMetrics: { gap: 0 },
+  trendMetric: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.line },
+  insightHero: { minHeight: 172, flexDirection: 'row', alignItems: 'center', gap: 8, overflow: 'visible' },
+  insightMascot: { width: 145, height: 145, marginRight: -8, alignSelf: 'flex-end' },
+  insightCard: { minHeight: 132, flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 20 },
+  insightIcon: { width: 68, height: 68, borderRadius: 34, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' },
   iconSoft: { width: 52, height: 52, borderRadius: 16, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' },
   profileCard: { alignItems: 'center', gap: 8, paddingVertical: 20 },
   profileAvatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.deepForest, alignItems: 'center', justifyContent: 'center' },
   settingsRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  logout: { alignItems: 'center', paddingVertical: 16 },
-  categoryRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  sectionLabel: { color: colors.muted, fontFamily: 'JakartaBold', letterSpacing: 1.1, marginTop: 8, marginLeft: 4 },
+  logoutCard: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 68, borderWidth: 1, borderColor: '#F0D5D2' },
+  logoutIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.dangerSoft, alignItems: 'center', justifyContent: 'center' },
+  categoryRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  categoryLoading: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  categoryError: { gap: 10 },
+  categoryMain: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  categoryIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#E1EBDD',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryEdit: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' },
+  choiceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  choiceCircle: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.pale, borderWidth: 2, borderColor: 'transparent', alignItems: 'center', justifyContent: 'center' },
+  choiceCircleActive: { backgroundColor: colors.deepForest, borderColor: colors.deepForest },
+  colorChoice: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: 'transparent' },
+  colorChoiceActive: { borderColor: colors.text },
+  dashboardToggle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1.5,
+    borderColor: '#C6D3C1',
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dashboardToggleOn: { backgroundColor: colors.deepForest, borderColor: colors.deepForest },
+  dashboardToggleBlocked: { borderColor: colors.line, backgroundColor: colors.pale },
 
   /* Budget row: icon | info (flex) | values | chevron */
   budgetRow: {
+    boxSizing: 'border-box',
+    width: '100%',
+    minHeight: 82,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingVertical: 14,
     paddingHorizontal: 14,
+    borderRadius: radii.md,
+    backgroundColor: 'rgba(255,253,247,.96)',
+    ...shadow,
   },
   budgetIcon: {
     width: 44,

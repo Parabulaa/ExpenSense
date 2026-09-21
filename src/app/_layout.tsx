@@ -14,12 +14,19 @@ import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { ToastProvider } from '@/components/common/toast';
 import { colors } from '@/constants/theme';
+import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
+import { useAuthGuard } from '@/features/auth/hooks/useAuthGuard';
+import { BudgetProvider } from '@/features/budget/BudgetProvider';
+import { CategoriesProvider } from '@/features/categories/CategoriesProvider';
+import { DashboardCategoriesProvider } from '@/features/dashboard/DashboardCategoriesProvider';
+import { ExpensesProvider } from '@/features/expenses/ExpensesProvider';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const [loaded] = useFonts({
+  const [fontsLoaded] = useFonts({
     JakartaRegular: PlusJakartaSans_400Regular,
     JakartaMedium: PlusJakartaSans_500Medium,
     JakartaSemiBold: PlusJakartaSans_600SemiBold,
@@ -27,29 +34,64 @@ export default function RootLayout() {
     JakartaExtraBold: PlusJakartaSans_800ExtraBold,
   });
 
-  useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
-
-  if (!loaded) return null;
+  if (!fontsLoaded) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StatusBar style="dark" />
 
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: {
-              backgroundColor: colors.cream,
-            },
-            animation: 'fade_from_bottom',
-          }}
-        />
+        <AuthProvider>
+          <ExpensesProvider>
+            <CategoriesProvider>
+              <BudgetProvider>
+                <DashboardCategoriesProvider>
+                  <ToastProvider>
+                    <RootNavigation />
+                  </ToastProvider>
+                </DashboardCategoriesProvider>
+              </BudgetProvider>
+            </CategoriesProvider>
+          </ExpensesProvider>
+        </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
+  );
+}
+
+// Waits for the initial Supabase session check before showing any route, so
+// we never flash a signed-out screen for a signed-in user (or vice versa),
+// and applies auth-based route protection for every navigation after that.
+function RootNavigation() {
+  const { initialized } = useAuth();
+  useAuthGuard();
+
+  useEffect(() => {
+    if (initialized) {
+      SplashScreen.hideAsync();
+    }
+  }, [initialized]);
+
+  if (!initialized) return null;
+
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: {
+          backgroundColor: colors.cream,
+        },
+        // `simple_push` travels a short distance with a cross-fade, which
+        // reads as a deliberate step deeper rather than the hard cut
+        // `fade_from_bottom` produced. Going back plays it in reverse, so
+        // direction stays consistent. `animationTypeForReplace: 'push'` keeps
+        // router.replace() (used between sign-in and create-account) moving
+        // forward instead of appearing to pop backwards.
+        animation: 'simple_push',
+        animationDuration: 260,
+        animationTypeForReplace: 'push',
+        gestureEnabled: true,
+      }}
+    />
   );
 }

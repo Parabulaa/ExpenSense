@@ -12,6 +12,7 @@ export const type = {
   h2: { fontSize: 22, lineHeight: 28, fontFamily: 'JakartaBold' },
   h3: { fontSize: 17, lineHeight: 22, fontFamily: 'JakartaBold' },
   body: { fontSize: 15, lineHeight: 22, fontFamily: 'JakartaRegular' },
+  subtitle: { fontSize: 16, lineHeight: 24, fontFamily: 'JakartaRegular' },
   bodyMedium: { fontSize: 15, lineHeight: 22, fontFamily: 'JakartaMedium' },
   small: { fontSize: 12, lineHeight: 17, fontFamily: 'JakartaRegular' },
   button: { fontSize: 17, lineHeight: 22, fontFamily: 'JakartaBold' },

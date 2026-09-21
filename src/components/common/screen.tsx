@@ -1,7 +1,8 @@
-import type { PropsWithChildren } from 'react';
+import type { PropsWithChildren, ReactNode } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   View,
@@ -16,8 +17,11 @@ type ScreenProps = PropsWithChildren<{
   scroll?: boolean;
   background?: boolean;
   bottomInset?: number;
-  variant?: 1 | 2 | 3 | 4 | 5 | 6;
+  variant?: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
   padded?: boolean;
+  fixed?: ReactNode;
+  refreshing?: boolean;
+  onRefresh?: () => void;
 }>;
 
 export function Screen({
@@ -27,6 +31,9 @@ export function Screen({
   bottomInset = 24,
   variant = 1,
   padded = true,
+  fixed,
+  refreshing = false,
+  onRefresh,
 }: ScreenProps) {
   const { width } = useWindowDimensions();
 
@@ -46,29 +53,44 @@ export function Screen({
 
   return (
     <View style={styles.root}>
-      {background && <OrganicBackground variant={variant} />}
+      <View style={styles.frame}>
+        {background && <OrganicBackground variant={variant} />}
 
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <KeyboardAvoidingView
-          style={styles.safe}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          {scroll ? (
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={[
-                styles.content,
-                { paddingBottom: bottomInset },
-              ]}
-              showsVerticalScrollIndicator={false}
-            >
-              {body}
-            </ScrollView>
-          ) : (
-            body
-          )}
-        </KeyboardAvoidingView>
-      </SafeAreaView>
+        <SafeAreaView style={styles.safe} edges={['top']}>
+          {/*
+            Scrolling screens handle the keyboard through the ScrollView's own
+            keyboard insets (iOS) and Android's native resize, so padding here
+            would offset the layout twice. Non-scrolling screens still need it.
+          */}
+          <KeyboardAvoidingView
+            style={styles.safe}
+            behavior={!scroll && Platform.OS === 'ios' ? 'padding' : undefined}
+          >
+            {scroll ? (
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                // Keeps the focused field above the keyboard and lets the CTA
+                // stay reachable while typing, instead of the keyboard covering
+                // the bottom of the form.
+                keyboardDismissMode="interactive"
+                automaticallyAdjustKeyboardInsets
+                refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.deepForest} colors={[colors.deepForest]} /> : undefined}
+                contentContainerStyle={[
+                  styles.content,
+                  { paddingBottom: bottomInset },
+                ]}
+                showsVerticalScrollIndicator={false}
+              >
+                {body}
+              </ScrollView>
+            ) : (
+              body
+            )}
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+
+        {fixed}
+      </View>
     </View>
   );
 }
@@ -76,6 +98,15 @@ export function Screen({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    alignItems: 'center',
+    backgroundColor: '#202220',
+    overflow: 'hidden',
+  },
+
+  frame: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 480,
     backgroundColor: colors.cream,
     overflow: 'hidden',
   },

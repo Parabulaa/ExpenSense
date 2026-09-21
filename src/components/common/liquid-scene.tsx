@@ -4,7 +4,7 @@ import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { assets } from '@/constants/theme';
 
-type Scene = 'splash' | 'onboarding' | 'welcome';
+type Scene = 'splash' | 'onboarding';
 
 export function LiquidScene({ scene }: { scene: Scene }) {
   const { width, height } = useWindowDimensions();
@@ -57,7 +57,6 @@ export function LiquidScene({ scene }: { scene: Scene }) {
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       {scene === 'splash' && <Image source={assets.shape3} contentFit="contain" style={[styles.topSplash, { width: width * 0.8, height: height * 0.25 }]} />}
       {scene === 'onboarding' && <Image source={assets.shape1} contentFit="contain" style={styles.topOnboarding} />}
-      {scene === 'welcome' && <Image source={assets.shape3} contentFit="contain" style={styles.topWelcome} />}
 
       <Animated.Image source={assets.shape4} resizeMode="stretch" style={[styles.liquid, { top: heroTop, width: width * 1.7, height: heroHeight }, liquidRight]} />
       <Animated.Image source={assets.shape4} resizeMode="stretch" style={[styles.liquid, { top: heroTop + 28, width: width * 1.7, height: heroHeight }, liquidLeft]} />
@@ -68,7 +67,6 @@ export function LiquidScene({ scene }: { scene: Scene }) {
       </View>
 
       {scene === 'splash' && <Image source={assets.shape1} contentFit="contain" style={styles.bottomSplash} />}
-      {scene === 'welcome' && <Image source={assets.shape4} contentFit="contain" style={styles.bottomWelcome} />}
     </View>
   );
 }
@@ -80,6 +78,4 @@ const styles = StyleSheet.create({
   topSplash: { position: 'absolute', left: '-23%', top: '-8%', transform: [{ rotate: '-15deg' }] },
   bottomSplash: { position: 'absolute', width: 230, height: 190, right: -95, bottom: -75, transform: [{ rotate: '160deg' }] },
   topOnboarding: { position: 'absolute', width: 170, height: 140, left: -65, top: -53, transform: [{ rotate: '30deg' }] },
-  topWelcome: { position: 'absolute', width: 255, height: 230, right: -85, top: -75, transform: [{ rotate: '38deg' }] },
-  bottomWelcome: { position: 'absolute', width: 280, height: 210, left: -120, bottom: -95 },
 });
