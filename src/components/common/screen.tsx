@@ -17,7 +17,7 @@ type ScreenProps = PropsWithChildren<{
   scroll?: boolean;
   background?: boolean;
   bottomInset?: number;
-  variant?: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
+  variant?: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
   padded?: boolean;
   fixed?: ReactNode;
   refreshing?: boolean;

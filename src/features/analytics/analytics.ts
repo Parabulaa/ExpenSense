@@ -32,7 +32,19 @@ export type AnalyticsInsight = {
   detail: string;
   icon: DashboardCategory['icon'];
   destination?: '/transactions' | '/budget';
+  /**
+   * Seeds the Transactions search so the chevron lands on the rows the insight
+   * is actually about, rather than the unfiltered list.
+   */
+  filterQuery?: string;
 };
+
+/**
+ * A single prior transaction isn't a spending pattern. The previous month needs
+ * at least this many expenses before a month-over-month jump is worth calling
+ * "unusual" rather than just "the first few entries".
+ */
+export const MIN_HISTORY_EXPENSES = 3;
 
 export function analyticsForMonth(expenses: Expense[], categories: DashboardCategory[], month: string): MonthAnalytics {
   const selected = expenses.filter((expense) => expense.transactionDate.startsWith(month));
@@ -80,7 +92,7 @@ export function buildInsights(
   if (!current.expenses.length) return [];
   const insights: AnalyticsInsight[] = [];
   const top = current.categorySlices[0];
-  if (top) insights.push({ id: 'top', label: 'Top Category', title: top.label, detail: `Accounts for ${Math.round(top.percentage)}% of your spending this month.`, icon: top.icon, destination: '/transactions' });
+  if (top) insights.push({ id: 'top', label: 'Top Category', title: top.label, detail: `Accounts for ${Math.round(top.percentage)}% of your spending this month.`, icon: top.icon, destination: '/transactions', filterQuery: top.id === 'others' ? undefined : top.label });
 
   const merchants = new Map<string, { name: string; count: number }>();
   current.expenses.forEach((expense) => {
@@ -89,9 +101,10 @@ export function buildInsights(
     merchants.set(key, { name: value?.name ?? expense.merchant.trim(), count: (value?.count ?? 0) + 1 });
   });
   const recurring = [...merchants.values()].filter((item) => item.count >= 2).sort((a, b) => b.count - a.count);
-  if (recurring.length) insights.push({ id: 'recurring', label: 'Recurring Expenses', title: `${recurring.length} recurring merchant${recurring.length === 1 ? '' : 's'}`, detail: `${recurring.slice(0, 2).map((item) => item.name).join(' and ')} appeared more than once this month.`, icon: 'cart-outline', destination: '/transactions' });
+  if (recurring.length) insights.push({ id: 'recurring', label: 'Recurring Expenses', title: `${recurring.length} recurring merchant${recurring.length === 1 ? '' : 's'}`, detail: `${recurring.slice(0, 2).map((item) => item.name).join(' and ')} appeared more than once this month.`, icon: 'cart-outline', destination: '/transactions', filterQuery: recurring[0].name });
 
-  if (previous.totalCents > 0 && current.totalCents > previous.totalCents * 1.15) {
+  // Needs a real baseline to compare against, not just one prior expense.
+  if (previous.expenses.length >= MIN_HISTORY_EXPENSES && previous.totalCents > 0 && current.totalCents > previous.totalCents * 1.15) {
     const increase = Math.round(((current.totalCents - previous.totalCents) / previous.totalCents) * 100);
     insights.push({ id: 'unusual', label: 'Unusual Spending', title: `${increase}% higher`, detail: 'Your total spending is higher than the previous month.', icon: 'shape-outline' });
   }
@@ -105,4 +118,63 @@ export function buildInsights(
     insights.push({ id: 'recommendation', label: 'Recommendation', title: `Set a ${topCategory?.fullLabel ?? top.label} budget`, detail: 'Your largest spending category does not have a category limit yet.', icon: 'briefcase-outline', destination: '/budget' });
   }
   return insights.slice(0, 4);
+}
+
+function formatPeso(cents: number) {
+  return `₱${Math.round(cents / 100).toLocaleString('en-PH')}`;
+}
+
+/**
+ * One short line for the dashboard mascot, derived from the same analytics the
+ * Insights screen uses so the two can never disagree. Budget pressure outranks
+ * the general insights, because an overspent month is the thing worth saying
+ * first; otherwise the highest-priority Phase 7 insight is summarised.
+ */
+export function mascotInsight(
+  current: MonthAnalytics,
+  previous: MonthAnalytics,
+  categories: DashboardCategory[],
+  budget?: MonthlyBudget,
+): string {
+  if (!current.expenses.length) {
+    return "Add a few expenses and I'll start spotting spending patterns.";
+  }
+
+  const insights = buildInsights(current, previous, categories, budget);
+
+  // An overspend or a near-limit category is the most actionable thing to say.
+  if (budget) {
+    const remaining = budget.amountCents - current.totalCents;
+    if (remaining < 0) return `You’re ${formatPeso(Math.abs(remaining))} over this month’s budget.`;
+
+    const pressured = budget.categoryBudgets
+      .map((limit) => {
+        const spent = current.expenses
+          .filter((expense) => expense.categoryId === limit.categoryId)
+          .reduce((sum, expense) => sum + expense.amountCents, 0);
+        const category = categories.find((item) => item.id === limit.categoryId);
+        return { label: category?.label ?? 'category', percent: limit.amountCents ? Math.round((spent / limit.amountCents) * 100) : 0 };
+      })
+      .sort((a, b) => b.percent - a.percent)[0];
+
+    if (pressured && pressured.percent >= 70) {
+      return `You’ve used ${pressured.percent}% of your ${pressured.label} budget.`;
+    }
+  }
+
+  const unusual = insights.find((insight) => insight.id === 'unusual');
+  if (unusual) return `Your spending is ${unusual.title} than last month.`;
+
+  if (budget) {
+    const remaining = budget.amountCents - current.totalCents;
+    return `You have ${formatPeso(remaining)} left in this month’s budget.`;
+  }
+
+  const top = insights.find((insight) => insight.id === 'top');
+  if (top) return `${top.title} is your highest category this month.`;
+
+  const recurring = insights.find((insight) => insight.id === 'recurring');
+  if (recurring) return recurring.detail;
+
+  return 'Your spending is tracking close to your usual monthly pace.';
 }

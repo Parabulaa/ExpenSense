@@ -7,6 +7,7 @@ import { FadeSlideIn, PressableScale } from '@/components/common/motion';
 import { Screen } from '@/components/common/screen';
 import { useToast } from '@/components/common/toast';
 import { AppIcon, AppText, BackButton, Card, FormInput, PrimaryButton, ProgressBar, SecondaryButton, StatusChip } from '@/components/common/ui';
+import { AppHeader } from '@/components/navigation/app-header';
 import { BottomNavigation, useBottomNavInset } from '@/components/navigation/bottom-navigation';
 import { assets, colors, radii, shadow } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -20,6 +21,7 @@ import { useCategories } from '@/features/categories/CategoriesProvider';
 import { MAX_DASHBOARD_CATEGORIES } from '@/features/dashboard/dashboard-data';
 import { useDashboardCategories } from '@/features/dashboard/DashboardCategoriesProvider';
 import { useExpenses } from '@/features/expenses/ExpensesProvider';
+import { useProfile } from '@/features/profile/ProfileProvider';
 import type { Expense, ExpenseFormErrors, ExpenseFormValues } from '@/features/expenses/types';
 import { formatExpenseDate, normalizeAmountInput, todayLocalDate, validateExpenseForm } from '@/features/expenses/validation';
 import { selectionFeedback, warningFeedback } from '@/lib/haptics';
@@ -39,7 +41,21 @@ export function TransactionsScreen() {
   const { categories } = useCategories();
   const { expenses, loading, loadError, refresh } = useExpenses();
   const bottomInset = useBottomNavInset();
-  const [query, setQuery] = useState('');
+  // Analytics insights link here with a `q` so the chevron lands on the rows the
+  // insight is about instead of the unfiltered list.
+  const { q } = useLocalSearchParams<{ q?: string }>();
+  const incomingQuery = Array.isArray(q) ? q[0] : q;
+  const [query, setQuery] = useState(incomingQuery ?? '');
+
+  // Covers the case where this screen is already mounted and the router hands
+  // it a new filter rather than pushing a fresh instance. Adjusting during
+  // render (rather than in an effect) is React's documented way to react to a
+  // changed input without an extra render pass.
+  const [appliedQueryParam, setAppliedQueryParam] = useState(incomingQuery);
+  if (incomingQuery !== appliedQueryParam) {
+    setAppliedQueryParam(incomingQuery);
+    if (incomingQuery) setQuery(incomingQuery);
+  }
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [sort, setSort] = useState<SortOption>('newest');
@@ -82,6 +98,7 @@ export function TransactionsScreen() {
   return (
     <Screen bottomInset={bottomInset} variant={7} fixed={<BottomNavigation />} refreshing={loading && expenses.length > 0} onRefresh={() => void refresh()}>
       <View style={s.page}>
+        <AppHeader />
         <AppText variant="hero">Transactions</AppText>
         <View style={s.search}>
           <AppIcon name="magnify" size={22} color={colors.muted} />
@@ -327,6 +344,7 @@ export function BudgetScreen() {
   return (
     <Screen bottomInset={bottomInset} variant={9} fixed={<BottomNavigation />} refreshing={loading} onRefresh={() => void refresh()}>
       <View style={s.page}>
+        <AppHeader />
         <AppText variant="hero">Budget</AppText>
         <PressableScale accessibilityRole="button" accessibilityLabel={`Selected budget month: ${monthLabel}`} onPress={() => { setMonthDraft(`${month}-01`); setMonthPicker(true); }} style={s.budgetMonth}><AppText variant="h3">{monthLabel}</AppText><AppIcon name="calendar-month-outline" /></PressableScale>
         {loading && monthlyBudgets.length === 0 ? <View style={s.skeletonCard} /> : error && monthlyBudgets.length === 0 ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load budgets</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : !budget ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="wallet-plus-outline" size={30} /></View><AppText variant="h2">No budget yet</AppText><AppText style={[s.muted, s.center]}>Set a monthly budget to start tracking your spending limits.</AppText><PrimaryButton title="Set Budget" onPress={openMonthly} /></Card> : <PressableScale accessibilityRole="button" accessibilityLabel={`Monthly budget ${currency(budget.amountCents)}, ${percentage}% used`} onPress={openMonthly}><Card style={s.monthlyBudgetCard}><View style={s.rowBetween}><AppText variant="h3">Monthly Budget</AppText><AppIcon name="pencil-outline" size={20} color={colors.muted} /></View><AppText variant="hero" adjustsFontSizeToFit numberOfLines={1}>{currency(budget.amountCents)}</AppText><View style={s.rowBetween}><AppText variant="h3" style={{ color: colors.deepForest }}>{currency(spentCents)} spent</AppText><AppText variant="h3" style={{ color: remainingCents < 0 ? colors.danger : colors.deepForest }}>{currency(remainingCents)} {remainingCents < 0 ? 'over' : 'left'}</AppText></View><View style={s.row}><ProgressBar value={Math.min(100, percentage)} /><AppText variant="h3">{percentage}%</AppText></View><StatusChip warning={percentage >= 90}>{status}</StatusChip></Card></PressableScale>}
@@ -387,6 +405,7 @@ export function AnalyticsScreen() {
   return (
     <Screen bottomInset={bottomInset} variant={11} fixed={<BottomNavigation />} refreshing={loading && expenses.length > 0} onRefresh={() => void refresh()}>
       <View style={s.page}>
+        <AppHeader />
         <AppText variant="hero">Analytics</AppText>
         <AppText style={s.muted}>A clearer view of your spending.</AppText>
         <PressableScale accessibilityRole="button" accessibilityLabel={`Selected analytics month: ${monthLabel}`} onPress={() => { setMonthDraft(`${month}-01`); setMonthPicker(true); }} style={s.analyticsMonth}><AppText variant="h2">{monthLabel}</AppText><AppIcon name="calendar-month-outline" /></PressableScale>
@@ -395,10 +414,35 @@ export function AnalyticsScreen() {
           <PressableScale onPress={() => setMode('trends')} style={[s.segmentHalf, mode === 'trends' && s.segmentActive]}><AppText variant="h3" style={mode === 'trends' ? s.segmentActiveText : s.muted}>Trends</AppText></PressableScale>
         </View>
         {loading && expenses.length === 0 ? <Card style={s.analyticsLoading}><ActivityIndicator color={colors.deepForest} /><View style={s.analyticsSkeletonCircle} /><View style={s.skeletonLineWide} /></Card> : loadError ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load analytics.</AppText><AppText style={[s.muted, s.center]}>Check your connection and try again.</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : analytics.expenses.length === 0 ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="chart-donut" size={30} /></View><AppText variant="h2">No spending data yet</AppText><AppText style={[s.muted, s.center]}>Add expenses to start seeing your spending patterns.</AppText><PrimaryButton title="Add Expense" onPress={() => router.push('/add-expense')} /></Card> : mode === 'spending' ? <Card style={s.analyticsCard}><DonutChart slices={analytics.categorySlices} refreshKey={month}><AppText variant="title" adjustsFontSizeToFit numberOfLines={1}>{compactCurrency(analytics.totalCents)}</AppText><AppText style={s.muted}>Total Spending</AppText></DonutChart><View style={s.legendList}>{analytics.categorySlices.map((slice) => <View style={s.legend} key={slice.id}><View style={[s.legendDot, { backgroundColor: slice.color }]} /><AppText style={[s.muted, { flex: 1 }]} numberOfLines={1}>{slice.label}</AppText><AppText style={s.muted}>{Math.round(slice.percentage)}%</AppText></View>)}</View></Card> : <Card style={s.trendsCard}><View style={s.rowBetween}><View><AppText style={s.muted}>This month</AppText><AppText variant="title">{compactCurrency(analytics.totalCents)}</AppText></View><View style={s.trendChange}><AppIcon name={change !== null && change > 0 ? 'trending-up' : 'trending-down'} size={20} color={change !== null && change > 0 ? colors.danger : colors.success} /><AppText variant="h3" style={{ color: change !== null && change > 0 ? colors.danger : colors.success }}>{change === null ? 'No comparison' : `${change > 0 ? '+' : ''}${change}%`}</AppText></View></View>{previous.totalCents === 0 || analytics.expenses.length < 2 ? <View style={s.trendEmpty}><AppText variant="h2">Not enough history yet</AppText><AppText style={[s.muted, s.center]}>Keep tracking expenses and your trends will appear here.</AppText></View> : <><View style={s.barChart}>{analytics.dailyTotals.map((item) => <View key={item.day} style={s.barColumn}><View style={[s.bar, { height: Math.max(8, Math.round((item.amountCents / maxDay) * 130)) }]} /><AppText variant="small" style={s.muted}>{item.day}</AppText></View>)}</View><View style={s.trendMetrics}><TrendMetric label={`${formatMonth(priorMonth)} total`} value={compactCurrency(previous.totalCents)} /><TrendMetric label="Daily average" value={compactCurrency(analytics.averageDailyCents)} /><TrendMetric label="Highest-spend day" value={analytics.highestDay ? `${monthLabel.split(' ')[0]} ${analytics.highestDay.day} · ${compactCurrency(analytics.highestDay.amountCents)}` : '—'} /></View></>}</Card>}
-        {analytics.expenses.length > 0 ? <PressableScale onPress={() => router.push(`/insights?month=${month}` as never)}><AppText variant="h3" style={s.insightsLink}>View Spending Insights <AppIcon name="arrow-right" size={18} color={colors.deepForest} /></AppText></PressableScale> : null}
+        {analytics.expenses.length > 0 ? <InsightsLink month={month} /> : null}
       </View>
       <MonthPickerModal visible={monthPicker} title="Choose Analytics Month" value={monthDraft} onChange={setMonthDraft} onClose={() => setMonthPicker(false)} onConfirm={(value) => { setMonth(value.slice(0, 7)); setMonthPicker(false); }} />
     </Screen>
+  );
+}
+
+/**
+ * Sits directly under the analytics card as a sibling inside the shared page
+ * frame, so it inherits the same horizontal padding as the title, month
+ * selector and card rather than aligning itself independently. `flex-start`
+ * keeps the row hugging its text, which is what keeps the arrow beside the
+ * label instead of pinned to the far edge of the screen.
+ */
+function InsightsLink({ month }: { month: string }) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <PressableScale
+      accessibilityRole="button"
+      accessibilityLabel="View spending insights"
+      onPress={() => router.push(`/insights?month=${month}` as never)}
+      onHoverIn={() => setHovered(true)}
+      onHoverOut={() => setHovered(false)}
+      style={hovered ? [s.insightsLink, s.insightsLinkHovered] : s.insightsLink}
+    >
+      <AppText style={s.insightsLinkText}>View Spending Insights</AppText>
+      <AppIcon name="arrow-right" size={18} color={colors.deepForest} />
+    </PressableScale>
   );
 }
 
@@ -423,7 +467,7 @@ export function InsightsScreen() {
           </View>
           <Image source={assets.mascotScanning} contentFit="contain" style={s.insightMascot} />
         </View>
-        {loading && expenses.length === 0 ? <Card style={s.analyticsLoading}><ActivityIndicator color={colors.deepForest} /><View style={s.skeletonLineWide} /><View style={s.skeletonLine} /></Card> : loadError ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load insights.</AppText><AppText style={[s.muted, s.center]}>Check your connection and try again.</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : insights.length === 0 ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="lightbulb-outline" size={30} /></View><AppText variant="h2">No insights yet</AppText><AppText style={[s.muted, s.center]}>Add expenses for {formatMonth(month)} to reveal useful spending patterns.</AppText><PrimaryButton title="Add Expense" onPress={() => router.push('/add-expense')} /></Card> : insights.map((insight) => <PressableScale key={insight.id} disabled={!insight.destination} onPress={() => insight.destination && router.push(insight.destination)}><Card style={s.insightCard}><View style={s.insightIcon}><AppIcon name={insight.icon} size={32} color={colors.deepForest} /></View><View style={{ flex: 1 }}><AppText style={s.muted}>{insight.label}</AppText><AppText variant="h2">{insight.title}</AppText><AppText style={s.muted}>{insight.detail}</AppText></View>{insight.destination ? <AppIcon name="chevron-right" size={28} color={colors.deepForest} /> : null}</Card></PressableScale>)}
+        {loading && expenses.length === 0 ? <Card style={s.analyticsLoading}><ActivityIndicator color={colors.deepForest} /><View style={s.skeletonLineWide} /><View style={s.skeletonLine} /></Card> : loadError ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load insights.</AppText><AppText style={[s.muted, s.center]}>Check your connection and try again.</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : insights.length === 0 ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="lightbulb-outline" size={30} /></View><AppText variant="h2">No insights yet</AppText><AppText style={[s.muted, s.center]}>Add expenses for {formatMonth(month)} to reveal useful spending patterns.</AppText><PrimaryButton title="Add Expense" onPress={() => router.push('/add-expense')} /></Card> : insights.map((insight) => <PressableScale key={insight.id} disabled={!insight.destination} onPress={() => { if (!insight.destination) return; if (insight.destination === '/transactions' && insight.filterQuery) { router.push({ pathname: '/transactions', params: { q: insight.filterQuery } }); return; } router.push(insight.destination); }}><Card style={s.insightCard}><View style={s.insightIcon}><AppIcon name={insight.icon} size={32} color={colors.deepForest} /></View><View style={{ flex: 1 }}><AppText style={s.muted}>{insight.label}</AppText><AppText variant="h2">{insight.title}</AppText><AppText style={s.muted}>{insight.detail}</AppText></View>{insight.destination ? <AppIcon name="chevron-right" size={28} color={colors.deepForest} /> : null}</Card></PressableScale>)}
       </View>
     </Screen>
   );
@@ -500,6 +544,7 @@ export function CategoriesScreen() {
   return (
     <Screen bottomInset={bottomInset} variant={10} fixed={<BottomNavigation />}>
       <View style={s.page}>
+        <AppHeader />
         <AppText variant="hero">Categories</AppText>
         <AppText style={s.muted}>Organize your spending, your way.</AppText>
         <AppText variant="small" style={s.muted}>
@@ -575,17 +620,50 @@ export function CategoriesScreen() {
   );
 }
 
+const SETTINGS_ROWS = [
+  { icon: 'account-outline', label: 'Account Information', route: '/settings/account' },
+  { icon: 'lock-outline', label: 'Change Password', route: '/settings/change-password' },
+  { icon: 'bell-outline', label: 'Notifications', route: '/settings/notifications' },
+  { icon: 'palette-outline', label: 'Appearance', route: '/settings/appearance' },
+  { icon: 'shield-check-outline', label: 'Privacy & Data', route: '/settings/privacy' },
+  { icon: 'help-circle-outline', label: 'Help & Support', route: '/settings/help' },
+  { icon: 'information-outline', label: 'About', route: '/settings/about' },
+] as const;
+
+function SettingsRow({ icon, label, route, index }: { icon: Parameters<typeof AppIcon>[0]['name']; label: string; route: string; index: number }) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <FadeSlideIn index={index}>
+      <PressableScale
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityHint={`Opens ${label}`}
+        onPress={() => router.push(route as never)}
+        onHoverIn={() => setHovered(true)}
+        onHoverOut={() => setHovered(false)}
+        scaleTo={0.985}
+        style={hovered ? [s.settingsRow, s.settingsRowHovered] : s.settingsRow}
+      >
+        <View style={s.settingsRowIcon}><AppIcon name={icon} size={22} color={colors.deepForest} /></View>
+        <AppText variant="h3" style={s.settingsRowLabel} numberOfLines={1}>{label}</AppText>
+        <AppIcon name="chevron-right" size={24} color={colors.muted} />
+      </PressableScale>
+    </FadeSlideIn>
+  );
+}
+
 export function ProfileScreen() {
-  const { user, signOut } = useAuth();
-  const displayName = (user?.user_metadata?.full_name as string | undefined) || 'Account';
-  const displayEmail = user?.email ?? '';
-  const initial = displayName.charAt(0).toUpperCase() || '?';
+  const { signOut } = useAuth();
+  const { displayName, initials, email, loading, loadError, refresh } = useProfile();
 
   // Local state rather than useAuthDialog so the confirm dialog's loading flag
   // stays live while sign-out is in flight (a stored config would be stale).
   const [logoutDialog, setLogoutDialog] = useState<'confirm' | 'error' | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const bottomInset = useBottomNavInset();
+
+  useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
 
   const handleConfirmLogout = async () => {
     if (signingOut) return;
@@ -607,45 +685,55 @@ export function ProfileScreen() {
   };
 
   return (
-    <Screen bottomInset={bottomInset} variant={4} fixed={<BottomNavigation />}>
+    <Screen bottomInset={bottomInset} variant={13} fixed={<BottomNavigation />}>
       <View style={s.page}>
-        <AppText variant="title">Profile & Settings</AppText>
+        <AppText variant="title">Profile &amp; Settings</AppText>
         <AppText style={s.muted}>Manage your account and preferences.</AppText>
-        <Card style={s.profileCard}>
-          <View style={s.profileAvatar}>
-            <AppText variant="hero" style={{ color: colors.surface }}>{initial}</AppText>
-          </View>
-          <AppText variant="h2">{displayName}</AppText>
-          <AppText style={s.muted}>{displayEmail}</AppText>
-        </Card>
-        {([['♙', 'Account Information'], ['▣', 'Change Password'], ['♧', 'Notifications'], ['◉', 'Appearance'], ['♢', 'Privacy & Data'], ['?', 'Help & Support'], ['ⓘ', 'About']] as const).map(x => (
-          <Pressable key={x[1]}>
-            <Card style={s.settingsRow}>
-              <View style={s.iconSoft}>
-                <AppText variant="h3">{x[0]}</AppText>
-              </View>
-              <AppText style={{ flex: 1 }}>{x[1]}</AppText>
-              <AppText variant="h2" style={s.muted}>›</AppText>
-            </Card>
-          </Pressable>
-        ))}
-        <AppText variant="small" style={s.sectionLabel}>ACCOUNT</AppText>
-        <Pressable
-          onPress={() => setLogoutDialog('confirm')}
-          accessibilityRole="button"
-          accessibilityLabel="Log out"
-          style={({ pressed }) => pressed && { opacity: 0.85 }}
-        >
-          <Card style={s.logoutCard}>
-            <View style={s.logoutIcon}>
-              <AppIcon name="logout" size={22} color={colors.danger} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <AppText variant="h3" style={{ color: colors.danger }}>Log Out</AppText>
-              <AppText variant="small" style={s.muted}>Sign out of this device.</AppText>
-            </View>
+
+        <FadeSlideIn index={0}>
+          <Card style={s.profileCard}>
+            {loading && !email ? (
+              // Skeleton rather than placeholder names, so no fake identity
+              // ever flashes on screen while the profile loads.
+              <>
+                <View style={[s.profileAvatar, s.profileAvatarSkeleton]} />
+                <View style={s.profileSkeletonName} />
+                <View style={s.profileSkeletonEmail} />
+              </>
+            ) : (
+              <>
+                <View style={s.profileAvatar}>
+                  <AppText variant="hero" style={s.profileInitials} accessibilityLabel={`Profile initials ${initials}`}>{initials}</AppText>
+                </View>
+                <AppText variant="h2" style={s.center} numberOfLines={2}>{displayName}</AppText>
+                <AppText style={[s.muted, s.center]} numberOfLines={1} ellipsizeMode="middle">{email}</AppText>
+                {loadError ? (
+                  <PressableScale accessibilityRole="button" accessibilityLabel="Retry loading profile" onPress={() => void refresh()} style={s.profileRetry}>
+                    <AppIcon name="refresh" size={16} color={colors.deepForest} />
+                    <AppText variant="small" style={s.profileRetryText}>Couldn&apos;t refresh — tap to retry</AppText>
+                  </PressableScale>
+                ) : null}
+              </>
+            )}
           </Card>
-        </Pressable>
+        </FadeSlideIn>
+
+        {SETTINGS_ROWS.map((row, index) => (
+          <SettingsRow key={row.label} icon={row.icon} label={row.label} route={row.route} index={index + 1} />
+        ))}
+
+        <FadeSlideIn index={SETTINGS_ROWS.length + 1}>
+          <PressableScale
+            onPress={() => setLogoutDialog('confirm')}
+            accessibilityRole="button"
+            accessibilityLabel="Log out"
+            scaleTo={0.985}
+            style={s.logoutCard}
+          >
+            <AppIcon name="logout" size={22} color={colors.danger} />
+            <AppText variant="h3" style={s.logoutText}>Logout</AppText>
+          </PressableScale>
+        </FadeSlideIn>
       </View>
 
       {logoutDialog === 'confirm' && (
@@ -752,7 +840,19 @@ const s = StyleSheet.create({
   legendList: { width: '100%', marginTop: 14 },
   legend: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
   legendDot: { width: 12, height: 12, borderRadius: 6 },
-  insightsLink: { textAlign: 'right', color: colors.deepForest },
+  // alignSelf keeps the row's left edge on the page frame's padding while the
+  // row itself only grows as wide as its content, so the arrow trails the text.
+  insightsLink: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minHeight: 44,
+    paddingRight: 8,
+    borderRadius: radii.sm,
+  },
+  insightsLinkHovered: { opacity: 0.7 },
+  insightsLinkText: { color: colors.deepForest, fontFamily: 'JakartaSemiBold', fontSize: 16, lineHeight: 22 },
   trendsCard: { gap: 22, paddingVertical: 24 },
   trendChange: { alignItems: 'flex-end', gap: 3 },
   trendEmpty: { minHeight: 210, alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 16 },
@@ -766,12 +866,46 @@ const s = StyleSheet.create({
   insightCard: { minHeight: 132, flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 20 },
   insightIcon: { width: 68, height: 68, borderRadius: 34, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' },
   iconSoft: { width: 52, height: 52, borderRadius: 16, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' },
-  profileCard: { alignItems: 'center', gap: 8, paddingVertical: 20 },
-  profileAvatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.deepForest, alignItems: 'center', justifyContent: 'center' },
-  settingsRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  sectionLabel: { color: colors.muted, fontFamily: 'JakartaBold', letterSpacing: 1.1, marginTop: 8, marginLeft: 4 },
-  logoutCard: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 68, borderWidth: 1, borderColor: '#F0D5D2' },
-  logoutIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.dangerSoft, alignItems: 'center', justifyContent: 'center' },
+  // Profile & Settings — mirrors 11_ProfileSettingsScreen: a tall avatar card,
+  // then evenly weighted rows with pale-green icon circles and a chevron.
+  profileCard: { alignItems: 'center', gap: 6, paddingVertical: 26, borderRadius: radii.lg },
+  profileAvatar: { width: 96, height: 96, borderRadius: 48, backgroundColor: colors.deepForest, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  profileAvatarSkeleton: { backgroundColor: colors.pale },
+  profileInitials: { color: colors.surface, fontSize: 38, lineHeight: 44 },
+  profileSkeletonName: { width: 128, height: 22, borderRadius: radii.pill, backgroundColor: colors.pale },
+  profileSkeletonEmail: { width: 176, height: 15, borderRadius: radii.pill, backgroundColor: colors.pale, marginTop: 6 },
+  profileRetry: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 36, marginTop: 4 },
+  profileRetryText: { color: colors.deepForest },
+  settingsRow: {
+    boxSizing: 'border-box',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    minHeight: 68,
+    paddingHorizontal: 16,
+    borderRadius: radii.lg,
+    backgroundColor: 'rgba(255,253,247,.97)',
+    borderWidth: 1,
+    borderColor: 'transparent',
+    ...shadow,
+  },
+  settingsRowHovered: { backgroundColor: '#F2F6EE', borderColor: '#D5E2CF' },
+  settingsRowIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#DDEBDD', alignItems: 'center', justifyContent: 'center' },
+  settingsRowLabel: { flex: 1, minWidth: 0 },
+  logoutCard: {
+    boxSizing: 'border-box',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    minHeight: 68,
+    borderRadius: radii.lg,
+    backgroundColor: colors.dangerSoft,
+    borderWidth: 1,
+    borderColor: '#F3DBD8',
+    marginTop: 4,
+  },
+  logoutText: { color: colors.danger },
   categoryRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   categoryLoading: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10 },
   categoryError: { gap: 10 },

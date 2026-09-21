@@ -18,12 +18,13 @@ import Animated, {
 import { FadeSlideIn, PressableScale, useDrift } from '@/components/common/motion';
 import { Screen } from '@/components/common/screen';
 import { AppIcon, AppText, Card, ProgressBar } from '@/components/common/ui';
+import { AppHeader } from '@/components/navigation/app-header';
 import { BottomNavigation, useBottomNavInset } from '@/components/navigation/bottom-navigation';
 import { assets, colors, radii, shadow, spacing } from '@/constants/theme';
+import { analyticsForMonth, mascotInsight, previousMonth } from '@/features/analytics/analytics';
 import {
   dashboardMonths,
   dashboardPeriods,
-  insightForMonth,
   MAX_DASHBOARD_CATEGORIES,
   type DashboardCategory,
   type DashboardPeriod,
@@ -35,6 +36,7 @@ import { useToast } from '@/components/common/toast';
 import { warningFeedback } from '@/lib/haptics';
 import { useBudgets } from '@/features/budget/BudgetProvider';
 import { useCategories } from '@/features/categories/CategoriesProvider';
+import { useProfile } from '@/features/profile/ProfileProvider';
 
 const PESO = '₱';
 const GRID_GAP = 10;
@@ -384,7 +386,8 @@ export function HomeScreen() {
   const { user } = useAuth();
   const { expenses, loading: expensesLoading, loadError, refresh: refreshExpenses } = useExpenses();
   const { budgets, loading: budgetsLoading, refresh: refreshBudgets } = useBudgets();
-  const { findCategory } = useCategories();
+  const { allCategories } = useCategories();
+  const { displayName: profileName } = useProfile();
   const { width } = useWindowDimensions();
   const bottomInset = useBottomNavInset();
   const [selectedMonthId, setSelectedMonthId] = useState(dashboardMonths[0].id);
@@ -403,8 +406,9 @@ export function HomeScreen() {
   const [editingCategories, setEditingCategories] = useState(false);
   const [drag, setDrag] = useState<{ id: string; target: number } | null>(null);
 
-  const firstName = resolveFirstName(user);
-  const initial = firstName.charAt(0).toUpperCase();
+  // Reads the shared profile cache so editing the name in Settings updates the
+  // greeting immediately, with the auth metadata as the fallback.
+  const firstName = profileName.trim() ? profileName.trim().split(/\s+/)[0] : resolveFirstName(user);
   const greeting = useMemo(() => greetingForHour(new Date().getHours()), []);
   const baseMonth = dashboardMonths.find((item) => item.id === selectedMonthId) ?? dashboardMonths[0];
   const savedBudget = budgets.find((item) => item.month === selectedMonthId);
@@ -431,28 +435,16 @@ export function HomeScreen() {
   }), [baseMonth, monthExpenses.length, realBars, realSpent, savedBudget]);
   const usage = month.budget > 0 ? Math.round((month.spent / month.budget) * 100) : 0;
   const remaining = month.budget - month.spent;
+  // Shares the Phase 7 analytics pipeline with the Insights screen, so the
+  // mascot can never contradict what Analytics reports.
   const insight = useMemo(() => {
     if (expensesLoading || budgetsLoading) return 'Checking your latest spending...';
-    if (savedBudget) {
-      const categoryUsage = savedBudget.categoryBudgets.map((limit) => {
-        const spent = monthExpenses.filter((expense) => expense.categoryId === limit.categoryId).reduce((sum, expense) => sum + expense.amountCents, 0);
-        return { ...limit, spent, percent: Math.round(spent / limit.amountCents * 100) };
-      }).sort((a, b) => b.percent - a.percent)[0];
-      if (categoryUsage && categoryUsage.percent >= 70) {
-        const category = findCategory(categoryUsage.categoryId);
-        return `You’ve used ${categoryUsage.percent}% of your ${category?.label ?? 'category'} budget.`;
-      }
-      if (remaining < 0) return `You’re ${formatMoney(Math.abs(remaining))} over this month’s budget.`;
-      return `You have ${formatMoney(remaining)} left in this month’s budget.`;
-    }
-    if (monthExpenses.length === 0) return "Add a few expenses and I'll start spotting spending patterns.";
-    const totals = new Map<string, number>();
-    monthExpenses.forEach((expense) => totals.set(expense.categoryId, (totals.get(expense.categoryId) ?? 0) + expense.amountCents));
-    const top = [...totals].sort((a, b) => b[1] - a[1])[0];
-    const category = categories.find((item) => item.id === top?.[0]);
-    if (category) return `${category.fullLabel} is your highest category this month.`;
-    return insightForMonth(month, period);
-  }, [budgetsLoading, categories, expensesLoading, findCategory, month, monthExpenses, period, remaining, savedBudget]);
+    // The full library, not the dashboard's eight — an expense in a category
+    // that isn't pinned to the grid still has a real name.
+    const current = analyticsForMonth(expenses, allCategories, selectedMonthId);
+    const prior = analyticsForMonth(expenses, allCategories, previousMonth(selectedMonthId));
+    return mascotInsight(current, prior, allCategories, savedBudget);
+  }, [allCategories, budgetsLoading, expenses, expensesLoading, savedBudget, selectedMonthId]);
   const mascotDrift = useDrift({ x: 8, y: 10, rotate: 1.5, scale: 0.018, duration: 7200 });
 
   useFocusEffect(useCallback(() => {
@@ -518,6 +510,10 @@ export function HomeScreen() {
       fixed={<BottomNavigation />}
     >
       <View style={[styles.page, { width: dashboardWidth }]}>
+        {/* Profile, help and alerts live in the shared header on every panel,
+            so the dashboard no longer carries its own avatar. */}
+        <AppHeader />
+
         <FadeSlideIn index={0}>
           <View style={styles.hero}>
             <View style={styles.heroTop}>
@@ -530,17 +526,6 @@ export function HomeScreen() {
                   A clearer view of your spending.
                 </AppText>
               </View>
-
-              <PressableScale
-                accessibilityRole="button"
-                accessibilityLabel="Open profile"
-                onPress={() => router.push('/profile')}
-                style={styles.avatar}
-              >
-                <AppText variant="h2" style={styles.avatarText}>
-                  {initial}
-                </AppText>
-              </PressableScale>
             </View>
 
             {/*

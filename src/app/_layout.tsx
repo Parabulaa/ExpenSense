@@ -22,6 +22,9 @@ import { BudgetProvider } from '@/features/budget/BudgetProvider';
 import { CategoriesProvider } from '@/features/categories/CategoriesProvider';
 import { DashboardCategoriesProvider } from '@/features/dashboard/DashboardCategoriesProvider';
 import { ExpensesProvider } from '@/features/expenses/ExpensesProvider';
+import { NotificationsProvider } from '@/features/notifications/NotificationsProvider';
+import { ProfileProvider } from '@/features/profile/ProfileProvider';
+import { SettingsProvider } from '@/features/settings/SettingsProvider';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -42,17 +45,23 @@ export default function RootLayout() {
         <StatusBar style="dark" />
 
         <AuthProvider>
-          <ExpensesProvider>
-            <CategoriesProvider>
-              <BudgetProvider>
-                <DashboardCategoriesProvider>
-                  <ToastProvider>
-                    <RootNavigation />
-                  </ToastProvider>
-                </DashboardCategoriesProvider>
-              </BudgetProvider>
-            </CategoriesProvider>
-          </ExpensesProvider>
+          <ProfileProvider>
+            <SettingsProvider>
+              <ExpensesProvider>
+                <CategoriesProvider>
+                  <BudgetProvider>
+                    <DashboardCategoriesProvider>
+                      <NotificationsProvider>
+                        <ToastProvider>
+                          <RootNavigation />
+                        </ToastProvider>
+                      </NotificationsProvider>
+                    </DashboardCategoriesProvider>
+                  </BudgetProvider>
+                </CategoriesProvider>
+              </ExpensesProvider>
+            </SettingsProvider>
+          </ProfileProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

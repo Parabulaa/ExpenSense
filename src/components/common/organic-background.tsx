@@ -7,7 +7,7 @@ import { useDrift } from './motion';
 
 const AnimatedImage = Animated.createAnimatedComponent(Image);
 
-type Variant = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
+type Variant = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
 type AssetKey = keyof typeof assets;
 
 type Layer = {
@@ -266,6 +266,26 @@ const COMPOSITIONS: Record<Variant, Layer[]> = {
     { asset: 'shape6', width: 132, height: 124, right: -34, bottom: '15%', opacity: 0.38, baseRotate: 46, drift: { x: -21, y: -22, rotate: 8, scale: 0.07, duration: 2550, delay: 840 } },
     { ...BOTTOM_LANDSCAPE, bottom: -98, opacity: 0.7, drift: { x: 15, y: -19, rotate: 2.5, scale: 0.035, duration: 4700 } },
     { ...BOTTOM_LANDSCAPE_FRONT, bottom: -110, opacity: 0.5, drift: { x: -18, y: 17, rotate: -3, scale: 0.04, duration: 3800, delay: 600 } },
+  ],
+
+  // 13 — Profile & Settings. The reference leads with a heavy top-right flow
+  // and leaf accents beside the title, then keeps scenery running down both
+  // edges so the long settings list never sits on an empty canvas. Accents move
+  // on short, independent cycles so the page reads as alive rather than drifting.
+  13: [
+    // Top-right mass behind the title, as in the reference.
+    { asset: 'shape3', width: 348, height: 334, right: -132, top: -118, opacity: 0.6, baseRotate: -30, drift: { x: 20, y: 24, rotate: 4.5, scale: 0.05, duration: 4100 } },
+    { asset: 'shape2', width: 266, height: 256, right: -64, top: -48, opacity: 0.42, baseRotate: -22, drift: { x: -23, y: 18, rotate: -4.5, scale: 0.045, duration: 3300, delay: 360 } },
+    // Leaf accents flanking the heading.
+    { asset: 'shape6', width: 124, height: 116, right: 22, top: '7%', opacity: 0.52, baseRotate: 34, drift: { x: -18, y: 21, rotate: 9, scale: 0.08, duration: 2500, delay: 560 } },
+    { asset: 'shape6', width: 96, height: 90, left: -22, top: '12%', opacity: 0.44, baseRotate: -18, drift: { x: 20, y: -19, rotate: -8, scale: 0.075, duration: 2750, delay: 900 } },
+    // Side accents running past the settings rows.
+    { asset: 'shape1', width: 196, height: 186, left: -110, top: '34%', opacity: 0.36, baseRotate: -28, drift: { x: 24, y: -22, rotate: 6.5, scale: 0.06, duration: 3050, delay: 240 } },
+    { asset: 'shape5', width: 146, height: 138, right: -58, top: '52%', opacity: 0.36, baseRotate: -24, drift: { x: -25, y: 22, rotate: -7, scale: 0.065, duration: 2900, delay: 1180 } },
+    { asset: 'shape6', width: 118, height: 110, left: -34, top: '72%', opacity: 0.38, baseRotate: 128, drift: { x: 21, y: 20, rotate: 8, scale: 0.07, duration: 2650, delay: 700 } },
+    // Ground behind the logout action and the floating navbar.
+    { ...BOTTOM_LANDSCAPE, bottom: -96, opacity: 0.68, drift: { x: 16, y: -18, rotate: 2.5, scale: 0.035, duration: 4600 } },
+    { ...BOTTOM_LANDSCAPE_FRONT, bottom: -108, opacity: 0.48, drift: { x: -18, y: 17, rotate: -3, scale: 0.04, duration: 3700, delay: 580 } },
   ],
 };
 
