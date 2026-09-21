@@ -1,1 +1,1 @@
-export { OnboardingScreen as default } from '@/screens/auth-screens';
+export { default } from '@/features/onboarding/OnboardingExperience';
