@@ -42,6 +42,25 @@ export function formatPeso(cents: number, options?: { alwaysShowDecimals?: boole
   })}`;
 }
 
+/** Compact peso text for constrained cards. It never truncates with an ellipsis. */
+export function formatCompactPeso(cents: number, options?: { alwaysShowDecimals?: boolean }): string {
+  if (!Number.isFinite(cents)) return `${PESO}0`;
+  const sign = cents < 0 ? '-' : '';
+  const amount = Math.abs(cents) / 100;
+  if (amount < 1000) return `${sign}${formatPeso(Math.abs(cents), options)}`;
+
+  const units = [
+    { value: 1_000_000_000, suffix: 'B' },
+    { value: 1_000_000, suffix: 'M' },
+    { value: 1_000, suffix: 'K' },
+  ];
+  const unit = units.find((candidate) => amount >= candidate.value)!;
+  const scaled = amount / unit.value;
+  const digits = scaled >= 100 || Number.isInteger(scaled) ? 0 : scaled >= 10 ? 1 : 2;
+  const compact = scaled.toFixed(digits).replace(/\.0+$|(?<=\.[0-9])0+$/, '');
+  return `${sign}${PESO}${compact}${unit.suffix}`;
+}
+
 /**
  * Font size for a currency figure that has to share a fixed-width card. Long
  * values step down in a few predictable stages rather than scaling smoothly,

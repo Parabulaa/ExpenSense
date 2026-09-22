@@ -1,8 +1,9 @@
 import { Image } from 'expo-image';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Keyboard, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Calendar } from '@/components/common/calendar';
+import { DraggableBottomSheet } from '@/components/common/draggable-bottom-sheet';
 import { FadeSlideIn, PressableScale } from '@/components/common/motion';
 import { Screen } from '@/components/common/screen';
 import { useToast } from '@/components/common/toast';
@@ -24,7 +25,7 @@ import { useExpenses } from '@/features/expenses/ExpensesProvider';
 import { useProfile } from '@/features/profile/ProfileProvider';
 import type { Expense, ExpenseFormErrors, ExpenseFormValues } from '@/features/expenses/types';
 import { formatExpenseDate, normalizeAmountInput, todayLocalDate, validateExpenseForm } from '@/features/expenses/validation';
-import { formatPercent, formatPeso, percentOf } from '@/lib/format';
+import { formatCompactPeso, formatPercent, formatPeso, percentOf } from '@/lib/format';
 import { selectionFeedback, warningFeedback } from '@/lib/haptics';
 
 const CATEGORY_LIMIT_MESSAGE = 'Dashboard category limit reached. Remove one before adding another.';
@@ -164,9 +165,7 @@ function formatMonth(month: string) {
   return new Intl.DateTimeFormat('en-PH', { month: 'long', year: 'numeric' }).format(new Date(`${month}-01T12:00:00`));
 }
 
-function compactCurrency(cents: number) {
-  return `₱${(cents / 100).toLocaleString('en-PH', { maximumFractionDigits: cents % 100 ? 2 : 0 })}`;
-}
+const compactCurrency = formatCompactPeso;
 
 const CALENDAR_WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -235,7 +234,7 @@ function TransactionPicker({ kind, dateFilter, categoryFilter, sort, onDate, onC
       : [{ id: 'all', label: 'All Categories', icon: 'shape-outline' as const }, ...categories.map((item) => ({ id: item.id, label: item.fullLabel, icon: item.icon }))];
   const selected = kind === 'date' ? dateFilter : kind === 'sort' ? sort : categoryFilter;
   const choose = (id: string) => { selectionFeedback(); if (kind === 'date') onDate(id as DateFilter); else if (kind === 'sort') onSort(id as SortOption); else onCategory(id); onClose(); };
-  return <Modal visible transparent animationType="fade" onRequestClose={onClose}><View style={s.pickerBackdrop}><Pressable accessibilityLabel="Close filter" onPress={onClose} style={StyleSheet.absoluteFill} /><View style={s.filterSheet}><View style={s.sheetHandle} /><AppText variant="h2">{kind === 'date' ? 'Filter by Date' : kind === 'sort' ? 'Sort Transactions' : 'Filter by Category'}</AppText><View style={s.pickerOptions}>{options.map((option) => <PressableScale key={option.id} onPress={() => choose(option.id)} accessibilityRole="button" accessibilityState={{ selected: selected === option.id }} style={[s.pickerOption, selected === option.id && s.pickerOptionSelected]}>{option.icon ? <View style={s.pickerOptionIcon}><AppIcon name={option.icon} size={21} /></View> : null}<AppText variant="bodyMedium" style={s.pickerOptionCopy}>{option.label}</AppText>{selected === option.id ? <AppIcon name="check-circle" color={colors.deepForest} /> : null}</PressableScale>)}</View></View></View></Modal>;
+  return <DraggableBottomSheet visible onClose={onClose}><AppText variant="h2">{kind === 'date' ? 'Filter by Date' : kind === 'sort' ? 'Sort Transactions' : 'Filter by Category'}</AppText><View style={s.pickerOptions}>{options.map((option) => <PressableScale key={option.id} onPress={() => choose(option.id)} accessibilityRole="button" accessibilityState={{ selected: selected === option.id }} style={[s.pickerOption, selected === option.id && s.pickerOptionSelected]}>{option.icon ? <View style={s.pickerOptionIcon}><AppIcon name={option.icon} size={21} /></View> : null}<AppText variant="bodyMedium" style={s.pickerOptionCopy}>{option.label}</AppText>{selected === option.id ? <AppIcon name="check-circle" color={colors.deepForest} /> : null}</PressableScale>)}</View></DraggableBottomSheet>;
 }
 
 function ExpenseRow({ expense }: { expense: Expense }) {
@@ -372,7 +371,7 @@ export function BudgetScreen() {
   const [month, setMonth] = useState(currentMonth);
   const [monthPicker, setMonthPicker] = useState(false);
   const [monthDraft, setMonthDraft] = useState(`${currentMonth}-01`);
-  const [editor, setEditor] = useState<{ type: 'monthly' } | { type: 'category'; categoryId: string } | null>(null);
+  const [editor, setEditor] = useState<{ type: 'addMonthly' } | { type: 'editMonthly' } | { type: 'category'; categoryId: string } | null>(null);
   const [amount, setAmount] = useState('');
   const [amountError, setAmountError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -384,20 +383,26 @@ export function BudgetScreen() {
   // produce an Infinity/NaN percentage.
   const percentage = percentOf(spentCents, budget?.amountCents) ?? 0;
   const currency = (cents: number) => formatPeso(Math.abs(cents), { alwaysShowDecimals: true });
+  const compact = (cents: number) => formatCompactPeso(Math.abs(cents), { alwaysShowDecimals: false });
   const monthLabel = new Intl.DateTimeFormat('en-PH', { month: 'long', year: 'numeric' }).format(new Date(`${month}-01T12:00:00`));
   const status = percentage >= 100 ? 'Budget exceeded' : percentage >= 90 ? 'Near budget limit' : percentage >= 70 ? 'Approaching limit' : 'On track';
 
-  const openMonthly = () => { setAmount(budget ? (budget.amountCents / 100).toFixed(2) : ''); setAmountError(null); setEditor({ type: 'monthly' }); };
+  const openAddMonthly = () => { setAmount(''); setAmountError(null); setEditor({ type: 'addMonthly' }); };
+  const openEditMonthly = () => { setAmount(budget ? (budget.amountCents / 100).toFixed(2) : ''); setAmountError(null); setEditor({ type: 'editMonthly' }); };
   const openCategory = (categoryId: string) => { const limit = budget?.categoryBudgets.find((item) => item.categoryId === categoryId); setAmount(limit ? (limit.amountCents / 100).toFixed(2) : ''); setAmountError(null); setEditor({ type: 'category', categoryId }); };
   const save = async () => {
     if (!editor || saving) return;
     const cents = parseBudgetAmount(amount);
     if (!cents) { setAmountError('Enter a valid amount greater than zero.'); return; }
     setSaving(true);
-    const result = editor.type === 'monthly' ? await saveMonthlyBudget(month, cents) : budget ? await saveCategoryBudget(budget.id, editor.categoryId, cents) : { ok: false as const, message: 'Set a monthly budget first.' };
+    const result = editor.type === 'addMonthly'
+      ? await saveMonthlyBudget(month, (budget?.amountCents ?? 0) + cents)
+      : editor.type === 'editMonthly'
+        ? await saveMonthlyBudget(month, cents)
+        : budget ? await saveCategoryBudget(budget.id, editor.categoryId, cents) : { ok: false as const, message: 'Add a monthly budget first.' };
     setSaving(false);
     if (!result.ok) { showToast(result.message, { tone: 'warning' }); return; }
-    selectionFeedback(); showToast(editor.type === 'monthly' ? 'Monthly budget saved.' : 'Category limit saved.'); setEditor(null);
+    selectionFeedback(); showToast(editor.type === 'addMonthly' ? 'Budget amount added.' : editor.type === 'editMonthly' ? 'Total budget updated.' : 'Category limit saved.'); setEditor(null);
   };
   const removeLimit = async () => {
     if (!budget || editor?.type !== 'category') return;
@@ -412,7 +417,7 @@ export function BudgetScreen() {
       <View style={s.page}>
         <AppText variant="hero">Budget</AppText>
         <PressableScale accessibilityRole="button" accessibilityLabel={`Selected budget month: ${monthLabel}`} onPress={() => { setMonthDraft(`${month}-01`); setMonthPicker(true); }} style={s.budgetMonth}><AppText variant="h3">{monthLabel}</AppText><AppIcon name="calendar-month-outline" /></PressableScale>
-        {loading && monthlyBudgets.length === 0 ? <View style={s.skeletonCard} /> : error && monthlyBudgets.length === 0 ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load budgets</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : !budget ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="wallet-plus-outline" size={30} /></View><AppText variant="h2">No budget yet</AppText><AppText style={[s.muted, s.center]}>Set a monthly budget to start tracking your spending limits.</AppText><PrimaryButton title="Set Budget" onPress={openMonthly} /></Card> : <PressableScale accessibilityRole="button" accessibilityLabel={`Monthly budget ${currency(budget.amountCents)}, ${percentage}% used`} onPress={openMonthly}><Card style={s.monthlyBudgetCard}><View style={s.rowBetween}><AppText variant="h3">Monthly Budget</AppText><AppIcon name="pencil-outline" size={20} color={colors.muted} /></View><AppText variant="hero" adjustsFontSizeToFit numberOfLines={1}>{currency(budget.amountCents)}</AppText><View style={s.rowBetween}><AppText variant="h3" style={{ color: colors.deepForest }}>{currency(spentCents)} spent</AppText><AppText variant="h3" style={{ color: remainingCents < 0 ? colors.danger : colors.deepForest }}>{currency(remainingCents)} {remainingCents < 0 ? 'over' : 'left'}</AppText></View><View style={s.row}><ProgressBar value={Math.min(100, percentage)} /><AppText variant="h3">{percentage}%</AppText></View><StatusChip warning={percentage >= 90}>{status}</StatusChip></Card></PressableScale>}
+        {loading && monthlyBudgets.length === 0 ? <View style={s.skeletonCard} /> : error && monthlyBudgets.length === 0 ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load budgets</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : !budget ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="wallet-plus-outline" size={30} /></View><AppText variant="h2">No budget yet</AppText><AppText style={[s.muted, s.center]}>Add your first monthly budget amount to start tracking spending.</AppText><PrimaryButton title="Add Budget Amount" onPress={openAddMonthly} /></Card> : <Card style={s.monthlyBudgetCard}><View style={s.rowBetween}><AppText variant="h3">Monthly Budget</AppText><PressableScale accessibilityRole="button" accessibilityLabel="Edit total budget" onPress={openEditMonthly} style={s.editBudgetButton}><AppIcon name="pencil-outline" size={20} color={colors.muted} /></PressableScale></View><AppText variant="hero" adjustsFontSizeToFit numberOfLines={1}>{currency(budget.amountCents)}</AppText><View style={s.budgetSummary}><View style={s.budgetSummaryItem}><AppText variant="small" style={s.muted}>Spent</AppText><AppText variant="h3" style={{ color: colors.deepForest }}>{compact(spentCents)}</AppText></View><View style={[s.budgetSummaryItem, s.budgetSummaryRight]}><AppText variant="small" style={s.muted}>{remainingCents < 0 ? 'Over' : 'Left'}</AppText><AppText variant="h3" style={{ color: remainingCents < 0 ? colors.danger : colors.deepForest }}>{compact(remainingCents)}</AppText></View></View><View style={s.row}><ProgressBar value={Math.min(100, percentage)} /><AppText variant="h3" style={s.budgetPercent}>{percentage}%</AppText></View><StatusChip warning={percentage >= 90}>{status}</StatusChip><SecondaryButton title="Add to Budget" icon="plus" onPress={openAddMonthly} /></Card>}
         <AppText variant="h2">Category Budgets</AppText>
         {!budget ? <AppText style={s.muted}>Set a monthly budget before adding category limits.</AppText> : budget.categoryBudgets.length === 0 ? <Card style={s.noLimits}><AppText variant="h3">No category limits yet</AppText><AppText style={s.muted}>Tap a category below to add one.</AppText></Card> : null}
         {categories.map((category) => {
@@ -427,7 +432,7 @@ export function BudgetScreen() {
             accessibilityLabel={`${limit ? 'Edit' : 'Set'} ${category.fullLabel} budget`}
             accessibilityHint={budget ? 'Opens the category budget editor' : 'Set a monthly budget first'}
             hitSlop={4}
-            onPress={() => budget ? openCategory(category.id) : openMonthly()}
+            onPress={() => budget ? openCategory(category.id) : openAddMonthly()}
             style={s.budgetRow}
           >
             <View style={[s.budgetIcon, { backgroundColor: category.color ? `${category.color}22` : CATEGORY_TONES[category.id]?.background ?? colors.pale }]}>
@@ -439,16 +444,23 @@ export function BudgetScreen() {
               <ProgressBar value={Math.min(100, categoryPercent)} height={9} />
             </View>
             <View style={s.budgetValues}>
-              <AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{limit ? currency(limit.amountCents) : 'Set limit'}</AppText>
-              <AppText variant="small" style={{ color: categoryPercent >= 100 ? colors.danger : colors.deepForest }} numberOfLines={1}>{currency(categorySpent)} spent</AppText>
-              {categoryRemaining !== null ? <AppText variant="small" style={{ color: categoryRemaining < 0 ? colors.danger : colors.muted }} numberOfLines={1}>{currency(categoryRemaining)} {categoryRemaining < 0 ? 'over' : 'left'}</AppText> : null}
+              <AppText variant="h3">{limit ? compact(limit.amountCents) : 'Set limit'}</AppText>
+              <AppText variant="small" style={{ color: categoryPercent >= 100 ? colors.danger : colors.deepForest }}>{compact(categorySpent)} spent</AppText>
+              {categoryRemaining !== null ? <AppText variant="small" style={{ color: categoryRemaining < 0 ? colors.danger : colors.muted }}>{compact(categoryRemaining)} {categoryRemaining < 0 ? 'over' : 'left'}</AppText> : null}
             </View>
             <AppIcon name="chevron-right" size={20} color={colors.muted} />
           </PressableScale>);
         })}
       </View>
-      <Modal visible={monthPicker} transparent animationType="fade" onRequestClose={() => setMonthPicker(false)}><View style={s.pickerBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setMonthPicker(false)} /><View style={s.filterSheet}><View style={s.sheetHandle} /><AppText variant="h2">Choose Budget Month</AppText><Calendar value={monthDraft} onSelect={setMonthDraft} /><AppText style={s.selectedMonthPreview}>{formatMonth(monthDraft.slice(0, 7))}</AppText><PrimaryButton title="Use This Month" onPress={() => { setMonth(monthDraft.slice(0, 7)); setMonthPicker(false); }} /></View></View></Modal>
-      <Modal visible={Boolean(editor)} transparent animationType="fade" onRequestClose={() => !saving && setEditor(null)}><View style={s.pickerBackdrop}><Pressable style={StyleSheet.absoluteFill} disabled={saving} onPress={() => setEditor(null)} /><View style={s.filterSheet}><View style={s.sheetHandle} /><AppText variant="h2">{editor?.type === 'monthly' ? `${budget ? 'Edit' : 'Set'} Monthly Budget` : `Set ${categoryLibrary.find((item) => item.id === (editor?.type === 'category' ? editor.categoryId : ''))?.fullLabel ?? 'Category'} Limit`}</AppText><FormInput label="Amount" icon="currency-php" placeholder="0.00" value={amount} onChangeText={(value) => { setAmount(normalizeAmountInput(value, amount)); setAmountError(null); }} keyboardType="decimal-pad" error={amountError ?? undefined} /><QuickAmountButtons value={amount} onSelect={(value) => { setAmount(String(value)); setAmountError(null); }} /><PrimaryButton title={saving ? 'Saving…' : 'Save Budget'} disabled={saving} onPress={() => void save()} />{editor?.type === 'category' && budget?.categoryBudgets.some((item) => item.categoryId === editor.categoryId) ? <SecondaryButton title="Remove Category Limit" disabled={saving} onPress={() => void removeLimit()} /> : null}</View></View></Modal>
+      <DraggableBottomSheet visible={monthPicker} onClose={() => setMonthPicker(false)}><AppText variant="h2">Choose Budget Month</AppText><Calendar value={monthDraft} onSelect={setMonthDraft} /><AppText style={s.selectedMonthPreview}>{formatMonth(monthDraft.slice(0, 7))}</AppText><PrimaryButton title="Use This Month" onPress={() => { setMonth(monthDraft.slice(0, 7)); setMonthPicker(false); }} /></DraggableBottomSheet>
+      <DraggableBottomSheet visible={Boolean(editor)} disabled={saving} onClose={() => setEditor(null)}>
+        <AppText variant="h2">{editor?.type === 'addMonthly' ? 'Add Budget Amount' : editor?.type === 'editMonthly' ? 'Edit Total Budget' : `Set ${categoryLibrary.find((item) => item.id === (editor?.type === 'category' ? editor.categoryId : ''))?.fullLabel ?? 'Category'} Limit`}</AppText>
+        {editor?.type === 'addMonthly' ? <View style={s.addBudgetContext}><InfoRow label="Current budget" value={currency(budget?.amountCents ?? 0)} /><InfoRow label="Amount to add" value={currency(Math.round((Number(amount) || 0) * 100))} /><InfoRow bold label="New budget" value={currency((budget?.amountCents ?? 0) + Math.round((Number(amount) || 0) * 100))} /></View> : null}
+        <FormInput label={editor?.type === 'addMonthly' ? 'Amount to add' : 'Amount'} icon="currency-php" placeholder="0.00" value={amount} onChangeText={(value) => { setAmount(normalizeAmountInput(value, amount)); setAmountError(null); }} keyboardType="decimal-pad" error={amountError ?? undefined} />
+        <QuickAmountButtons value={amount} onSelect={(value) => { setAmount(String(value)); setAmountError(null); }} />
+        <PrimaryButton title={saving ? 'Saving…' : editor?.type === 'addMonthly' ? `Add ${formatPeso(Math.round((Number(amount) || 0) * 100))}` : editor?.type === 'editMonthly' ? 'Save Total Budget' : 'Save Category Limit'} disabled={saving} onPress={() => void save()} />
+        {editor?.type === 'category' && budget?.categoryBudgets.some((item) => item.categoryId === editor.categoryId) ? <SecondaryButton title="Remove Category Limit" disabled={saving} onPress={() => void removeLimit()} /> : null}
+      </DraggableBottomSheet>
     </Screen>
   );
 }
@@ -539,7 +551,7 @@ export function InsightsScreen() {
 }
 
 function MonthPickerModal({ visible, title, value, onChange, onClose, onConfirm }: { visible: boolean; title: string; value: string; onChange: (value: string) => void; onClose: () => void; onConfirm: (value: string) => void }) {
-  return <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}><View style={s.pickerBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={onClose} /><View style={s.filterSheet}><View style={s.sheetHandle} /><AppText variant="h2">{title}</AppText><Calendar value={value} onSelect={onChange} /><AppText style={s.selectedMonthPreview}>{formatMonth(value.slice(0, 7))}</AppText><PrimaryButton title="Use This Month" onPress={() => onConfirm(value)} /></View></View></Modal>;
+  return <DraggableBottomSheet visible={visible} onClose={onClose}><AppText variant="h2">{title}</AppText><Calendar value={value} onSelect={onChange} /><AppText style={s.selectedMonthPreview}>{formatMonth(value.slice(0, 7))}</AppText><PrimaryButton title="Use This Month" onPress={() => onConfirm(value)} /></DraggableBottomSheet>;
 }
 
 function TrendMetric({ label, value }: { label: string; value: string }) {
@@ -678,9 +690,7 @@ export function CategoriesScreen() {
           onPress={openCreate}
         />
       </View>
-      <Modal visible={Boolean(editor)} transparent animationType="fade" onRequestClose={() => !saving && setEditor(null)}>
-        <View style={s.pickerBackdrop}><Pressable style={StyleSheet.absoluteFill} disabled={saving} onPress={() => setEditor(null)} /><View style={s.filterSheet}><View style={s.sheetHandle} /><AppText variant="h2">{editor?.id ? 'Edit Category' : 'Add Category'}</AppText><FormInput label="Category name" placeholder="e.g. Pets" value={name} onChangeText={(value) => { setName(value); setFormError(null); }} maxLength={40} error={formError ?? undefined} /><AppText variant="bodyMedium">Icon</AppText><View style={s.choiceRow}>{iconChoices.map((value) => <PressableScale key={value} accessibilityLabel={`Use ${value} icon`} accessibilityState={{ selected: icon === value }} onPress={() => setIcon(value)} style={[s.choiceCircle, icon === value && s.choiceCircleActive]}><AppIcon name={value} color={icon === value ? colors.surface : colors.deepForest} /></PressableScale>)}</View><AppText variant="bodyMedium">Color</AppText><View style={s.choiceRow}>{colorChoices.map((value) => <PressableScale key={value} accessibilityLabel={`Use color ${value}`} accessibilityState={{ selected: color === value }} onPress={() => setColor(value)} style={[s.colorChoice, { backgroundColor: value }, color === value && s.colorChoiceActive]}>{color === value ? <AppIcon name="check" size={17} color={colors.surface} /> : null}</PressableScale>)}</View><PrimaryButton title={saving ? 'Saving…' : editor?.id ? 'Save Changes' : 'Add Category'} disabled={saving} onPress={() => void saveCategory()} />{editor?.id ? <SecondaryButton title="Archive Category" disabled={saving} onPress={() => setArchiveId(editor.id ?? null)} /> : null}</View></View>
-      </Modal>
+      <DraggableBottomSheet visible={Boolean(editor)} disabled={saving} onClose={() => setEditor(null)}><AppText variant="h2">{editor?.id ? 'Edit Category' : 'Add Category'}</AppText><FormInput label="Category name" placeholder="e.g. Pets" value={name} onChangeText={(value) => { setName(value); setFormError(null); }} maxLength={40} error={formError ?? undefined} /><AppText variant="bodyMedium">Icon</AppText><View style={s.choiceRow}>{iconChoices.map((value) => <PressableScale key={value} accessibilityLabel={`Use ${value} icon`} accessibilityState={{ selected: icon === value }} onPress={() => setIcon(value)} style={[s.choiceCircle, icon === value && s.choiceCircleActive]}><AppIcon name={value} color={icon === value ? colors.surface : colors.deepForest} /></PressableScale>)}</View><AppText variant="bodyMedium">Color</AppText><View style={s.choiceRow}>{colorChoices.map((value) => <PressableScale key={value} accessibilityLabel={`Use color ${value}`} accessibilityState={{ selected: color === value }} onPress={() => setColor(value)} style={[s.colorChoice, { backgroundColor: value }, color === value && s.colorChoiceActive]}>{color === value ? <AppIcon name="check" size={17} color={colors.surface} /> : null}</PressableScale>)}</View><PrimaryButton title={saving ? 'Saving…' : editor?.id ? 'Save Changes' : 'Add Category'} disabled={saving} onPress={() => void saveCategory()} />{editor?.id ? <SecondaryButton title="Archive Category" disabled={saving} onPress={() => setArchiveId(editor.id ?? null)} /> : null}</DraggableBottomSheet>
       <AuthDialog visible={Boolean(archiveId)} title="Archive category?" message="The category will be hidden from new expenses, but all historical transactions will keep their category." primaryAction={{ label: 'Archive', destructive: true, loading: saving, onPress: () => void archive() }} secondaryAction={{ label: 'Cancel', onPress: () => setArchiveId(null) }} onRequestClose={() => setArchiveId(null)} />
     </Screen>
   );
@@ -839,7 +849,7 @@ export function ProfileScreen() {
 }
 
 const s = StyleSheet.create({
-  page: { padding: 24, gap: 16 },
+  page: { paddingTop: 16, gap: 16 },
   muted: { color: colors.muted },
   center: { textAlign: 'center' },
   avatar: { position: 'absolute', right: 26, top: 8, width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', zIndex: 3 },
@@ -924,6 +934,12 @@ const s = StyleSheet.create({
   analyticsMonth: { minHeight: 68, borderRadius: radii.lg, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,253,247,.97)', ...shadow },
   budgetMonth: { minHeight: 62, borderRadius: radii.lg, backgroundColor: 'rgba(255,253,247,.96)', borderWidth: 1, borderColor: colors.line, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   monthlyBudgetCard: { gap: 13, paddingVertical: 22 },
+  editBudgetButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  budgetSummary: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  budgetSummaryItem: { flexGrow: 1, minWidth: 118, gap: 2 },
+  budgetSummaryRight: { alignItems: 'flex-end' },
+  budgetPercent: { flexShrink: 0, minWidth: 54, textAlign: 'right' },
+  addBudgetContext: { gap: 10, padding: 14, borderRadius: radii.md, backgroundColor: colors.pale },
   noLimits: { gap: 4, backgroundColor: 'rgba(255,253,247,.9)' },
   segment: { flexDirection: 'row', borderRadius: radii.md, backgroundColor: colors.pale, padding: 4 },
   segmentActive: { flex: 1, height: 42, borderRadius: radii.sm, backgroundColor: colors.deepForest, alignItems: 'center', justifyContent: 'center' },
@@ -1050,7 +1066,7 @@ const s = StyleSheet.create({
     minHeight: 82,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 9,
     paddingVertical: 14,
     paddingHorizontal: 14,
     borderRadius: radii.md,
@@ -1076,8 +1092,8 @@ const s = StyleSheet.create({
     alignItems: 'flex-end',
     flexGrow: 0,
     flexShrink: 0,
-    minWidth: 72,
-    maxWidth: '44%',
+    minWidth: 76,
+    maxWidth: '42%',
     gap: 2,
   },
 });

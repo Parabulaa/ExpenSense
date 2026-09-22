@@ -99,6 +99,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 10,
     pointerEvents: 'box-none',
+    backgroundColor: colors.cream,
+    zIndex: 20,
   },
   wrap: {
     boxSizing: 'border-box',

@@ -4,10 +4,11 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Keyboard, Linking, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown, SlideInDown } from 'react-native-reanimated';
+import { ActivityIndicator, Keyboard, Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import { Calendar } from '@/components/common/calendar';
+import { DraggableBottomSheet } from '@/components/common/draggable-bottom-sheet';
 import { FadeSlideIn, PressableScale, useDrift } from '@/components/common/motion';
 import { Screen } from '@/components/common/screen';
 import { useToast } from '@/components/common/toast';
@@ -35,16 +36,14 @@ export function AddExpenseScreen() {
   };
   return (
     <View style={styles.addExpenseModal}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Close add expense" onPress={close} style={styles.dim} />
-      <Animated.View entering={SlideInDown.duration(280)} style={styles.sheet}>
+      <DraggableBottomSheet visible onClose={close}>{(dismiss) => <>
         <Animated.Image source={assets.shape6} resizeMode="contain" style={[styles.sheetLeaf, leafDrift]} />
-        <View style={styles.handle} />
         <View style={[styles.rowBetween, styles.sheetContent]}>
           <View>
             <AppText variant="title">Add Expense</AppText>
             <AppText style={styles.muted}>Choose how you want to record it.</AppText>
           </View>
-          <PressableScale accessibilityRole="button" accessibilityLabel="Close" onPress={close} style={styles.close}>
+          <PressableScale accessibilityRole="button" accessibilityLabel="Close" onPress={dismiss} style={styles.close}>
             <AppIcon name="close" size={22} />
           </PressableScale>
         </View>
@@ -53,8 +52,8 @@ export function AddExpenseScreen() {
           <ExpenseOption icon="image-outline" title="Upload Receipt" description="Choose from gallery" onPress={upload} />
           <ExpenseOption icon="file-document-edit-outline" title="Manual Entry" description="Enter details manually" onPress={() => router.push('/manual-expense')} />
         </View>
-        <View style={styles.sheetContent}><SecondaryButton title="Cancel" onPress={close} /></View>
-      </Animated.View>
+        <View style={styles.sheetContent}><SecondaryButton title="Cancel" onPress={dismiss} /></View>
+      </>}</DraggableBottomSheet>
     </View>
   );
 }
@@ -169,19 +168,13 @@ function FormButton({ label, value, icon, placeholder, error, onPress }: { label
 
 function SheetModal({ visible, title, onClose, children }: { visible: boolean; title: string; onClose: () => void; children: ReactNode }) {
   return (
-    <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
-      <View style={styles.modalRoot}>
-        <Pressable accessibilityLabel={`Close ${title}`} onPress={onClose} style={styles.modalDim} />
-        <Animated.View entering={SlideInDown.duration(240)} style={styles.pickerSheet}>
-          <View style={styles.handle} />
-          <View style={styles.rowBetween}>
-            <AppText variant="h2">{title}</AppText>
-            <PressableScale accessibilityLabel="Close" onPress={onClose} style={styles.close}><AppIcon name="close" size={21} /></PressableScale>
-          </View>
-          {children}
-        </Animated.View>
+    <DraggableBottomSheet visible={visible} onClose={onClose}>{(dismiss) => <>
+      <View style={styles.rowBetween}>
+        <AppText variant="h2">{title}</AppText>
+        <PressableScale accessibilityLabel="Close" onPress={dismiss} style={styles.close}><AppIcon name="close" size={21} /></PressableScale>
       </View>
-    </Modal>
+      {children}
+    </>}</DraggableBottomSheet>
   );
 }
 

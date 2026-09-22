@@ -13,6 +13,9 @@
     },
     "android": {
       "softwareKeyboardLayoutMode": "pan",
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#F5F2E8",
         "foregroundImage": "./assets/Branding/Logo_Mark.png",
@@ -38,16 +41,34 @@
       "@react-native-community/datetimepicker",
       [
         "expo-camera",
-        { "cameraPermission": "Allow ExpenSense to photograph receipts for expense recognition.", "recordAudioAndroid": false }
+        {
+          "cameraPermission": "Allow ExpenSense to photograph receipts for expense recognition.",
+          "recordAudioAndroid": false
+        }
       ],
       [
         "expo-image-picker",
-        { "photosPermission": "Allow ExpenSense to choose receipt images from your library." }
+        {
+          "photosPermission": "Allow ExpenSense to choose receipt images from your library."
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "2bb8181b-05b6-4571-bb59-4e93b843f8f2"
+      }
+    },
+    "owner": "parabulaaa",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/2bb8181b-05b6-4571-bb59-4e93b843f8f2"
     }
   }
 }
