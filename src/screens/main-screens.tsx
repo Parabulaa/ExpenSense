@@ -9,8 +9,8 @@ import { FadeSlideIn, PressableScale } from '@/components/common/motion';
 import { Screen } from '@/components/common/screen';
 import { useToast } from '@/components/common/toast';
 import { AppIcon, AppText, BackButton, Card, FormInput, PrimaryButton, ProgressBar, SecondaryButton, StatusChip } from '@/components/common/ui';
-import { AppHeader } from '@/components/navigation/app-header';
 import { BottomNavigation, useBottomNavInset } from '@/components/navigation/bottom-navigation';
+import { FloatingRadialMenu } from '@/components/navigation/floating-radial-menu';
 import { assets, colors, radii, shadow, spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { analyticsForMonth, buildInsights, previousMonth } from '@/features/analytics/analytics';
@@ -613,11 +613,8 @@ export function CategoriesScreen() {
   };
 
   return (
-    <Screen bottomInset={bottomInset} variant={10} fixed={<BottomNavigation />}>
+    <Screen bottomInset={bottomInset} variant={10} fixed={<><FloatingRadialMenu /><BottomNavigation /></>}>
       <View style={s.page}>
-        {/* Categories sits outside the swipeable shell, so it renders its own
-            header rather than inheriting the shared one. */}
-        <AppHeader />
         <AppText variant="hero">Categories</AppText>
         <AppText style={s.muted}>Organize your spending, your way.</AppText>
         <AppText variant="small" style={s.muted}>

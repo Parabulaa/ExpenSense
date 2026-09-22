@@ -13,8 +13,8 @@ import Animated, {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { OrganicBackground } from '@/components/common/organic-background';
-import { AppHeader } from '@/components/navigation/app-header';
 import { BottomNavigation } from '@/components/navigation/bottom-navigation';
+import { FloatingRadialMenu } from '@/components/navigation/floating-radial-menu';
 import { colors } from '@/constants/theme';
 import { selectionFeedback } from '@/lib/haptics';
 
@@ -52,15 +52,13 @@ export default function AppShellLayout() {
         <OrganicBackground variant={14} />
 
         <SafeAreaView style={styles.safe} edges={['top']}>
-          <View style={styles.header}>
-            <AppHeader />
-          </View>
-
           <SwipeViewport index={index}>
             <Slot />
           </SwipeViewport>
         </SafeAreaView>
 
+        {/* Remounting by path guarantees an open menu closes on navigation. */}
+        <FloatingRadialMenu key={pathname} />
         <BottomNavigation />
       </View>
     </View>
@@ -186,13 +184,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   safe: { flex: 1 },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 4,
-    paddingBottom: 2,
-    // Above the scenery, below any sheet or modal a screen opens.
-    zIndex: 5,
-  },
   viewport: { flex: 1, overflow: 'hidden' },
   page: { flex: 1 },
 });
