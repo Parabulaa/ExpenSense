@@ -13,10 +13,8 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PressableScale } from '@/components/common/motion';
-import { useToast } from '@/components/common/toast';
 import { AppIcon, AppText } from '@/components/common/ui';
 import { colors, radii, shadow } from '@/constants/theme';
-import { useAuth } from '@/features/auth/AuthProvider';
 import { useNotifications } from '@/features/notifications/NotificationsProvider';
 import { selectionFeedback } from '@/lib/haptics';
 
@@ -25,47 +23,26 @@ type IconName = Parameters<typeof AppIcon>[0]['name'];
 type MenuAction = {
   label: string;
   icon: IconName;
-  route?: '/settings/account' | '/notifications' | '/settings/help' | '/profile';
+  route: '/settings/account' | '/notifications' | '/settings/help';
   x: number;
   y: number;
-  danger?: boolean;
 };
 
 const ACTIONS: MenuAction[] = [
-  { label: 'Account', icon: 'account-outline', route: '/settings/account', x: 101, y: 4 },
-  { label: 'Notifications', icon: 'bell-outline', route: '/notifications', x: 70, y: 58 },
-  { label: 'Help', icon: 'help-circle-outline', route: '/settings/help', x: 64, y: 116 },
-  { label: 'Settings', icon: 'cog-outline', route: '/profile', x: 91, y: 171 },
-  { label: 'Logout', icon: 'logout', x: 141, y: 207, danger: true },
+  { label: 'Account', icon: 'account-outline', route: '/settings/account', x: 24, y: 6 },
+  { label: 'Notifications', icon: 'bell-outline', route: '/notifications', x: 0, y: 64 },
+  { label: 'FAQ', icon: 'help-circle-outline', route: '/settings/help', x: 35, y: 122 },
 ];
 
 export function FloatingRadialMenu() {
   const insets = useSafeAreaInsets();
-  const { signOut } = useAuth();
   const { unreadCount } = useNotifications();
-  const { showToast } = useToast();
   const [open, setOpen] = useState(false);
-  const [signingOut, setSigningOut] = useState(false);
 
-  const choose = async (action: MenuAction) => {
-    if (signingOut) return;
+  const choose = (action: MenuAction) => {
     selectionFeedback();
     setOpen(false);
-
-    if (action.route) {
-      router.push(action.route);
-      return;
-    }
-
-    setSigningOut(true);
-    const result = await signOut();
-    setSigningOut(false);
-    if (!result.ok) {
-      showToast("Couldn't log out. Check your connection and try again.", { tone: 'warning', icon: 'alert-circle-outline' });
-      return;
-    }
-    router.dismissAll();
-    router.replace('/onboarding');
+    router.push(action.route);
   };
 
   return (
@@ -86,7 +63,7 @@ export function FloatingRadialMenu() {
             index={index}
             key={action.label}
             open={open}
-            onPress={() => void choose(action)}
+            onPress={() => choose(action)}
           />
         ))}
 
@@ -94,7 +71,6 @@ export function FloatingRadialMenu() {
           accessibilityRole="button"
           accessibilityLabel={open ? 'Close quick menu' : 'Open quick menu'}
           accessibilityState={{ expanded: open }}
-          disabled={signingOut}
           onPress={() => setOpen((current) => !current)}
           scaleTo={0.93}
           style={[styles.trigger, open && styles.triggerOpen]}
@@ -131,15 +107,15 @@ function RadialAction({ action, badge, index, open, onPress }: { action: MenuAct
 
   return (
     <Animated.View pointerEvents={open ? 'auto' : 'none'} style={[styles.actionWrap, { left: action.x, top: action.y }, animatedStyle]}>
-      <AppText variant="small" numberOfLines={1} style={[styles.actionLabel, action.danger && styles.dangerText]}>{action.label}</AppText>
+      <AppText variant="small" numberOfLines={1} style={styles.actionLabel}>{action.label}</AppText>
       <PressableScale
         accessibilityRole="button"
         accessibilityLabel={badge ? `${action.label}, ${badge} unread` : action.label}
         onPress={onPress}
         scaleTo={0.91}
-        style={[styles.action, action.danger ? styles.dangerAction : {}]}
+        style={styles.action}
       >
-        <AppIcon name={action.icon} size={21} color={action.danger ? colors.danger : colors.deepForest} />
+        <AppIcon name={action.icon} size={21} color={colors.deepForest} />
         {badge ? <View style={styles.badge}><AppText style={styles.badgeText}>{badge > 9 ? '9+' : badge}</AppText></View> : null}
       </PressableScale>
     </Animated.View>
@@ -158,8 +134,8 @@ const styles = StyleSheet.create({
   host: {
     position: 'absolute',
     right: 12,
-    width: 230,
-    height: 260,
+    width: 210,
+    height: 180,
     zIndex: 40,
   },
   trigger: {
@@ -210,8 +186,6 @@ const styles = StyleSheet.create({
     borderColor: '#CAD6C5',
     ...shadow,
   },
-  dangerAction: { borderColor: '#E8C6C2' },
-  dangerText: { color: colors.danger },
   badge: {
     position: 'absolute',
     right: -3,
