@@ -24,6 +24,7 @@ import { DashboardCategoriesProvider } from '@/features/dashboard/DashboardCateg
 import { ExpensesProvider } from '@/features/expenses/ExpensesProvider';
 import { NotificationsProvider } from '@/features/notifications/NotificationsProvider';
 import { ProfileProvider } from '@/features/profile/ProfileProvider';
+import { ReceiptProvider } from '@/features/receipts/ReceiptProvider';
 import { SettingsProvider } from '@/features/settings/SettingsProvider';
 
 SplashScreen.preventAutoHideAsync();
@@ -48,7 +49,7 @@ export default function RootLayout() {
           <ProfileProvider>
             <SettingsProvider>
               <ExpensesProvider>
-                <CategoriesProvider>
+                <ReceiptProvider><CategoriesProvider>
                   <BudgetProvider>
                     <DashboardCategoriesProvider>
                       <NotificationsProvider>
@@ -58,7 +59,7 @@ export default function RootLayout() {
                       </NotificationsProvider>
                     </DashboardCategoriesProvider>
                   </BudgetProvider>
-                </CategoriesProvider>
+                </CategoriesProvider></ReceiptProvider>
               </ExpensesProvider>
             </SettingsProvider>
           </ProfileProvider>
@@ -101,6 +102,27 @@ function RootNavigation() {
         animationTypeForReplace: 'push',
         gestureEnabled: true,
       }}
-    />
+    >
+      <Stack.Screen
+        name="add-expense"
+        options={{
+          presentation: 'transparentModal',
+          animation: 'fade',
+          animationDuration: 180,
+          contentStyle: { backgroundColor: 'transparent' },
+          gestureEnabled: false,
+        }}
+      />
+      <Stack.Screen
+        name="scanner"
+        options={{
+          presentation: 'fullScreenModal',
+          animation: 'slide_from_bottom',
+          animationDuration: 280,
+          gestureEnabled: true,
+          gestureDirection: 'vertical',
+        }}
+      />
+    </Stack>
   );
 }

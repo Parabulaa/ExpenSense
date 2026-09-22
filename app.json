@@ -4,7 +4,7 @@
     "slug": "ExpenSense",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/Branding/Logo_Mark.png",
     "scheme": "expensense",
     "userInterfaceStyle": "light",
     "ios": {
@@ -14,10 +14,9 @@
     "android": {
       "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#F5F2E8",
+        "foregroundImage": "./assets/Branding/Logo_Mark.png",
+        "monochromeImage": "./assets/Branding/Logo_Mark.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.expensense.app"
@@ -36,7 +35,15 @@
           "imageWidth": 110
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-camera",
+        { "cameraPermission": "Allow ExpenSense to photograph receipts for expense recognition.", "recordAudioAndroid": false }
+      ],
+      [
+        "expo-image-picker",
+        { "photosPermission": "Allow ExpenSense to choose receipt images from your library." }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

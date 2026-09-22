@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { Easing, FadeIn, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { Screen } from '@/components/common/screen';
 import { LiquidScene } from '@/components/common/liquid-scene';
 import { FadeSlideIn } from '@/components/common/motion';
@@ -25,10 +25,25 @@ export function SplashScreen() {
   const { height } = useWindowDimensions();
   const { session } = useAuth();
   useEffect(() => {
-    const id = setTimeout(() => router.replace(session ? '/home' : '/onboarding'), 2200);
+    const id = setTimeout(() => router.replace(session ? '/home' : '/onboarding'), 3200);
     return () => clearTimeout(id);
   }, [session]);
-  return <Screen scroll={false} background={false}><LiquidScene scene="splash"/><Animated.View entering={FadeIn.duration(650)} style={[s.splash,{minHeight:height}]}><View style={s.splashCopy}><Brand /><AppText variant="hero" style={s.center}>Smarter habits.{`\n`}<AppText variant="hero" style={s.green}>Brighter tomorrows.</AppText></AppText><AppText variant="h3" style={[s.center,s.muted]}>Take control of your spending{`\n`}one receipt at a time.</AppText></View><View style={s.splashLoading}><View style={s.dots}><View style={s.dotActive}/><View style={s.dot}/><View style={s.dot}/></View><AppText variant="bodyMedium" style={s.green}>Loading your brighter tomorrow...</AppText></View></Animated.View></Screen>;
+  return <Screen scroll={false} background={false}><LiquidScene scene="splash"/><Animated.View entering={FadeIn.duration(500)} style={[s.splash,{minHeight:height}]}><View style={s.splashCopy}><Brand /><AppText variant="hero" style={s.center}>Smarter habits.{`\n`}<AppText variant="hero" style={s.green}>Brighter tomorrows.</AppText></AppText><AppText variant="h3" style={[s.center,s.muted]}>Take control of your spending{`\n`}one receipt at a time.</AppText></View><View style={s.splashLoading}><SplashLoadingDots /><AppText variant="bodyMedium" style={s.green}>Loading your brighter tomorrow...</AppText></View></Animated.View></Screen>;
+}
+
+function SplashLoadingDots() {
+  return <View style={s.dots}><LoadingDot delay={0} /><LoadingDot delay={180} /><LoadingDot delay={360} /></View>;
+}
+
+function LoadingDot({ delay }: { delay: number }) {
+  const progress = useSharedValue(0.3);
+  const reduced = useReducedMotion();
+  useEffect(() => {
+    if (reduced) { progress.value = 0.65; return; }
+    progress.value = withDelay(delay, withRepeat(withSequence(withTiming(1, { duration: 260, easing: Easing.out(Easing.quad) }), withTiming(0.3, { duration: 420, easing: Easing.inOut(Easing.sin) })), -1));
+  }, [delay, progress, reduced]);
+  const animatedStyle = useAnimatedStyle(() => ({ opacity: progress.value, transform: [{ translateY: (1 - progress.value) * 5 }, { scale: 0.82 + progress.value * 0.18 }] }));
+  return <Animated.View style={[s.dotActive, animatedStyle]} />;
 }
 export function OnboardingScreen() { const {height}=useWindowDimensions(); return <Screen background={false}><View style={[s.onboarding,{minHeight:Math.max(height,760)}]}><LiquidScene scene="onboarding"/><View style={s.backFloat}><BackButton/></View><View style={s.onboardBrand}><Brand compact /></View><View style={s.onboardContent}><AppText variant="title" style={s.center}>Track smarter,{`\n`}not harder.</AppText><AppText style={[s.center,s.muted]}>Turn receipts into verified expense records{`\n`}and understand your spending with less effort.</AppText>{([['receipt-text-outline','Scan Receipts','Snap a photo, we do the rest.'],['shield-check','Verify Details','We extract and confirm the key info.'],['chart-bar','See Insights','Understand your spending, grow smarter.']] as const).map(x=><Card key={x[1]} style={s.feature}><View style={s.featureIcon}><AppIcon name={x[0]} size={28}/></View><View style={{flex:1}}><AppText variant="h3">{x[1]}</AppText><AppText variant="small" style={s.muted}>{x[2]}</AppText></View></Card>)}<View style={s.dots}><View style={s.dotActive}/><View style={s.dot}/><View style={s.dot}/></View><PrimaryButton title="Get Started" onPress={()=>router.push('/create-account')}/><Pressable onPress={()=>router.push('/sign-in')} accessibilityRole="button" accessibilityLabel="I already have an account"><AppText variant="bodyMedium" style={[s.center,s.muted]}>I already have an account</AppText></Pressable></View></View></Screen>; }
 

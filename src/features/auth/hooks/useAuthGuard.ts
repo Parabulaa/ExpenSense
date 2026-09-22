@@ -24,7 +24,9 @@ export function useAuthGuard() {
   useEffect(() => {
     if (!initialized) return;
 
-    const currentRoute = segments[0] ?? 'index';
+    // Route groups like "(app)" are layout-only and never appear in the URL,
+    // so skip them to get the segment the route is actually named after.
+    const currentRoute = segments.find((segment) => !segment.startsWith('(')) ?? 'index';
     const isPublicRoute = PUBLIC_ROUTES.has(currentRoute);
 
     if (!session && !isPublicRoute) {

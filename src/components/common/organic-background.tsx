@@ -7,7 +7,7 @@ import { useDrift } from './motion';
 
 const AnimatedImage = Animated.createAnimatedComponent(Image);
 
-type Variant = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
+type Variant = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14;
 type AssetKey = keyof typeof assets;
 
 type Layer = {
@@ -286,6 +286,23 @@ const COMPOSITIONS: Record<Variant, Layer[]> = {
     // Ground behind the logout action and the floating navbar.
     { ...BOTTOM_LANDSCAPE, bottom: -96, opacity: 0.68, drift: { x: 16, y: -18, rotate: 2.5, scale: 0.035, duration: 4600 } },
     { ...BOTTOM_LANDSCAPE_FRONT, bottom: -108, opacity: 0.48, drift: { x: -18, y: 17, rotate: -3, scale: 0.04, duration: 3700, delay: 580 } },
+  ],
+
+  // 14 — Swipeable app shell. This stays mounted while the user moves between
+  // Home, Transactions, Analytics and Budget, so its independently timed
+  // layers keep moving through a carousel transition instead of restarting.
+  // The accents are spread down the full canvas and use the quicker rhythm the
+  // user approved on Analytics/Insights.
+  14: [
+    { asset: 'shape3', width: 352, height: 338, right: -144, top: -110, opacity: 0.62, baseRotate: -29, drift: { x: 22, y: 25, rotate: 5, scale: 0.055, duration: 3900 } },
+    { asset: 'shape2', width: 278, height: 266, right: -68, top: -54, opacity: 0.44, baseRotate: -23, drift: { x: -25, y: 20, rotate: -5, scale: 0.05, duration: 3150, delay: 340 } },
+    { asset: 'shape6', width: 118, height: 110, left: -22, top: '12%', opacity: 0.5, baseRotate: 28, drift: { x: 24, y: -24, rotate: 9, scale: 0.08, duration: 2350, delay: 680 } },
+    { asset: 'shape1', width: 210, height: 200, left: -120, top: '31%', opacity: 0.4, baseRotate: -27, drift: { x: 27, y: -23, rotate: 7, scale: 0.065, duration: 2850, delay: 220 } },
+    { asset: 'shape5', width: 148, height: 140, right: -54, top: '48%', opacity: 0.38, baseRotate: 152, drift: { x: -27, y: 24, rotate: -8, scale: 0.07, duration: 2550, delay: 980 } },
+    { asset: 'shape6', width: 132, height: 124, left: -42, top: '66%', opacity: 0.4, baseRotate: 126, drift: { x: 23, y: 22, rotate: 8, scale: 0.075, duration: 2450, delay: 520 } },
+    { asset: 'shape1', width: 142, height: 134, right: -48, bottom: '14%', opacity: 0.36, baseRotate: 164, drift: { x: -24, y: -22, rotate: -8, scale: 0.07, duration: 2700, delay: 1240 } },
+    { ...BOTTOM_LANDSCAPE, bottom: -96, opacity: 0.7, drift: { x: 17, y: -20, rotate: 2.8, scale: 0.04, duration: 4400 } },
+    { ...BOTTOM_LANDSCAPE_FRONT, bottom: -108, opacity: 0.5, drift: { x: -20, y: 18, rotate: -3.2, scale: 0.045, duration: 3500, delay: 560 } },
   ],
 };
 

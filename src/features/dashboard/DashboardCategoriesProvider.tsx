@@ -23,8 +23,6 @@ type DashboardCategoriesValue = {
   isOnDashboard: (id: string) => boolean;
   /** Returns false when the selection is already at the limit. */
   addCategory: (id: string) => boolean;
-  /** Adds the first library category not already selected. */
-  addNextAvailable: () => boolean;
   /** Removes from the dashboard selection only — the category itself remains. */
   removeCategory: (id: string) => void;
   /** Trades the dragged category's slot with the one at `target`. */
@@ -72,24 +70,6 @@ export function DashboardCategoriesProvider({ children }: PropsWithChildren) {
     return added;
   }, [categoryLibrary]);
 
-  const addNextAvailable = useCallback(() => {
-    let added = false;
-
-    setCategories((current) => {
-      if (current.length >= MAX_DASHBOARD_CATEGORIES) return current;
-
-      const next = categoryLibrary.find(
-        (candidate) => !current.some((category) => category.id === candidate.id),
-      );
-      if (!next) return current;
-
-      added = true;
-      return [...current, next];
-    });
-
-    return added;
-  }, [categoryLibrary]);
-
   const removeCategory = useCallback((id: string) => {
     setCategories((current) =>
       current.length > MIN_DASHBOARD_CATEGORIES
@@ -121,7 +101,6 @@ export function DashboardCategoriesProvider({ children }: PropsWithChildren) {
       canRemove,
       isOnDashboard,
       addCategory,
-      addNextAvailable,
       removeCategory,
       swapCategories,
     }),
@@ -131,7 +110,6 @@ export function DashboardCategoriesProvider({ children }: PropsWithChildren) {
       canRemove,
       isOnDashboard,
       addCategory,
-      addNextAvailable,
       removeCategory,
       swapCategories,
     ],

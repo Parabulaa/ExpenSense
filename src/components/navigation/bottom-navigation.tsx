@@ -49,7 +49,13 @@ export function BottomNavigation() {
               key={item.label}
               accessibilityRole="button"
               accessibilityLabel={item.label}
-              onPress={() => router.replace(item.path as never)}
+              onPress={() => {
+                if (isScan) {
+                  router.push({ pathname: '/add-expense', params: { returnTo: pathname } } as never);
+                  return;
+                }
+                router.replace(item.path as never);
+              }}
               scaleTo={isScan ? 0.92 : 0.94}
               style={[
                 styles.item,

@@ -61,6 +61,9 @@ export function TransactionsScreen() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [sort, setSort] = useState<SortOption>('newest');
   const [picker, setPicker] = useState<PickerKind>(null);
+  const [view, setView] = useState<'list' | 'calendar'>('list');
+  const [calendarMonth, setCalendarMonth] = useState(todayLocalDate().slice(0, 7));
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
 
   useFocusEffect(useCallback(() => {
     void refresh();
@@ -78,11 +81,12 @@ export function TransactionsScreen() {
       const category = categories.find((item) => item.id === expense.categoryId);
       const matchesQuery = !needle || `${expense.merchant} ${category?.fullLabel ?? ''} ${expense.notes ?? ''}`.toLocaleLowerCase().includes(needle);
       const matchesCategory = categoryFilter === 'all' || expense.categoryId === categoryFilter;
+      const matchesCalendarDate = view !== 'calendar' || !selectedCalendarDate || expense.transactionDate === selectedCalendarDate;
       const matchesDate = dateFilter === 'all' ||
         (dateFilter === 'today' && expense.transactionDate === today) ||
         (dateFilter === 'month' && expense.transactionDate.startsWith(month)) ||
         ((dateFilter === 'last7' || dateFilter === 'last30') && expense.transactionDate >= cutoffValue && expense.transactionDate <= today);
-      return matchesQuery && matchesCategory && matchesDate;
+      return matchesQuery && matchesCategory && matchesDate && matchesCalendarDate;
     });
     return [...filtered].sort((a, b) => {
       if (sort === 'oldest') return a.transactionDate.localeCompare(b.transactionDate) || a.createdAt.localeCompare(b.createdAt);
@@ -90,17 +94,23 @@ export function TransactionsScreen() {
       if (sort === 'lowest') return a.amountCents - b.amountCents;
       return b.transactionDate.localeCompare(a.transactionDate) || b.createdAt.localeCompare(a.createdAt);
     });
-  }, [categories, categoryFilter, dateFilter, expenses, query, sort]);
+  }, [categories, categoryFilter, dateFilter, expenses, query, selectedCalendarDate, sort, view]);
 
   const groups = useMemo(() => groupExpensesByDate(visibleExpenses), [visibleExpenses]);
-  const hasFilters = Boolean(query.trim()) || dateFilter !== 'all' || categoryFilter !== 'all' || sort !== 'newest';
-  const clearFilters = () => { setQuery(''); setDateFilter('all'); setCategoryFilter('all'); setSort('newest'); };
+  const hasFilters = Boolean(query.trim()) || dateFilter !== 'all' || categoryFilter !== 'all' || sort !== 'newest' || Boolean(selectedCalendarDate);
+  const clearFilters = () => { setQuery(''); setDateFilter('all'); setCategoryFilter('all'); setSort('newest'); setSelectedCalendarDate(null); };
 
   return (
-    <Screen bottomInset={bottomInset} variant={7} fixed={<BottomNavigation />} refreshing={loading && expenses.length > 0} onRefresh={() => void refresh()}>
+    <Screen embedded bottomInset={bottomInset} background={false} refreshing={loading && expenses.length > 0} onRefresh={() => void refresh()}>
       <View style={s.page}>
-        <AppHeader />
-        <AppText variant="hero">Transactions</AppText>
+        <View style={s.rowBetween}>
+          <AppText variant="hero">Transactions</AppText>
+          <View style={s.viewToggle}>
+            <PressableScale accessibilityRole="button" accessibilityLabel="List view" accessibilityState={{ selected: view === 'list' }} onPress={() => { setView('list'); setSelectedCalendarDate(null); }} style={[s.viewToggleButton, view === 'list' && s.viewToggleActive]}><AppIcon name="format-list-bulleted" size={20} color={view === 'list' ? colors.surface : colors.deepForest} /></PressableScale>
+            <PressableScale accessibilityRole="button" accessibilityLabel="Calendar spending view" accessibilityState={{ selected: view === 'calendar' }} onPress={() => setView('calendar')} style={[s.viewToggleButton, view === 'calendar' && s.viewToggleActive]}><AppIcon name="calendar-month-outline" size={20} color={view === 'calendar' ? colors.surface : colors.deepForest} /></PressableScale>
+          </View>
+        </View>
+        {view === 'calendar' ? <SpendingCalendar expenses={expenses} month={calendarMonth} selectedDate={selectedCalendarDate} onMonthChange={(next) => { setCalendarMonth(next); setSelectedCalendarDate(null); }} onSelectDate={setSelectedCalendarDate} /> : null}
         <View style={s.search}>
           <AppIcon name="magnify" size={22} color={colors.muted} />
           <TextInput accessibilityLabel="Search transactions" placeholder="Search transactions" placeholderTextColor={colors.muted} value={query} onChangeText={setQuery} style={s.searchInput} />
@@ -158,11 +168,61 @@ function compactCurrency(cents: number) {
   return `₱${(cents / 100).toLocaleString('en-PH', { maximumFractionDigits: cents % 100 ? 2 : 0 })}`;
 }
 
+const CALENDAR_WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+function shiftMonth(month: string, delta: number) {
+  const [year, monthNumber] = month.split('-').map(Number);
+  const next = new Date(year, monthNumber - 1 + delta, 1);
+  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function SpendingCalendar({ expenses, month, selectedDate, onMonthChange, onSelectDate }: { expenses: Expense[]; month: string; selectedDate: string | null; onMonthChange: (month: string) => void; onSelectDate: (date: string | null) => void }) {
+  const [year, monthNumber] = month.split('-').map(Number);
+  const days = new Date(year, monthNumber, 0).getDate();
+  const leading = new Date(year, monthNumber - 1, 1).getDay();
+  const cells: (number | null)[] = [...Array.from({ length: leading }, () => null), ...Array.from({ length: days }, (_, index) => index + 1)];
+  while (cells.length % 7) cells.push(null);
+  const monthExpenses = expenses.filter((expense) => expense.transactionDate.startsWith(month));
+  const totals = new Map<string, number>();
+  monthExpenses.forEach((expense) => totals.set(expense.transactionDate, (totals.get(expense.transactionDate) ?? 0) + expense.amountCents));
+  const monthTotal = monthExpenses.reduce((sum, expense) => sum + expense.amountCents, 0);
+  const selectedTotal = selectedDate ? totals.get(selectedDate) ?? 0 : 0;
+
+  return <Card style={s.spendingCalendar}>
+    <View style={s.calendarHeader}>
+      <PressableScale accessibilityRole="button" accessibilityLabel="Previous spending month" onPress={() => onMonthChange(shiftMonth(month, -1))} style={s.calendarNav}><AppIcon name="chevron-left" size={21} /></PressableScale>
+      <View style={{ alignItems: 'center' }}><AppText variant="h2">{formatMonth(month)}</AppText><AppText variant="small" style={s.muted}>{monthExpenses.length} transaction{monthExpenses.length === 1 ? '' : 's'}</AppText></View>
+      <PressableScale accessibilityRole="button" accessibilityLabel="Next spending month" onPress={() => onMonthChange(shiftMonth(month, 1))} style={s.calendarNav}><AppIcon name="chevron-right" size={21} /></PressableScale>
+    </View>
+    <View style={s.calendarWeek}>{CALENDAR_WEEKDAYS.map((label, index) => <View key={`${label}-${index}`} style={s.calendarCell}><AppText variant="small" style={s.calendarWeekday}>{label}</AppText></View>)}</View>
+    <View style={s.calendarGrid}>{cells.map((day, index) => {
+      if (!day) return <View key={`blank-${index}`} style={s.calendarCell} />;
+      const date = `${month}-${String(day).padStart(2, '0')}`;
+      const total = totals.get(date) ?? 0;
+      const selected = date === selectedDate;
+      return <View key={date} style={s.calendarCell}><Pressable accessibilityRole="button" accessibilityLabel={`${date}${total ? `, spent ${compactCurrency(total)}` : ', no spending'}`} accessibilityState={{ selected }} onPress={() => onSelectDate(selected ? null : date)} style={({ pressed }) => [s.calendarDay, total > 0 && s.calendarDayHasSpending, selected && s.calendarDaySelected, pressed && { opacity: 0.75 }]}><AppText variant="bodyMedium" style={selected ? s.calendarDaySelectedText : undefined}>{day}</AppText>{total > 0 ? <AppText numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[s.calendarAmount, selected && s.calendarDaySelectedText]}>{compactCurrency(total)}</AppText> : null}</Pressable></View>;
+    })}</View>
+    <View style={s.calendarSummary}>
+      <View><AppText variant="small" style={s.muted}>Month spent</AppText><AppText variant="h3">{compactCurrency(monthTotal)}</AppText></View>
+      <View style={{ alignItems: 'center' }}><AppText variant="small" style={s.muted}>Active days</AppText><AppText variant="h3">{totals.size}</AppText></View>
+      <View style={{ alignItems: 'flex-end' }}><AppText variant="small" style={s.muted}>{selectedDate ? 'Selected day' : 'Daily average'}</AppText><AppText variant="h3">{compactCurrency(selectedDate ? selectedTotal : days ? Math.round(monthTotal / days) : 0)}</AppText></View>
+    </View>
+    {selectedDate ? <Pressable accessibilityRole="button" accessibilityLabel="Show every transaction in this month" onPress={() => onSelectDate(null)} style={s.calendarSelection}><AppText variant="small" style={s.calendarSelectionText}>Showing {formatExpenseDate(selectedDate)} · Tap to clear</AppText></Pressable> : null}
+  </Card>;
+}
+
 function FilterButton({ label, active, flex = 1, onPress }: { label: string; active: boolean; flex?: number; onPress: () => void }) {
   // `flex` is weighted per control: "Category" is the longest label, so it gets
   // more of the row than "Date"/"Sort" instead of all three being equal and
   // clipping the middle one.
   return <PressableScale accessibilityRole="button" accessibilityLabel={`${label} filter`} accessibilityState={{ selected: active }} onPress={onPress} style={[s.filter, { flex }, active && s.filterActive]}><AppText variant="bodyMedium" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={[s.filterLabel, active && s.filterActiveText]}>{label}</AppText><AppIcon name="chevron-down" size={16} color={active ? colors.surface : colors.deepForest} /></PressableScale>;
+}
+
+function QuickAmountButtons({ value, onSelect }: { value: string; onSelect: (amount: number) => void }) {
+  return <View style={s.quickAmounts}>{[100, 200, 500, 1000].map((amount) => {
+    const selected = Number(value) === amount;
+    return <PressableScale key={amount} accessibilityRole="button" accessibilityLabel={`Use ${amount} pesos`} accessibilityState={{ selected }} onPress={() => onSelect(amount)} style={[s.quickAmount, selected && s.quickAmountSelected]}><AppText variant="small" style={selected ? s.quickAmountTextSelected : s.quickAmountText}>₱{amount.toLocaleString('en-PH')}</AppText></PressableScale>;
+  })}</View>;
 }
 
 function TransactionPicker({ kind, dateFilter, categoryFilter, sort, onDate, onCategory, onSort, onClose }: { kind: PickerKind; dateFilter: DateFilter; categoryFilter: string; sort: SortOption; onDate: (value: DateFilter) => void; onCategory: (value: string) => void; onSort: (value: SortOption) => void; onClose: () => void }) {
@@ -289,7 +349,7 @@ export function EditTransactionScreen() {
     if (!result.ok) { showToast(result.message, { tone: 'warning' }); return; }
     selectionFeedback(); showToast('Transaction updated.'); router.replace(`/transaction/${expense.id}` as never);
   };
-  return <Screen variant={8} bottomInset={40}><View style={s.page}><View style={s.editHeader}><BackButton /><View><AppText variant="title">Edit Transaction</AppText><AppText style={s.muted}>Update the saved expense.</AppText></View></View><FormInput label="Amount" icon="currency-php" value={values.amount} onChangeText={(value) => update('amount', normalizeAmountInput(value, values.amount))} keyboardType="decimal-pad" error={errors.amount} /><FormInput label="Merchant / Description" value={values.merchant} onChangeText={(value) => update('merchant', value)} error={errors.merchant} /><AppText variant="bodyMedium">Category</AppText><View style={s.editCategories}>{categories.map((category) => <PressableScale key={category.id} onPress={() => update('categoryId', category.id)} style={[s.editCategory, values.categoryId === category.id && s.editCategoryActive]}><AppIcon name={category.icon} size={18} color={values.categoryId === category.id ? colors.surface : colors.deepForest} /><AppText variant="small" style={values.categoryId === category.id ? s.editCategoryTextActive : undefined}>{category.label}</AppText></PressableScale>)}</View>{errors.categoryId ? <AppText variant="small" style={s.errorText}>{errors.categoryId}</AppText> : null}<FormInput label="Date" placeholder="YYYY-MM-DD" value={values.transactionDate} onChangeText={(value) => update('transactionDate', value)} error={errors.transactionDate} /><FormInput label="Notes (optional)" value={values.notes} onChangeText={(value) => update('notes', value)} multiline style={s.editNotes} error={errors.notes} /><PrimaryButton title={saving ? 'Saving Changes…' : 'Save Changes'} disabled={saving} onPress={() => void save()} /></View></Screen>;
+  return <Screen variant={8} bottomInset={40}><View style={s.page}><View style={s.editHeader}><BackButton /><View><AppText variant="title">Edit Transaction</AppText><AppText style={s.muted}>Update the saved expense.</AppText></View></View><FormInput label="Amount" icon="currency-php" value={values.amount} onChangeText={(value) => update('amount', normalizeAmountInput(value, values.amount))} keyboardType="decimal-pad" error={errors.amount} /><QuickAmountButtons value={values.amount} onSelect={(amount) => update('amount', String(amount))} /><FormInput label="Merchant / Description" value={values.merchant} onChangeText={(value) => update('merchant', value)} error={errors.merchant} /><AppText variant="bodyMedium">Category</AppText><View style={s.editCategories}>{categories.map((category) => <PressableScale key={category.id} onPress={() => update('categoryId', category.id)} style={[s.editCategory, values.categoryId === category.id && s.editCategoryActive]}><AppIcon name={category.icon} size={18} color={values.categoryId === category.id ? colors.surface : colors.deepForest} /><AppText variant="small" style={values.categoryId === category.id ? s.editCategoryTextActive : undefined}>{category.label}</AppText></PressableScale>)}</View>{errors.categoryId ? <AppText variant="small" style={s.errorText}>{errors.categoryId}</AppText> : null}<FormInput label="Date" placeholder="YYYY-MM-DD" value={values.transactionDate} onChangeText={(value) => update('transactionDate', value)} error={errors.transactionDate} /><FormInput label="Notes (optional)" value={values.notes} onChangeText={(value) => update('notes', value)} multiline style={s.editNotes} error={errors.notes} /><PrimaryButton title={saving ? 'Saving Changes…' : 'Save Changes'} disabled={saving} onPress={() => void save()} /></View></Screen>;
 }
 
 function InfoRow({ label, value, bold = false }: { label: string; value: string; bold?: boolean }) {
@@ -348,9 +408,8 @@ export function BudgetScreen() {
     showToast('Category limit removed.'); setEditor(null);
   };
   return (
-    <Screen bottomInset={bottomInset} variant={9} fixed={<BottomNavigation />} refreshing={loading} onRefresh={() => void refresh()}>
+    <Screen embedded bottomInset={bottomInset} background={false} refreshing={loading} onRefresh={() => void refresh()}>
       <View style={s.page}>
-        <AppHeader />
         <AppText variant="hero">Budget</AppText>
         <PressableScale accessibilityRole="button" accessibilityLabel={`Selected budget month: ${monthLabel}`} onPress={() => { setMonthDraft(`${month}-01`); setMonthPicker(true); }} style={s.budgetMonth}><AppText variant="h3">{monthLabel}</AppText><AppIcon name="calendar-month-outline" /></PressableScale>
         {loading && monthlyBudgets.length === 0 ? <View style={s.skeletonCard} /> : error && monthlyBudgets.length === 0 ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load budgets</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : !budget ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="wallet-plus-outline" size={30} /></View><AppText variant="h2">No budget yet</AppText><AppText style={[s.muted, s.center]}>Set a monthly budget to start tracking your spending limits.</AppText><PrimaryButton title="Set Budget" onPress={openMonthly} /></Card> : <PressableScale accessibilityRole="button" accessibilityLabel={`Monthly budget ${currency(budget.amountCents)}, ${percentage}% used`} onPress={openMonthly}><Card style={s.monthlyBudgetCard}><View style={s.rowBetween}><AppText variant="h3">Monthly Budget</AppText><AppIcon name="pencil-outline" size={20} color={colors.muted} /></View><AppText variant="hero" adjustsFontSizeToFit numberOfLines={1}>{currency(budget.amountCents)}</AppText><View style={s.rowBetween}><AppText variant="h3" style={{ color: colors.deepForest }}>{currency(spentCents)} spent</AppText><AppText variant="h3" style={{ color: remainingCents < 0 ? colors.danger : colors.deepForest }}>{currency(remainingCents)} {remainingCents < 0 ? 'over' : 'left'}</AppText></View><View style={s.row}><ProgressBar value={Math.min(100, percentage)} /><AppText variant="h3">{percentage}%</AppText></View><StatusChip warning={percentage >= 90}>{status}</StatusChip></Card></PressableScale>}
@@ -389,7 +448,7 @@ export function BudgetScreen() {
         })}
       </View>
       <Modal visible={monthPicker} transparent animationType="fade" onRequestClose={() => setMonthPicker(false)}><View style={s.pickerBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={() => setMonthPicker(false)} /><View style={s.filterSheet}><View style={s.sheetHandle} /><AppText variant="h2">Choose Budget Month</AppText><Calendar value={monthDraft} onSelect={setMonthDraft} /><AppText style={s.selectedMonthPreview}>{formatMonth(monthDraft.slice(0, 7))}</AppText><PrimaryButton title="Use This Month" onPress={() => { setMonth(monthDraft.slice(0, 7)); setMonthPicker(false); }} /></View></View></Modal>
-      <Modal visible={Boolean(editor)} transparent animationType="fade" onRequestClose={() => !saving && setEditor(null)}><View style={s.pickerBackdrop}><Pressable style={StyleSheet.absoluteFill} disabled={saving} onPress={() => setEditor(null)} /><View style={s.filterSheet}><View style={s.sheetHandle} /><AppText variant="h2">{editor?.type === 'monthly' ? `${budget ? 'Edit' : 'Set'} Monthly Budget` : `Set ${categoryLibrary.find((item) => item.id === (editor?.type === 'category' ? editor.categoryId : ''))?.fullLabel ?? 'Category'} Limit`}</AppText><FormInput label="Amount" icon="currency-php" placeholder="0.00" value={amount} onChangeText={(value) => { setAmount(normalizeAmountInput(value, amount)); setAmountError(null); }} keyboardType="decimal-pad" error={amountError ?? undefined} /><PrimaryButton title={saving ? 'Saving…' : 'Save Budget'} disabled={saving} onPress={() => void save()} />{editor?.type === 'category' && budget?.categoryBudgets.some((item) => item.categoryId === editor.categoryId) ? <SecondaryButton title="Remove Category Limit" disabled={saving} onPress={() => void removeLimit()} /> : null}</View></View></Modal>
+      <Modal visible={Boolean(editor)} transparent animationType="fade" onRequestClose={() => !saving && setEditor(null)}><View style={s.pickerBackdrop}><Pressable style={StyleSheet.absoluteFill} disabled={saving} onPress={() => setEditor(null)} /><View style={s.filterSheet}><View style={s.sheetHandle} /><AppText variant="h2">{editor?.type === 'monthly' ? `${budget ? 'Edit' : 'Set'} Monthly Budget` : `Set ${categoryLibrary.find((item) => item.id === (editor?.type === 'category' ? editor.categoryId : ''))?.fullLabel ?? 'Category'} Limit`}</AppText><FormInput label="Amount" icon="currency-php" placeholder="0.00" value={amount} onChangeText={(value) => { setAmount(normalizeAmountInput(value, amount)); setAmountError(null); }} keyboardType="decimal-pad" error={amountError ?? undefined} /><QuickAmountButtons value={amount} onSelect={(value) => { setAmount(String(value)); setAmountError(null); }} /><PrimaryButton title={saving ? 'Saving…' : 'Save Budget'} disabled={saving} onPress={() => void save()} />{editor?.type === 'category' && budget?.categoryBudgets.some((item) => item.categoryId === editor.categoryId) ? <SecondaryButton title="Remove Category Limit" disabled={saving} onPress={() => void removeLimit()} /> : null}</View></View></Modal>
     </Screen>
   );
 }
@@ -410,9 +469,8 @@ export function AnalyticsScreen() {
   const maxDay = Math.max(...analytics.dailyTotals.map((item) => item.amountCents), 1);
   const change = previous.totalCents ? Math.round(((analytics.totalCents - previous.totalCents) / previous.totalCents) * 100) : null;
   return (
-    <Screen bottomInset={bottomInset} variant={11} fixed={<BottomNavigation />} refreshing={loading && expenses.length > 0} onRefresh={() => void refresh()}>
+    <Screen embedded bottomInset={bottomInset} background={false} refreshing={loading && expenses.length > 0} onRefresh={() => void refresh()}>
       <View style={s.page}>
-        <AppHeader />
         <AppText variant="hero">Analytics</AppText>
         <AppText style={s.muted}>A clearer view of your spending.</AppText>
         <PressableScale accessibilityRole="button" accessibilityLabel={`Selected analytics month: ${monthLabel}`} onPress={() => { setMonthDraft(`${month}-01`); setMonthPicker(true); }} style={s.analyticsMonth}><AppText variant="h2">{monthLabel}</AppText><AppIcon name="calendar-month-outline" /></PressableScale>
@@ -490,7 +548,7 @@ function TrendMetric({ label, value }: { label: string; value: string }) {
 
 export function CategoriesScreen() {
   const { categories, loading: categoriesLoading, error: categoriesError, refresh: refreshCategories, createCategory, updateCategory, archiveCategory } = useCategories();
-  const { categories: dashboardCategories, isFull, isOnDashboard, addCategory, removeCategory, addNextAvailable } =
+  const { categories: dashboardCategories, isFull, isOnDashboard, addCategory, removeCategory } =
     useDashboardCategories();
   const { showToast } = useToast();
   const bottomInset = useBottomNavInset();
@@ -551,6 +609,8 @@ export function CategoriesScreen() {
   return (
     <Screen bottomInset={bottomInset} variant={10} fixed={<BottomNavigation />}>
       <View style={s.page}>
+        {/* Categories sits outside the swipeable shell, so it renders its own
+            header rather than inheriting the shared one. */}
         <AppHeader />
         <AppText variant="hero">Categories</AppText>
         <AppText style={s.muted}>Organize your spending, your way.</AppText>
@@ -617,7 +677,6 @@ export function CategoriesScreen() {
           icon="plus"
           onPress={openCreate}
         />
-        {!isFull ? <SecondaryButton title="Add Next to Dashboard" onPress={() => { if (addNextAvailable()) { selectionFeedback(); showToast('Category added to your dashboard.'); } }} /> : null}
       </View>
       <Modal visible={Boolean(editor)} transparent animationType="fade" onRequestClose={() => !saving && setEditor(null)}>
         <View style={s.pickerBackdrop}><Pressable style={StyleSheet.absoluteFill} disabled={saving} onPress={() => setEditor(null)} /><View style={s.filterSheet}><View style={s.sheetHandle} /><AppText variant="h2">{editor?.id ? 'Edit Category' : 'Add Category'}</AppText><FormInput label="Category name" placeholder="e.g. Pets" value={name} onChangeText={(value) => { setName(value); setFormError(null); }} maxLength={40} error={formError ?? undefined} /><AppText variant="bodyMedium">Icon</AppText><View style={s.choiceRow}>{iconChoices.map((value) => <PressableScale key={value} accessibilityLabel={`Use ${value} icon`} accessibilityState={{ selected: icon === value }} onPress={() => setIcon(value)} style={[s.choiceCircle, icon === value && s.choiceCircleActive]}><AppIcon name={value} color={icon === value ? colors.surface : colors.deepForest} /></PressableScale>)}</View><AppText variant="bodyMedium">Color</AppText><View style={s.choiceRow}>{colorChoices.map((value) => <PressableScale key={value} accessibilityLabel={`Use color ${value}`} accessibilityState={{ selected: color === value }} onPress={() => setColor(value)} style={[s.colorChoice, { backgroundColor: value }, color === value && s.colorChoiceActive]}>{color === value ? <AppIcon name="check" size={17} color={colors.surface} /> : null}</PressableScale>)}</View><PrimaryButton title={saving ? 'Saving…' : editor?.id ? 'Save Changes' : 'Add Category'} disabled={saving} onPress={() => void saveCategory()} />{editor?.id ? <SecondaryButton title="Archive Category" disabled={saving} onPress={() => setArchiveId(editor.id ?? null)} /> : null}</View></View>
@@ -793,6 +852,24 @@ const s = StyleSheet.create({
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   categoryTile: { width: '31%', alignItems: 'center', gap: 6, padding: 12 },
   addTile: { width: '31%', minHeight: 91, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.lightGreen, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
+  viewToggle: { flexDirection: 'row', gap: 5, padding: 4, borderRadius: radii.pill, backgroundColor: 'rgba(224,235,218,.9)' },
+  viewToggleButton: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  viewToggleActive: { backgroundColor: colors.deepForest },
+  spendingCalendar: { gap: 10, padding: 14 },
+  calendarHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  calendarNav: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.pale },
+  calendarWeek: { flexDirection: 'row' },
+  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  calendarCell: { width: `${100 / 7}%`, minHeight: 52, padding: 2 },
+  calendarWeekday: { color: colors.muted, textAlign: 'center', paddingTop: 6 },
+  calendarDay: { flex: 1, minHeight: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 1, borderWidth: 1, borderColor: 'transparent' },
+  calendarDayHasSpending: { backgroundColor: '#EDF4E9', borderColor: '#D8E6D2' },
+  calendarDaySelected: { backgroundColor: colors.deepForest, borderColor: colors.deepForest },
+  calendarDaySelectedText: { color: colors.surface },
+  calendarAmount: { width: '100%', paddingHorizontal: 1, textAlign: 'center', color: colors.forest, fontFamily: 'JakartaSemiBold', fontSize: 9, lineHeight: 12 },
+  calendarSummary: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 12 },
+  calendarSelection: { alignSelf: 'center', paddingHorizontal: 12, paddingVertical: 7, borderRadius: radii.pill, backgroundColor: colors.pale },
+  calendarSelectionText: { color: colors.deepForest, fontFamily: 'JakartaSemiBold' },
   search: { height: 54, backgroundColor: 'rgba(232,238,227,.88)', borderRadius: radii.md, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 10 },
   searchInput: { flex: 1, fontFamily: 'JakartaRegular', fontSize: 15, color: colors.text },
   filters: { flexDirection: 'row', gap: 8 },
@@ -803,6 +880,11 @@ const s = StyleSheet.create({
   filterActiveText: { color: colors.surface },
   clearFilters: { alignSelf: 'flex-end', minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 4 },
   clearFiltersText: { color: colors.deepForest, fontFamily: 'JakartaBold' },
+  quickAmounts: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  quickAmount: { flexGrow: 1, minWidth: '21%', minHeight: 42, paddingHorizontal: 9, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.lightGreen, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  quickAmountSelected: { backgroundColor: colors.deepForest, borderColor: colors.deepForest },
+  quickAmountText: { color: colors.deepForest, fontFamily: 'JakartaSemiBold' },
+  quickAmountTextSelected: { color: colors.surface, fontFamily: 'JakartaSemiBold' },
   pickerBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: colors.overlay },
   filterSheet: { width: '100%', maxWidth: 480, maxHeight: '82%', alignSelf: 'center', backgroundColor: colors.surface, borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 22, gap: 16 },
   sheetHandle: { width: 44, height: 5, borderRadius: 3, backgroundColor: '#B8B6AF', alignSelf: 'center' },

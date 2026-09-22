@@ -43,3 +43,6 @@ example
 /android
 
 .env
+
+# Supabase CLI local project metadata
+supabase/.temp/

@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
@@ -18,8 +18,7 @@ import Animated, {
 import { FadeSlideIn, PressableScale, useDrift } from '@/components/common/motion';
 import { Screen } from '@/components/common/screen';
 import { AppIcon, AppText, Card, ProgressBar } from '@/components/common/ui';
-import { AppHeader } from '@/components/navigation/app-header';
-import { BottomNavigation, useBottomNavInset } from '@/components/navigation/bottom-navigation';
+import { useBottomNavInset } from '@/components/navigation/bottom-navigation';
 import { assets, colors, radii, shadow, spacing } from '@/constants/theme';
 import { analyticsForMonth, mascotInsight, previousMonth } from '@/features/analytics/analytics';
 import {
@@ -398,12 +397,14 @@ export function HomeScreen() {
     categories,
     isFull: atCategoryLimit,
     canRemove: canRemoveCategory,
-    addNextAvailable,
+    addCategory: addDashboardCategory,
     removeCategory,
     swapCategories,
   } = useDashboardCategories();
   const { showToast } = useToast();
   const [editingCategories, setEditingCategories] = useState(false);
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const [insightIndex, setInsightIndex] = useState(0);
   const [drag, setDrag] = useState<{ id: string; target: number } | null>(null);
 
   // Reads the shared profile cache so editing the name in Settings updates the
@@ -437,14 +438,26 @@ export function HomeScreen() {
   const remaining = month.budget - month.spent;
   // Shares the Phase 7 analytics pipeline with the Insights screen, so the
   // mascot can never contradict what Analytics reports.
-  const insight = useMemo(() => {
-    if (expensesLoading || budgetsLoading) return 'Checking your latest spending...';
+  const insights = useMemo(() => {
+    if (expensesLoading || budgetsLoading) return ['Checking your latest spending...'];
     // The full library, not the dashboard's eight — an expense in a category
     // that isn't pinned to the grid still has a real name.
     const current = analyticsForMonth(expenses, allCategories, selectedMonthId);
     const prior = analyticsForMonth(expenses, allCategories, previousMonth(selectedMonthId));
-    return mascotInsight(current, prior, allCategories, savedBudget);
+    const primary = mascotInsight(current, prior, allCategories, savedBudget);
+    const messages = [primary];
+    if (current.expenses.length) {
+      messages.push(`You recorded ${current.expenses.length} expense${current.expenses.length === 1 ? '' : 's'} this month.`);
+      const top = current.categorySlices[0];
+      if (top) messages.push(`${top.label} is ${Math.round(top.percentage)}% of your spending this month.`);
+      if (prior.totalCents > 0) {
+        const change = Math.round(((current.totalCents - prior.totalCents) / prior.totalCents) * 100);
+        messages.push(change === 0 ? 'Your spending matches last month so far.' : `Your spending is ${Math.abs(change)}% ${change > 0 ? 'higher' : 'lower'} than last month.`);
+      }
+    }
+    return [...new Set(messages)];
   }, [allCategories, budgetsLoading, expenses, expensesLoading, savedBudget, selectedMonthId]);
+  const insight = insights[insightIndex % insights.length];
   const mascotDrift = useDrift({ x: 8, y: 10, rotate: 1.5, scale: 0.018, duration: 7200 });
 
   useFocusEffect(useCallback(() => {
@@ -482,18 +495,19 @@ export function HomeScreen() {
     [swapCategories],
   );
 
-  const addCategory = () => {
-    if (addNextAvailable()) {
-      setEditingCategories(true);
+  const availableCategories = allCategories.filter(
+    (candidate) => !categories.some((selected) => selected.id === candidate.id) && !candidate.archived,
+  );
+
+  const chooseCategory = (category: DashboardCategory) => {
+    if (!addDashboardCategory(category.id)) {
+      warningFeedback();
+      showToast('That category is already included or the dashboard is full.', { tone: 'warning' });
       return;
     }
-
-    // Only reachable if the selection filled up between render and press.
-    warningFeedback();
-    showToast(
-      `Dashboard category limit reached. Remove one before adding another.`,
-      { tone: 'warning' },
-    );
+    setCategoryPickerOpen(false);
+    setEditingCategories(true);
+    showToast(`${category.fullLabel} added to your dashboard.`);
   };
 
   const gridHint = editingCategories
@@ -503,17 +517,8 @@ export function HomeScreen() {
     : 'Hold a category to customize this grid';
 
   return (
-    <Screen
-      bottomInset={bottomInset}
-      variant={4}
-      padded={false}
-      fixed={<BottomNavigation />}
-    >
+    <Screen embedded bottomInset={bottomInset} background={false} padded={false}>
       <View style={[styles.page, { width: dashboardWidth }]}>
-        {/* Profile, help and alerts live in the shared header on every panel,
-            so the dashboard no longer carries its own avatar. */}
-        <AppHeader />
-
         <FadeSlideIn index={0}>
           <View style={styles.hero}>
             <View style={styles.heroTop}>
@@ -534,10 +539,15 @@ export function HomeScreen() {
               the remaining width, which keeps it clear of the greeting above.
             */}
             <View style={[styles.insightArea, { height: mascotSize }]}>
-              <View style={styles.insightBubble}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${insight} Tap for another offline insight.`}
+                onPress={() => setInsightIndex((current) => current + 1)}
+                style={({ pressed }) => [styles.insightBubble, pressed && { opacity: 0.82 }]}
+              >
                 <AppText style={styles.insightText}>{insight}</AppText>
                 <View style={styles.bubbleTail} />
-              </View>
+              </Pressable>
 
               <Animated.View
                 style={[styles.mascotWrap, { width: mascotSize, height: mascotSize }, mascotDrift]}
@@ -762,18 +772,46 @@ export function HomeScreen() {
               <PressableScale
                 accessibilityRole="button"
                 accessibilityLabel="Add a budget category"
-                onPress={addCategory}
+                onPress={() => setCategoryPickerOpen(true)}
                 style={styles.addTile}
               >
                 <AppIcon name="plus" size={34} color={colors.deepForest} />
                 <AppText style={styles.categoryLabel} numberOfLines={1} adjustsFontSizeToFit>
-                  Add / Edit
+                  Add Existing
                 </AppText>
               </PressableScale>
             </Animated.View>
           ) : null}
         </View>
       </View>
+      <Modal visible={categoryPickerOpen} transparent animationType="fade" onRequestClose={() => setCategoryPickerOpen(false)}>
+        <View style={styles.pickerBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setCategoryPickerOpen(false)} />
+          <View style={styles.categoryPickerSheet}>
+            <View style={styles.pickerHandle} />
+            <View style={styles.pickerHeader}>
+              <View style={{ flex: 1 }}>
+                <AppText variant="h2">Add Existing Category</AppText>
+                <AppText variant="small" style={styles.editHint}>Choose what appears on your dashboard. Existing choices are hidden.</AppText>
+              </View>
+              <PressableScale accessibilityLabel="Close category picker" onPress={() => setCategoryPickerOpen(false)} style={styles.pickerClose}>
+                <AppIcon name="close" size={20} />
+              </PressableScale>
+            </View>
+            <ScrollView style={styles.pickerList} contentContainerStyle={styles.pickerListContent}>
+              {availableCategories.length ? availableCategories.map((category) => (
+                <PressableScale key={category.id} accessibilityRole="button" accessibilityLabel={`Add ${category.fullLabel}`} onPress={() => chooseCategory(category)} style={styles.pickerCategory}>
+                  <View style={[styles.pickerCategoryIcon, { backgroundColor: category.color ? `${category.color}22` : colors.pale }]}>
+                    <AppIcon name={category.icon} color={category.color ?? colors.deepForest} />
+                  </View>
+                  <AppText variant="bodyMedium" style={{ flex: 1 }} numberOfLines={1}>{category.fullLabel}</AppText>
+                  <AppIcon name="plus" color={colors.deepForest} />
+                </PressableScale>
+              )) : <AppText style={styles.editHint}>Every available category is already included.</AppText>}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -1130,5 +1168,58 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 5,
     padding: 7,
+  },
+  pickerBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: colors.overlay,
+  },
+  categoryPickerSheet: {
+    width: '100%',
+    maxWidth: 480,
+    maxHeight: '72%',
+    alignSelf: 'center',
+    padding: 22,
+    gap: 16,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    backgroundColor: colors.surface,
+  },
+  pickerHandle: {
+    width: 42,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    backgroundColor: '#B8B8B0',
+  },
+  pickerHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  pickerClose: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.pale,
+  },
+  pickerList: { flexGrow: 0 },
+  pickerListContent: { gap: 10, paddingBottom: 8 },
+  pickerCategory: {
+    minHeight: 62,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: '#D8E1D3',
+    backgroundColor: '#FFFDF7',
+  },
+  pickerCategoryIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -17,11 +17,19 @@ type ScreenProps = PropsWithChildren<{
   scroll?: boolean;
   background?: boolean;
   bottomInset?: number;
-  variant?: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
+  variant?: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14;
   padded?: boolean;
   fixed?: ReactNode;
   refreshing?: boolean;
   onRefresh?: () => void;
+  /**
+   * Set by root panels that live inside the authenticated app shell. The shell
+   * already owns the canvas frame, the organic background, the safe-area inset
+   * and the bottom navigation, so an embedded screen contributes only its
+   * scrolling content — that is what keeps the header and navbar from being
+   * re-created (and shifting) on every tab.
+   */
+  embedded?: boolean;
 }>;
 
 export function Screen({
@@ -34,6 +42,7 @@ export function Screen({
   fixed,
   refreshing = false,
   onRefresh,
+  embedded = false,
 }: ScreenProps) {
   const { width } = useWindowDimensions();
 
@@ -50,6 +59,33 @@ export function Screen({
       {children}
     </View>
   );
+
+  const scroller = (
+    <ScrollView
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="interactive"
+      automaticallyAdjustKeyboardInsets
+      refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.deepForest} colors={[colors.deepForest]} /> : undefined}
+      contentContainerStyle={[styles.content, { paddingBottom: bottomInset }]}
+      showsVerticalScrollIndicator={false}
+    >
+      {body}
+    </ScrollView>
+  );
+
+  // Inside the shell the surrounding chrome already exists, so this renders
+  // only the scrolling content.
+  if (embedded) {
+    return (
+      <KeyboardAvoidingView
+        style={styles.safe}
+        behavior={!scroll && Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        {scroll ? scroller : body}
+        {fixed}
+      </KeyboardAvoidingView>
+    );
+  }
 
   return (
     <View style={styles.root}>
