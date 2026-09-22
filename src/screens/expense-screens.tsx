@@ -20,12 +20,17 @@ import type { ExpenseFormErrors, ExpenseFormValues } from '@/features/expenses/t
 import { useReceipt } from '@/features/receipts/ReceiptProvider';
 import { dateToLocalDate, formatExpenseDate, isValidLocalDate, localDateToDate, MAX_MERCHANT_LENGTH, MAX_NOTES_LENGTH, normalizeAmountInput, todayLocalDate, validateExpenseForm } from '@/features/expenses/validation';
 import { selectionFeedback } from '@/lib/haptics';
+import { skipNextPanelRefresh } from '@/lib/panel-refresh';
 
 export function AddExpenseScreen() {
   const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
   const leafDrift = useDrift({ x: 24, y: 20, rotate: 9, scale: 0.08, duration: 2400, baseRotate: 28 });
   const safeReturn = returnTo === '/transactions' || returnTo === '/analytics' || returnTo === '/budget' ? returnTo : '/home';
-  const close = () => router.canGoBack() ? router.back() : router.replace(safeReturn as never);
+  const close = () => {
+    skipNextPanelRefresh(safeReturn);
+    if (router.canGoBack()) router.back();
+    else router.replace(safeReturn as never);
+  };
   const { setSource } = useReceipt();
   const upload = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();

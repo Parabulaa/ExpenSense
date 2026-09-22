@@ -54,7 +54,7 @@ export function PrimaryButton({ title, onPress, icon, danger = false, loading = 
   );
 }
 export function SecondaryButton({ title, onPress, icon, disabled = false }: { title: string; onPress?: () => void; icon?: keyof typeof MaterialCommunityIcons.glyphMap; disabled?: boolean }) { return <Pressable accessibilityRole="button" accessibilityLabel={title} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.secondary, disabled && styles.disabled, pressed && !disabled && { opacity: .75 }]}>{icon && <AppIcon name={icon} />}<AppText variant="button">{title}</AppText></Pressable>; }
-export function BackButton({ onPress }: { onPress?: () => void }) { const goBack = () => router.canGoBack() ? router.back() : router.replace('/'); return <Pressable accessibilityLabel="Go back" hitSlop={12} onPress={onPress ?? goBack} style={styles.back}><AppIcon name="arrow-left" size={25} /></Pressable>; }
+export function BackButton({ onPress }: { onPress?: () => void }) { const goBack = () => router.canGoBack() ? router.back() : router.replace('/'); return <PressableScale accessibilityLabel="Go back" hitSlop={12} scaleTo={0.97} onPress={onPress ?? goBack} style={styles.back}><AppIcon name="arrow-left" size={25} /></PressableScale>; }
 export function FormInput({ icon, secure, right, style, inputStyle, error, label, hint, onFocus, onBlur, ...props }: Omit<TextInputProps, 'style'> & { icon?: keyof typeof MaterialCommunityIcons.glyphMap; secure?: boolean; right?: ReactNode; style?: any; inputStyle?: TextInputProps['style']; error?: string | null; label?: string; hint?: string }) {
   const [focused, setFocused] = useState(false);
   // Error wins over hint so the field never shows contradictory guidance, and

@@ -234,10 +234,10 @@ export default function OnboardingExperience() {
 
         <View style={[styles.controls, compact && styles.controlsCompact]}>
           <Pagination translateX={translateX} width={viewport.width} onSelect={goToPage} />
-          <PrimaryButton title="Get Started" onPress={() => router.push('/create-account')} />
+          <PrimaryButton title="Get Started" onPress={() => router.replace('/create-account')} />
           <SecondaryButton
             title="I already have an account"
-            onPress={() => router.push('/sign-in')}
+            onPress={() => router.replace('/sign-in')}
           />
         </View>
       </SafeAreaView>

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { useEffect } from 'react';
 import { Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, shadow } from '@/constants/theme';
@@ -24,7 +24,7 @@ export function DraggableBottomSheet({ visible, onClose, disabled = false, child
   const translateY = useSharedValue(height);
 
   useEffect(() => {
-    if (visible) translateY.value = withSpring(0, { damping: 22, stiffness: 230 });
+    if (visible) translateY.value = withTiming(0, { duration: 190, easing: Easing.out(Easing.cubic) });
   }, [translateY, visible]);
 
   const dismiss = () => {
@@ -41,7 +41,7 @@ export function DraggableBottomSheet({ visible, onClose, disabled = false, child
     .activeOffsetY([-6, 6])
     .onUpdate((event) => {
       // eslint-disable-next-line react-hooks/immutability
-      translateY.value = Math.max(-28, event.translationY);
+      translateY.value = Math.max(-height * 0.16, event.translationY);
     })
     .onEnd((event) => {
       if (event.translationY > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY) {
@@ -50,17 +50,23 @@ export function DraggableBottomSheet({ visible, onClose, disabled = false, child
           if (finished) runOnJS(onClose)();
         });
       } else {
-        translateY.value = withSpring(0, { damping: 20, stiffness: 250 });
+        translateY.value = withTiming(0, { duration: 170, easing: Easing.out(Easing.cubic) });
       }
     });
 
-  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ translateY: translateY.value }] }));
+  const baseBottomPadding = Math.max(insets.bottom, 12) + 14;
+  const animatedStyle = useAnimatedStyle(() => ({
+    // Pulling down moves the whole sheet. Pulling up extends its surface while
+    // keeping the bottom edge attached to the viewport instead of exposing a gap.
+    transform: [{ translateY: Math.max(0, translateY.value) }],
+    paddingBottom: baseBottomPadding + Math.max(0, -translateY.value),
+  }));
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={dismiss} statusBarTranslucent>
       <View style={styles.backdrop}>
         <Pressable accessibilityRole="button" accessibilityLabel="Close sheet" disabled={disabled} onPress={dismiss} style={StyleSheet.absoluteFill} />
-        <Animated.View style={[styles.sheet, { maxHeight: height * 0.9, paddingBottom: Math.max(insets.bottom, 12) + 14 }, animatedStyle]}>
+        <Animated.View style={[styles.sheet, { maxHeight: height * 0.9 }, animatedStyle]}>
           <GestureDetector gesture={pan}>
             <View accessibilityRole="adjustable" accessibilityLabel="Drag sheet" style={styles.handleTarget}>
               <View style={styles.handle} />

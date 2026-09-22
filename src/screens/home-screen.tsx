@@ -38,6 +38,7 @@ import { useBudgets } from '@/features/budget/BudgetProvider';
 import { useCategories } from '@/features/categories/CategoriesProvider';
 import { useProfile } from '@/features/profile/ProfileProvider';
 import { answerBudgetQuestion, type BudgetAssistantMemory } from '@/features/assistant/offline-budget-assistant';
+import { consumeSkippedPanelRefresh } from '@/lib/panel-refresh';
 
 const PESO = '₱';
 const GRID_GAP = 10;
@@ -483,6 +484,7 @@ export function HomeScreen() {
   const mascotDrift = useDrift({ x: 8, y: 10, rotate: 1.5, scale: 0.018, duration: 7200 });
 
   useFocusEffect(useCallback(() => {
+    if (consumeSkippedPanelRefresh('/home')) return;
     void refreshExpenses();
     void refreshBudgets();
   }, [refreshBudgets, refreshExpenses]));

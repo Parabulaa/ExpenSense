@@ -1,6 +1,6 @@
-import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, BackHandler, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, { Easing, FadeIn, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { Screen } from '@/components/common/screen';
 import { LiquidScene } from '@/components/common/liquid-scene';
@@ -45,7 +45,7 @@ function LoadingDot({ delay }: { delay: number }) {
   const animatedStyle = useAnimatedStyle(() => ({ opacity: progress.value, transform: [{ translateY: (1 - progress.value) * 5 }, { scale: 0.82 + progress.value * 0.18 }] }));
   return <Animated.View style={[s.dotActive, animatedStyle]} />;
 }
-export function OnboardingScreen() { const {height}=useWindowDimensions(); return <Screen background={false}><View style={[s.onboarding,{minHeight:Math.max(height,760)}]}><LiquidScene scene="onboarding"/><View style={s.backFloat}><BackButton/></View><View style={s.onboardBrand}><Brand compact /></View><View style={s.onboardContent}><AppText variant="title" style={s.center}>Track smarter,{`\n`}not harder.</AppText><AppText style={[s.center,s.muted]}>Turn receipts into verified expense records{`\n`}and understand your spending with less effort.</AppText>{([['receipt-text-outline','Scan Receipts','Snap a photo, we do the rest.'],['shield-check','Verify Details','We extract and confirm the key info.'],['chart-bar','See Insights','Understand your spending, grow smarter.']] as const).map(x=><Card key={x[1]} style={s.feature}><View style={s.featureIcon}><AppIcon name={x[0]} size={28}/></View><View style={{flex:1}}><AppText variant="h3">{x[1]}</AppText><AppText variant="small" style={s.muted}>{x[2]}</AppText></View></Card>)}<View style={s.dots}><View style={s.dotActive}/><View style={s.dot}/><View style={s.dot}/></View><PrimaryButton title="Get Started" onPress={()=>router.push('/create-account')}/><Pressable onPress={()=>router.push('/sign-in')} accessibilityRole="button" accessibilityLabel="I already have an account"><AppText variant="bodyMedium" style={[s.center,s.muted]}>I already have an account</AppText></Pressable></View></View></Screen>; }
+export function OnboardingScreen() { const {height}=useWindowDimensions(); return <Screen background={false}><View style={[s.onboarding,{minHeight:Math.max(height,760)}]}><LiquidScene scene="onboarding"/><View style={s.onboardBrand}><Brand compact /></View><View style={s.onboardContent}><AppText variant="title" style={s.center}>Track smarter,{`\n`}not harder.</AppText><AppText style={[s.center,s.muted]}>Turn receipts into verified expense records{`\n`}and understand your spending with less effort.</AppText>{([['receipt-text-outline','Scan Receipts','Snap a photo, we do the rest.'],['shield-check','Verify Details','We extract and confirm the key info.'],['chart-bar','See Insights','Understand your spending, grow smarter.']] as const).map(x=><Card key={x[1]} style={s.feature}><View style={s.featureIcon}><AppIcon name={x[0]} size={28}/></View><View style={{flex:1}}><AppText variant="h3">{x[1]}</AppText><AppText variant="small" style={s.muted}>{x[2]}</AppText></View></Card>)}<View style={s.dots}><View style={s.dotActive}/><View style={s.dot}/><View style={s.dot}/></View><PrimaryButton title="Get Started" onPress={()=>router.replace('/create-account')}/><Pressable onPress={()=>router.replace('/sign-in')} accessibilityRole="button" accessibilityLabel="I already have an account"><AppText variant="bodyMedium" style={[s.center,s.muted]}>I already have an account</AppText></Pressable></View></View></Screen>; }
 
 // The shared auth content frame. Header, title, fields, CTA and footer all
 // resolve to the same left/right edges because they're siblings in one column
@@ -58,6 +58,7 @@ export function OnboardingScreen() { const {height}=useWindowDimensions(); retur
 // is small enough not to fight the stack's own push transition.
 function AuthShell({
   back = false,
+  backTo,
   title,
   subtitle,
   children,
@@ -67,6 +68,7 @@ function AuthShell({
   density = 'roomy',
 }: {
   back?: boolean;
+  backTo?: '/onboarding' | '/sign-in';
   title: string;
   subtitle?: string;
   children: React.ReactNode;
@@ -76,6 +78,11 @@ function AuthShell({
   density?: 'roomy' | 'compact';
 }) {
   const compact = density === 'compact';
+  useFocusEffect(useCallback(() => {
+    if (!backTo) return undefined;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => { router.replace(backTo); return true; });
+    return () => subscription.remove();
+  }, [backTo]));
 
   return (
     <Screen variant={variant} bottomInset={28}>
@@ -84,7 +91,7 @@ function AuthShell({
           <View style={s.authHeader}>
             {back ? (
               <View style={s.authBack}>
-                <BackButton />
+                <BackButton onPress={backTo ? () => router.replace(backTo) : undefined} />
               </View>
             ) : null}
             <Brand large />
@@ -182,6 +189,7 @@ export function SignInScreen() {
   return (
     <AuthShell
       back
+      backTo="/onboarding"
       title="Welcome back"
       subtitle="Sign in to continue to ExpenSense."
       variant={1}
@@ -198,7 +206,7 @@ export function SignInScreen() {
         <AuthSwitchLink
           prompt="New to ExpenSense?"
           action="Create account"
-          onPress={() => router.push('/create-account')}
+          onPress={() => router.replace('/create-account')}
         />
       }
     >
@@ -286,6 +294,7 @@ export function ForgotPasswordScreen() {
   return (
     <AuthShell
       back
+      backTo="/sign-in"
       title="Forgot password?"
       subtitle="Enter your email and we’ll send a reset link."
       variant={3}
@@ -515,6 +524,7 @@ export function CreateAccountScreen() {
   return (
     <AuthShell
       back
+      backTo="/onboarding"
       title="Create your account"
       subtitle="Start tracking verified expenses."
       variant={5}
@@ -604,7 +614,7 @@ export function CreateAccountScreen() {
 }
 const s=StyleSheet.create({
   center:{textAlign:'center'},muted:{color:colors.muted},green:{color:colors.forest},
-  splash:{flex:1,alignItems:'center',paddingHorizontal:24},splashCopy:{position:'absolute',top:'14%',alignItems:'center',gap:24},splashLoading:{position:'absolute',top:'80%',alignItems:'center',gap:16},
+  splash:{flex:1,alignItems:'center',paddingHorizontal:24},splashCopy:{position:'absolute',top:'10%',left:20,right:20,alignItems:'center',gap:16,zIndex:3},splashLoading:{position:'absolute',bottom:'7%',left:16,right:16,alignItems:'center',gap:12,zIndex:3},
   dots:{flexDirection:'row',gap:10,justifyContent:'center',alignItems:'center'},dot:{width:10,height:10,borderRadius:5,backgroundColor:'#C8D8C1'},dotActive:{width:10,height:10,borderRadius:5,backgroundColor:colors.deepForest},
   backFloat:{position:'absolute',left:18,top:16,zIndex:20},
   onboarding:{paddingHorizontal:24,paddingBottom:22},onboardBrand:{position:'absolute',top:32,left:0,right:0,alignItems:'center'},onboardContent:{paddingTop:330,gap:10},feature:{flexDirection:'row',alignItems:'center',paddingVertical:10,paddingHorizontal:12,gap:14,backgroundColor:'rgba(238,242,233,.96)',borderRadius:22},featureIcon:{width:58,height:48,borderRadius:17,backgroundColor:'#DCE8D5',alignItems:'center',justifyContent:'center'},

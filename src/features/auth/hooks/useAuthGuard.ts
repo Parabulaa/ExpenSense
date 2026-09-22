@@ -14,7 +14,7 @@ const PUBLIC_ROUTES = new Set([
 ]);
 
 // Routes a signed-in user shouldn't be shown (they get bounced to /home instead).
-const SIGNED_IN_REDIRECT_ROUTES = new Set(['sign-in', 'create-account']);
+const SIGNED_IN_REDIRECT_ROUTES = new Set(['onboarding', 'sign-in', 'create-account', 'forgot-password']);
 
 export function useAuthGuard() {
   const { session, initialized } = useAuth();
@@ -30,7 +30,7 @@ export function useAuthGuard() {
     const isPublicRoute = PUBLIC_ROUTES.has(currentRoute);
 
     if (!session && !isPublicRoute) {
-      router.replace('/sign-in');
+      router.replace('/onboarding');
       return;
     }
 

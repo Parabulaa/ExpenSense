@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { Calendar } from '@/components/common/calendar';
 import { DraggableBottomSheet } from '@/components/common/draggable-bottom-sheet';
 import { FadeSlideIn, PressableScale } from '@/components/common/motion';
@@ -27,6 +28,7 @@ import type { Expense, ExpenseFormErrors, ExpenseFormValues } from '@/features/e
 import { formatExpenseDate, normalizeAmountInput, todayLocalDate, validateExpenseForm } from '@/features/expenses/validation';
 import { formatCompactPeso, formatPercent, formatPeso, percentOf } from '@/lib/format';
 import { selectionFeedback, warningFeedback } from '@/lib/haptics';
+import { consumeSkippedPanelRefresh } from '@/lib/panel-refresh';
 
 const CATEGORY_LIMIT_MESSAGE = 'Dashboard category limit reached. Remove one before adding another.';
 const CATEGORY_TONES: Record<string, { background: string; foreground: string }> = {
@@ -48,6 +50,7 @@ export function TransactionsScreen() {
   const { q } = useLocalSearchParams<{ q?: string }>();
   const incomingQuery = Array.isArray(q) ? q[0] : q;
   const [query, setQuery] = useState(incomingQuery ?? '');
+  const [searchOpen, setSearchOpen] = useState(Boolean(incomingQuery));
 
   // Covers the case where this screen is already mounted and the router hands
   // it a new filter rather than pushing a fresh instance. Adjusting during
@@ -56,17 +59,20 @@ export function TransactionsScreen() {
   const [appliedQueryParam, setAppliedQueryParam] = useState(incomingQuery);
   if (incomingQuery !== appliedQueryParam) {
     setAppliedQueryParam(incomingQuery);
-    if (incomingQuery) setQuery(incomingQuery);
+    if (incomingQuery) {
+      setQuery(incomingQuery);
+      setSearchOpen(true);
+    }
   }
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [sort, setSort] = useState<SortOption>('newest');
   const [picker, setPicker] = useState<PickerKind>(null);
-  const [view, setView] = useState<'list' | 'calendar'>('list');
   const [calendarMonth, setCalendarMonth] = useState(todayLocalDate().slice(0, 7));
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
 
   useFocusEffect(useCallback(() => {
+    if (consumeSkippedPanelRefresh('/transactions')) return;
     void refresh();
   }, [refresh]));
 
@@ -77,17 +83,17 @@ export function TransactionsScreen() {
     const cutoff = new Date(now);
     cutoff.setDate(cutoff.getDate() - (dateFilter === 'last7' ? 6 : 29));
     const cutoffValue = localDateString(cutoff);
-    const month = today.slice(0, 7);
     const filtered = expenses.filter((expense) => {
       const category = categories.find((item) => item.id === expense.categoryId);
       const matchesQuery = !needle || `${expense.merchant} ${category?.fullLabel ?? ''} ${expense.notes ?? ''}`.toLocaleLowerCase().includes(needle);
       const matchesCategory = categoryFilter === 'all' || expense.categoryId === categoryFilter;
-      const matchesCalendarDate = view !== 'calendar' || !selectedCalendarDate || expense.transactionDate === selectedCalendarDate;
+      const matchesDisplayedMonth = expense.transactionDate.startsWith(calendarMonth);
+      const matchesCalendarDate = !selectedCalendarDate || expense.transactionDate === selectedCalendarDate;
       const matchesDate = dateFilter === 'all' ||
         (dateFilter === 'today' && expense.transactionDate === today) ||
-        (dateFilter === 'month' && expense.transactionDate.startsWith(month)) ||
+        (dateFilter === 'month' && expense.transactionDate.startsWith(calendarMonth)) ||
         ((dateFilter === 'last7' || dateFilter === 'last30') && expense.transactionDate >= cutoffValue && expense.transactionDate <= today);
-      return matchesQuery && matchesCategory && matchesDate && matchesCalendarDate;
+      return matchesDisplayedMonth && matchesQuery && matchesCategory && matchesDate && matchesCalendarDate;
     });
     return [...filtered].sort((a, b) => {
       if (sort === 'oldest') return a.transactionDate.localeCompare(b.transactionDate) || a.createdAt.localeCompare(b.createdAt);
@@ -95,32 +101,20 @@ export function TransactionsScreen() {
       if (sort === 'lowest') return a.amountCents - b.amountCents;
       return b.transactionDate.localeCompare(a.transactionDate) || b.createdAt.localeCompare(a.createdAt);
     });
-  }, [categories, categoryFilter, dateFilter, expenses, query, selectedCalendarDate, sort, view]);
+  }, [calendarMonth, categories, categoryFilter, dateFilter, expenses, query, selectedCalendarDate, sort]);
 
   const groups = useMemo(() => groupExpensesByDate(visibleExpenses), [visibleExpenses]);
   const hasFilters = Boolean(query.trim()) || dateFilter !== 'all' || categoryFilter !== 'all' || sort !== 'newest' || Boolean(selectedCalendarDate);
-  const clearFilters = () => { setQuery(''); setDateFilter('all'); setCategoryFilter('all'); setSort('newest'); setSelectedCalendarDate(null); };
+  const clearFilters = () => { setQuery(''); setSearchOpen(false); setDateFilter('all'); setCategoryFilter('all'); setSort('newest'); setSelectedCalendarDate(null); };
 
   return (
     <Screen embedded bottomInset={bottomInset} background={false} refreshing={loading && expenses.length > 0} onRefresh={() => void refresh()}>
       <View style={s.page}>
-        <View style={s.rowBetween}>
-          <AppText variant="hero">Transactions</AppText>
-          <View style={s.viewToggle}>
-            <PressableScale accessibilityRole="button" accessibilityLabel="List view" accessibilityState={{ selected: view === 'list' }} onPress={() => { setView('list'); setSelectedCalendarDate(null); }} style={[s.viewToggleButton, view === 'list' && s.viewToggleActive]}><AppIcon name="format-list-bulleted" size={20} color={view === 'list' ? colors.surface : colors.deepForest} /></PressableScale>
-            <PressableScale accessibilityRole="button" accessibilityLabel="Calendar spending view" accessibilityState={{ selected: view === 'calendar' }} onPress={() => setView('calendar')} style={[s.viewToggleButton, view === 'calendar' && s.viewToggleActive]}><AppIcon name="calendar-month-outline" size={20} color={view === 'calendar' ? colors.surface : colors.deepForest} /></PressableScale>
-          </View>
-        </View>
-        {view === 'calendar' ? <SpendingCalendar expenses={expenses} month={calendarMonth} selectedDate={selectedCalendarDate} onMonthChange={(next) => { setCalendarMonth(next); setSelectedCalendarDate(null); }} onSelectDate={setSelectedCalendarDate} /> : null}
-        <View style={s.search}>
-          <AppIcon name="magnify" size={22} color={colors.muted} />
-          <TextInput accessibilityLabel="Search transactions" placeholder="Search transactions" placeholderTextColor={colors.muted} value={query} onChangeText={setQuery} style={s.searchInput} />
-        </View>
-        <View style={s.filters}>
-          <FilterButton label={DATE_LABELS[dateFilter]} active={dateFilter !== 'all'} flex={0.9} onPress={() => setPicker('date')} />
-          <FilterButton label={categoryFilter === 'all' ? 'Category' : categories.find((item) => item.id === categoryFilter)?.label ?? 'Category'} active={categoryFilter !== 'all'} flex={1.25} onPress={() => setPicker('category')} />
-          <FilterButton label={SORT_LABELS[sort]} active={sort !== 'newest'} flex={0.9} onPress={() => setPicker('sort')} />
-        </View>
+        <AppText variant="hero">Transactions</AppText>
+        <Animated.View layout={LinearTransition.duration(180)} style={s.transactionToolbar}>
+          {searchOpen ? <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} style={s.searchExpanded}><AppIcon name="magnify" size={21} color={colors.muted} /><TextInput autoFocus accessibilityLabel="Search transactions" placeholder="Search transactions..." placeholderTextColor={colors.muted} value={query} onChangeText={setQuery} style={s.searchInput} /><PressableScale accessibilityLabel="Close transaction search" onPress={() => { setQuery(''); setSearchOpen(false); }} style={s.searchClose}><AppIcon name="close" size={19} /></PressableScale></Animated.View> : <><PressableScale accessibilityRole="button" accessibilityLabel="Open transaction search" onPress={() => setSearchOpen(true)} style={s.searchCompact}><AppIcon name="magnify" size={22} color={colors.deepForest} /></PressableScale><FilterButton label="Date" active={dateFilter !== 'all'} flex={0.9} onPress={() => setPicker('date')} /><FilterButton label="Category" active={categoryFilter !== 'all'} flex={1.25} onPress={() => setPicker('category')} /><FilterButton label="Sort" active={sort !== 'newest'} flex={0.9} onPress={() => setPicker('sort')} /></>}
+        </Animated.View>
+        <Animated.View key={calendarMonth} entering={FadeIn.duration(180)}><SpendingCalendar expenses={expenses} month={calendarMonth} selectedDate={selectedCalendarDate} onMonthChange={(next) => { setCalendarMonth(next); setDateFilter('all'); setSelectedCalendarDate(null); }} onSelectDate={(date) => { setDateFilter('all'); setSelectedCalendarDate(date); }} /></Animated.View>
         {hasFilters ? <Pressable accessibilityRole="button" accessibilityLabel="Clear transaction filters" onPress={clearFilters} style={s.clearFilters}><AppIcon name="filter-remove-outline" size={17} /><AppText variant="small" style={s.clearFiltersText}>Clear filters</AppText></Pressable> : null}
 
         {loading && expenses.length === 0 ? (
@@ -146,7 +140,7 @@ export function TransactionsScreen() {
           </View>
         ))}
       </View>
-      <TransactionPicker kind={picker} dateFilter={dateFilter} categoryFilter={categoryFilter} sort={sort} onDate={setDateFilter} onCategory={setCategoryFilter} onSort={setSort} onClose={() => setPicker(null)} />
+      <TransactionPicker kind={picker} dateFilter={dateFilter} categoryFilter={categoryFilter} sort={sort} onDate={(value) => { setDateFilter(value); setSelectedCalendarDate(null); if (value === 'today') setCalendarMonth(todayLocalDate().slice(0, 7)); }} onCategory={setCategoryFilter} onSort={setSort} onClose={() => setPicker(null)} />
     </Screen>
   );
 }
@@ -199,12 +193,12 @@ function SpendingCalendar({ expenses, month, selectedDate, onMonthChange, onSele
       const date = `${month}-${String(day).padStart(2, '0')}`;
       const total = totals.get(date) ?? 0;
       const selected = date === selectedDate;
-      return <View key={date} style={s.calendarCell}><Pressable accessibilityRole="button" accessibilityLabel={`${date}${total ? `, spent ${compactCurrency(total)}` : ', no spending'}`} accessibilityState={{ selected }} onPress={() => onSelectDate(selected ? null : date)} style={({ pressed }) => [s.calendarDay, total > 0 && s.calendarDayHasSpending, selected && s.calendarDaySelected, pressed && { opacity: 0.75 }]}><AppText variant="bodyMedium" style={selected ? s.calendarDaySelectedText : undefined}>{day}</AppText>{total > 0 ? <AppText numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[s.calendarAmount, selected && s.calendarDaySelectedText]}>{compactCurrency(total)}</AppText> : null}</Pressable></View>;
+      return <View key={date} style={s.calendarCell}><PressableScale scaleTo={0.92} accessibilityRole="button" accessibilityLabel={`${date}${total ? `, spent ${compactCurrency(total)}` : ', no spending'}`} accessibilityState={{ selected }} onPress={() => onSelectDate(selected ? null : date)} style={[s.calendarDay, total > 0 && s.calendarDayHasSpending, selected && s.calendarDaySelected]}><AppText variant="bodyMedium" style={selected ? s.calendarDaySelectedText : undefined}>{day}</AppText>{total > 0 ? <AppText numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[s.calendarAmount, selected && s.calendarDaySelectedText]}>{compactCurrency(total)}</AppText> : null}</PressableScale></View>;
     })}</View>
     <View style={s.calendarSummary}>
       <View><AppText variant="small" style={s.muted}>Month spent</AppText><AppText variant="h3">{compactCurrency(monthTotal)}</AppText></View>
       <View style={{ alignItems: 'center' }}><AppText variant="small" style={s.muted}>Active days</AppText><AppText variant="h3">{totals.size}</AppText></View>
-      <View style={{ alignItems: 'flex-end' }}><AppText variant="small" style={s.muted}>{selectedDate ? 'Selected day' : 'Daily average'}</AppText><AppText variant="h3">{compactCurrency(selectedDate ? selectedTotal : days ? Math.round(monthTotal / days) : 0)}</AppText></View>
+      <View style={{ alignItems: 'flex-end' }}><AppText variant="small" style={s.muted}>{selectedDate ? 'Selected day' : 'Daily average'}</AppText><AppText variant="h3">{compactCurrency(selectedDate ? selectedTotal : totals.size ? Math.round(monthTotal / totals.size) : 0)}</AppText></View>
     </View>
     {selectedDate ? <Pressable accessibilityRole="button" accessibilityLabel="Show every transaction in this month" onPress={() => onSelectDate(null)} style={s.calendarSelection}><AppText variant="small" style={s.calendarSelectionText}>Showing {formatExpenseDate(selectedDate)} · Tap to clear</AppText></Pressable> : null}
   </Card>;
@@ -245,10 +239,10 @@ function ExpenseRow({ expense }: { expense: Expense }) {
       <Card style={s.transaction}>
         <View style={s.roundIcon}><AppIcon name={category?.icon ?? 'receipt-text-outline'} size={24} color={colors.deepForest} /></View>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <AppText variant="h3" numberOfLines={1}>{expense.merchant}</AppText>
-          <AppText style={s.muted} numberOfLines={1}>{category?.fullLabel ?? expense.categoryId}</AppText>
+          <AppText variant="h3" numberOfLines={2}>{expense.merchant}</AppText>
+          <AppText style={s.muted} numberOfLines={2}>{category?.fullLabel ?? expense.categoryId}</AppText>
         </View>
-        <AppText variant="h3" numberOfLines={1}>−₱{(expense.amountCents / 100).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</AppText>
+        <AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={s.transactionAmount}>−{formatCompactPeso(expense.amountCents)}</AppText>
       </Card>
     </Pressable>
   );
@@ -452,7 +446,7 @@ export function BudgetScreen() {
           </PressableScale>);
         })}
       </View>
-      <DraggableBottomSheet visible={monthPicker} onClose={() => setMonthPicker(false)}><AppText variant="h2">Choose Budget Month</AppText><Calendar value={monthDraft} onSelect={setMonthDraft} /><AppText style={s.selectedMonthPreview}>{formatMonth(monthDraft.slice(0, 7))}</AppText><PrimaryButton title="Use This Month" onPress={() => { setMonth(monthDraft.slice(0, 7)); setMonthPicker(false); }} /></DraggableBottomSheet>
+      <DraggableBottomSheet visible={monthPicker} onClose={() => setMonthPicker(false)}>{(dismiss) => <><AppText variant="h2">Choose Budget Month</AppText><Calendar value={monthDraft} onSelect={setMonthDraft} /><AppText style={s.selectedMonthPreview}>{formatMonth(monthDraft.slice(0, 7))}</AppText><PrimaryButton title="Use This Month" onPress={() => { setMonth(monthDraft.slice(0, 7)); dismiss(); }} /></>}</DraggableBottomSheet>
       <DraggableBottomSheet visible={Boolean(editor)} disabled={saving} onClose={() => setEditor(null)}>
         <AppText variant="h2">{editor?.type === 'addMonthly' ? 'Add Budget Amount' : editor?.type === 'editMonthly' ? 'Edit Total Budget' : `Set ${categoryLibrary.find((item) => item.id === (editor?.type === 'category' ? editor.categoryId : ''))?.fullLabel ?? 'Category'} Limit`}</AppText>
         {editor?.type === 'addMonthly' ? <View style={s.addBudgetContext}><InfoRow label="Current budget" value={currency(budget?.amountCents ?? 0)} /><InfoRow label="Amount to add" value={currency(Math.round((Number(amount) || 0) * 100))} /><InfoRow bold label="New budget" value={currency((budget?.amountCents ?? 0) + Math.round((Number(amount) || 0) * 100))} /></View> : null}
@@ -473,7 +467,7 @@ export function AnalyticsScreen() {
   const [monthDraft, setMonthDraft] = useState(`${month}-01`);
   const [monthPicker, setMonthPicker] = useState(false);
   const [mode, setMode] = useState<'spending' | 'trends'>('spending');
-  useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
+  useFocusEffect(useCallback(() => { if (!consumeSkippedPanelRefresh('/analytics')) void refresh(); }, [refresh]));
   const analytics = useMemo(() => analyticsForMonth(expenses, allCategories, month), [allCategories, expenses, month]);
   const priorMonth = previousMonth(month);
   const previous = useMemo(() => analyticsForMonth(expenses, allCategories, priorMonth), [allCategories, expenses, priorMonth]);
@@ -493,7 +487,7 @@ export function AnalyticsScreen() {
         {loading && expenses.length === 0 ? <Card style={s.analyticsLoading}><ActivityIndicator color={colors.deepForest} /><View style={s.analyticsSkeletonCircle} /><View style={s.skeletonLineWide} /></Card> : loadError ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load analytics.</AppText><AppText style={[s.muted, s.center]}>Check your connection and try again.</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : analytics.expenses.length === 0 ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="chart-donut" size={30} /></View><AppText variant="h2">No spending data yet</AppText><AppText style={[s.muted, s.center]}>Add expenses to start seeing your spending patterns.</AppText><PrimaryButton title="Add Expense" onPress={() => router.push('/add-expense')} /></Card> : mode === 'spending' ? <Card style={s.analyticsCard}><DonutChart slices={analytics.categorySlices} refreshKey={month}><AppText variant="title" adjustsFontSizeToFit numberOfLines={1}>{compactCurrency(analytics.totalCents)}</AppText><AppText style={s.muted}>Total Spending</AppText></DonutChart><View style={s.legendList}>{analytics.categorySlices.map((slice) => <View style={s.legend} key={slice.id}><View style={[s.legendDot, { backgroundColor: slice.color }]} /><AppText style={[s.muted, s.legendLabel]} numberOfLines={1}>{slice.label}</AppText><AppText style={[s.muted, s.legendValue]}>{formatPercent(slice.percentage)}</AppText></View>)}</View></Card> : <Card style={s.trendsCard}><View style={s.rowBetween}><View><AppText style={s.muted}>This month</AppText><AppText variant="title">{compactCurrency(analytics.totalCents)}</AppText></View><View style={s.trendChange}><AppIcon name={change !== null && change > 0 ? 'trending-up' : 'trending-down'} size={20} color={change !== null && change > 0 ? colors.danger : colors.success} /><AppText variant="h3" style={{ color: change !== null && change > 0 ? colors.danger : colors.success }}>{change === null ? 'No comparison' : `${change > 0 ? '+' : ''}${change}%`}</AppText></View></View>{previous.totalCents === 0 || analytics.expenses.length < 2 ? <View style={s.trendEmpty}><AppText variant="h2">Not enough history yet</AppText><AppText style={[s.muted, s.center]}>Keep tracking expenses and your trends will appear here.</AppText></View> : <><View style={s.barChart}>{analytics.dailyTotals.map((item) => <View key={item.day} style={s.barColumn}><View style={[s.bar, { height: Math.max(8, Math.round((item.amountCents / maxDay) * 130)) }]} /><AppText variant="small" style={s.muted}>{item.day}</AppText></View>)}</View><View style={s.trendMetrics}><TrendMetric label={`${formatMonth(priorMonth)} total`} value={compactCurrency(previous.totalCents)} /><TrendMetric label="Daily average" value={compactCurrency(analytics.averageDailyCents)} /><TrendMetric label="Highest-spend day" value={analytics.highestDay ? `${monthLabel.split(' ')[0]} ${analytics.highestDay.day} · ${compactCurrency(analytics.highestDay.amountCents)}` : '—'} /></View></>}</Card>}
         {analytics.expenses.length > 0 ? <InsightsLink month={month} /> : null}
       </View>
-      <MonthPickerModal visible={monthPicker} title="Choose Analytics Month" value={monthDraft} onChange={setMonthDraft} onClose={() => setMonthPicker(false)} onConfirm={(value) => { setMonth(value.slice(0, 7)); setMonthPicker(false); }} />
+      <MonthPickerModal visible={monthPicker} title="Choose Analytics Month" value={monthDraft} onChange={setMonthDraft} onClose={() => setMonthPicker(false)} onConfirm={(value) => setMonth(value.slice(0, 7))} />
     </Screen>
   );
 }
@@ -551,7 +545,7 @@ export function InsightsScreen() {
 }
 
 function MonthPickerModal({ visible, title, value, onChange, onClose, onConfirm }: { visible: boolean; title: string; value: string; onChange: (value: string) => void; onClose: () => void; onConfirm: (value: string) => void }) {
-  return <DraggableBottomSheet visible={visible} onClose={onClose}><AppText variant="h2">{title}</AppText><Calendar value={value} onSelect={onChange} /><AppText style={s.selectedMonthPreview}>{formatMonth(value.slice(0, 7))}</AppText><PrimaryButton title="Use This Month" onPress={() => onConfirm(value)} /></DraggableBottomSheet>;
+  return <DraggableBottomSheet visible={visible} onClose={onClose}>{(dismiss) => <><AppText variant="h2">{title}</AppText><Calendar value={value} onSelect={onChange} /><AppText style={s.selectedMonthPreview}>{formatMonth(value.slice(0, 7))}</AppText><PrimaryButton title="Use This Month" onPress={() => { onConfirm(value); dismiss(); }} /></>}</DraggableBottomSheet>;
 }
 
 function TrendMetric({ label, value }: { label: string; value: string }) {
@@ -753,10 +747,10 @@ export function ProfileScreen() {
       return;
     }
 
-    // On success the session becomes null and useAuthGuard moves us to the
-    // public flow, so we don't navigate here — a manual replace on top of the
-    // guard's redirect is what causes the flicker.
+    // Replace the protected route so Back cannot reveal authenticated content
+    // after the Supabase session has been cleared.
     setLogoutDialog(null);
+    router.replace('/onboarding');
   };
 
   // Profile is a drill-down from the header avatar, not a tab — so it carries a
@@ -862,9 +856,10 @@ const s = StyleSheet.create({
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   categoryTile: { width: '31%', alignItems: 'center', gap: 6, padding: 12 },
   addTile: { width: '31%', minHeight: 91, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.lightGreen, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
-  viewToggle: { flexDirection: 'row', gap: 5, padding: 4, borderRadius: radii.pill, backgroundColor: 'rgba(224,235,218,.9)' },
-  viewToggleButton: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  viewToggleActive: { backgroundColor: colors.deepForest },
+  transactionToolbar: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  searchCompact: { width: 46, height: 48, flexShrink: 0, borderRadius: radii.md, backgroundColor: 'rgba(232,238,227,.92)', borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
+  searchExpanded: { flex: 1, height: 50, minWidth: 0, borderRadius: radii.md, backgroundColor: 'rgba(232,238,227,.92)', borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', paddingLeft: 14, paddingRight: 7, gap: 8 },
+  searchClose: { width: 34, height: 34, flexShrink: 0, borderRadius: 17, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   spendingCalendar: { gap: 10, padding: 14 },
   calendarHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   calendarNav: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.pale },
@@ -907,6 +902,7 @@ const s = StyleSheet.create({
   pickerOptionCopy: { flex: 1 },
   group: { marginTop: 14, color: colors.muted },
   transaction: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 8 },
+  transactionAmount: { flexShrink: 0, maxWidth: '36%', textAlign: 'right' },
   roundIcon: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#E1EBDD', alignItems: 'center', justifyContent: 'center' },
   loadingCard: { minHeight: 150, alignItems: 'center', justifyContent: 'center', gap: 12 },
   skeletonList: { gap: 10, marginTop: 8 },

@@ -82,10 +82,10 @@ export function LiquidScene({ scene }: { scene: Scene }) {
 
   const scale = Math.min(Math.max(width / 390, 0.82), 1.08);
 
-  const heroTop = scene === 'splash' ? height * 0.39 : scene === 'onboarding' ? 70 : height * 0.38;
-  const heroHeight = scene === 'splash' ? height * 0.39 : scene === 'onboarding' ? 220 : 300;
-  const mascotTop = scene === 'splash' ? height * 0.43 : scene === 'onboarding' ? 105 : height * 0.405;
-  const mascotSize = scene === 'splash' ? 294 : scene === 'onboarding' ? 224 : 215;
+  const heroTop = scene === 'splash' ? height * 0.48 : scene === 'onboarding' ? 70 : height * 0.38;
+  const heroHeight = scene === 'splash' ? height * 0.34 : scene === 'onboarding' ? 220 : 300;
+  const mascotTop = scene === 'splash' ? Math.max(height * 0.48, height < 700 ? 320 : 360) : scene === 'onboarding' ? 105 : height * 0.405;
+  const mascotSize = scene === 'splash' ? (height < 700 ? 205 : 250) : scene === 'onboarding' ? 224 : 215;
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
