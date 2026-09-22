@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
@@ -16,6 +16,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { FadeSlideIn, PressableScale, useDrift } from '@/components/common/motion';
+import { DraggableBottomSheet } from '@/components/common/draggable-bottom-sheet';
 import { Screen } from '@/components/common/screen';
 import { AppIcon, AppText, Card, ProgressBar } from '@/components/common/ui';
 import { useBottomNavInset } from '@/components/navigation/bottom-navigation';
@@ -36,6 +37,7 @@ import { warningFeedback } from '@/lib/haptics';
 import { useBudgets } from '@/features/budget/BudgetProvider';
 import { useCategories } from '@/features/categories/CategoriesProvider';
 import { useProfile } from '@/features/profile/ProfileProvider';
+import { answerBudgetQuestion, type BudgetAssistantMemory } from '@/features/assistant/offline-budget-assistant';
 
 const PESO = '₱';
 const GRID_GAP = 10;
@@ -405,6 +407,12 @@ export function HomeScreen() {
   const [editingCategories, setEditingCategories] = useState(false);
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const [insightIndex, setInsightIndex] = useState(0);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantInput, setAssistantInput] = useState('');
+  const [assistantMemory, setAssistantMemory] = useState<BudgetAssistantMemory>({});
+  const [assistantMessages, setAssistantMessages] = useState<{ role: 'user' | 'assistant'; text: string }[]>([
+    { role: 'assistant', text: 'Ask me about your spending or budget. I work locally using the data already in ExpenSense.' },
+  ]);
   const [drag, setDrag] = useState<{ id: string; target: number } | null>(null);
 
   // Reads the shared profile cache so editing the name in Settings updates the
@@ -458,6 +466,20 @@ export function HomeScreen() {
     return [...new Set(messages)];
   }, [allCategories, budgetsLoading, expenses, expensesLoading, savedBudget, selectedMonthId]);
   const insight = insights[insightIndex % insights.length];
+  const assistantContext = useMemo(() => ({
+    current: analyticsForMonth(expenses, allCategories, selectedMonthId),
+    previous: analyticsForMonth(expenses, allCategories, previousMonth(selectedMonthId)),
+    categories: allCategories,
+    budget: savedBudget,
+  }), [allCategories, expenses, savedBudget, selectedMonthId]);
+  const askAssistant = (suggestion?: string) => {
+    const question = (suggestion ?? assistantInput).trim();
+    if (!question) return;
+    const answer = answerBudgetQuestion(question, assistantContext, assistantMemory);
+    setAssistantMemory(answer.memory);
+    setAssistantMessages((current) => [...current, { role: 'user', text: question }, { role: 'assistant', text: answer.text }]);
+    setAssistantInput('');
+  };
   const mascotDrift = useDrift({ x: 8, y: 10, rotate: 1.5, scale: 0.018, duration: 7200 });
 
   useFocusEffect(useCallback(() => {
@@ -541,8 +563,8 @@ export function HomeScreen() {
             <View style={[styles.insightArea, { height: mascotSize }]}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`${insight} Tap for another offline insight.`}
-                onPress={() => setInsightIndex((current) => current + 1)}
+                accessibilityLabel={`${insight} Open offline budget assistant.`}
+                onPress={() => setAssistantOpen(true)}
                 style={({ pressed }) => [styles.insightBubble, pressed && { opacity: 0.82 }]}
               >
                 <AppText style={styles.insightText}>{insight}</AppText>
@@ -812,6 +834,22 @@ export function HomeScreen() {
           </View>
         </View>
       </Modal>
+      <DraggableBottomSheet visible={assistantOpen} onClose={() => setAssistantOpen(false)}>
+        <View style={styles.assistantHeader}>
+          <View style={{ flex: 1 }}><AppText variant="h2">Ask ExpenSense</AppText><AppText variant="small" style={styles.assistantOffline}>Offline · selected month context</AppText></View>
+          <PressableScale accessibilityLabel="Show another quick insight" onPress={() => setInsightIndex((current) => current + 1)} style={styles.assistantRefresh}><AppIcon name="refresh" size={20} /></PressableScale>
+        </View>
+        <ScrollView style={styles.assistantMessages} contentContainerStyle={styles.assistantMessagesContent} keyboardShouldPersistTaps="handled">
+          {assistantMessages.map((message, index) => <View key={`${message.role}-${index}`} style={[styles.assistantMessage, message.role === 'user' ? styles.assistantUser : styles.assistantReply]}><AppText style={message.role === 'user' ? styles.assistantUserText : undefined}>{message.text}</AppText></View>)}
+        </ScrollView>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.assistantSuggestions}>
+          {['How much is left?', 'Top category?', 'Compare last month', 'How can I save?'].map((prompt) => <PressableScale key={prompt} onPress={() => askAssistant(prompt)} style={styles.assistantSuggestion}><AppText variant="small" style={styles.assistantSuggestionText}>{prompt}</AppText></PressableScale>)}
+        </ScrollView>
+        <View style={styles.assistantComposer}>
+          <TextInput accessibilityLabel="Ask about your budget" value={assistantInput} onChangeText={setAssistantInput} onSubmitEditing={() => askAssistant()} returnKeyType="send" placeholder="Ask about your spending…" placeholderTextColor={colors.muted} style={styles.assistantInput} />
+          <PressableScale accessibilityRole="button" accessibilityLabel="Send question" onPress={() => askAssistant()} style={styles.assistantSend}><AppIcon name="arrow-up" color={colors.surface} /></PressableScale>
+        </View>
+      </DraggableBottomSheet>
     </Screen>
   );
 }
@@ -1222,4 +1260,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  assistantHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  assistantOffline: { color: colors.forest, marginTop: 2 },
+  assistantRefresh: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.pale },
+  assistantMessages: { maxHeight: 330, minHeight: 180 },
+  assistantMessagesContent: { gap: 10, paddingVertical: 4 },
+  assistantMessage: { maxWidth: '88%', paddingHorizontal: 14, paddingVertical: 11, borderRadius: 17 },
+  assistantReply: { alignSelf: 'flex-start', backgroundColor: colors.pale, borderBottomLeftRadius: 5 },
+  assistantUser: { alignSelf: 'flex-end', backgroundColor: colors.deepForest, borderBottomRightRadius: 5 },
+  assistantUserText: { color: colors.surface },
+  assistantComposer: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 2 },
+  assistantSuggestions: { gap: 8, paddingRight: 8 },
+  assistantSuggestion: { minHeight: 36, paddingHorizontal: 12, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#C7D8C1', backgroundColor: '#F5F8F1' },
+  assistantSuggestionText: { color: colors.deepForest, fontFamily: 'JakartaSemiBold' },
+  assistantInput: { flex: 1, minHeight: 50, borderRadius: 25, paddingHorizontal: 17, fontFamily: 'JakartaRegular', fontSize: 15, color: colors.text, backgroundColor: '#F0F3EC', borderWidth: 1, borderColor: colors.line },
+  assistantSend: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.deepForest },
 });
