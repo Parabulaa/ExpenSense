@@ -98,6 +98,7 @@ export function validateExpenseForm(values: ExpenseFormValues): {
       categoryId: values.categoryId,
       transactionDate: values.transactionDate,
       notes,
+      walletId: values.walletId || null,
     },
   };
 }

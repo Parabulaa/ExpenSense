@@ -23,6 +23,7 @@ import { useCategories } from '@/features/categories/CategoriesProvider';
 import { MAX_DASHBOARD_CATEGORIES } from '@/features/dashboard/dashboard-data';
 import { useDashboardCategories } from '@/features/dashboard/DashboardCategoriesProvider';
 import { useExpenses } from '@/features/expenses/ExpensesProvider';
+import { useFinance } from '@/features/finance/FinanceProvider';
 import { useProfile } from '@/features/profile/ProfileProvider';
 import type { Expense, ExpenseFormErrors, ExpenseFormValues } from '@/features/expenses/types';
 import { formatExpenseDate, normalizeAmountInput, todayLocalDate, validateExpenseForm } from '@/features/expenses/validation';
@@ -327,7 +328,7 @@ export function EditTransactionScreen() {
   const submitting = useRef(false);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<ExpenseFormErrors>({});
-  const [values, setValues] = useState<ExpenseFormValues>(() => expense ? { amount: (expense.amountCents / 100).toFixed(2), merchant: expense.merchant, categoryId: expense.categoryId, transactionDate: expense.transactionDate, notes: expense.notes ?? '' } : { amount: '', merchant: '', categoryId: '', transactionDate: todayLocalDate(), notes: '' });
+  const [values, setValues] = useState<ExpenseFormValues>(() => expense ? { amount: (expense.amountCents / 100).toFixed(2), merchant: expense.merchant, categoryId: expense.categoryId, walletId: expense.walletId ?? '', transactionDate: expense.transactionDate, notes: expense.notes ?? '' } : { amount: '', merchant: '', categoryId: '', walletId: '', transactionDate: todayLocalDate(), notes: '' });
   if (!expense) return <Screen variant={8}><View style={s.page}><BackButton /><Card style={s.emptyCard}><AppText variant="h2">Transaction not found</AppText></Card></View></Screen>;
   const update = <K extends keyof ExpenseFormValues>(key: K, value: ExpenseFormValues[K]) => { setValues((current) => ({ ...current, [key]: value })); setErrors((current) => ({ ...current, [key]: undefined })); };
   const save = async () => {
@@ -359,6 +360,7 @@ export function BudgetScreen() {
   const categoryLibrary = categories;
   const bottomInset = useBottomNavInset();
   const { expenses } = useExpenses();
+  const { wallets, goals } = useFinance();
   const { budgets: monthlyBudgets, loading, error, refresh, saveMonthlyBudget, saveCategoryBudget, removeCategoryBudget } = useBudgets();
   const { showToast } = useToast();
   const currentMonth = todayLocalDate().slice(0, 7);
@@ -412,6 +414,20 @@ export function BudgetScreen() {
         <AppText variant="hero">Budget</AppText>
         <PressableScale accessibilityRole="button" accessibilityLabel={`Selected budget month: ${monthLabel}`} onPress={() => { setMonthDraft(`${month}-01`); setMonthPicker(true); }} style={s.budgetMonth}><AppText variant="h3">{monthLabel}</AppText><AppIcon name="calendar-month-outline" /></PressableScale>
         {loading && monthlyBudgets.length === 0 ? <View style={s.skeletonCard} /> : error && monthlyBudgets.length === 0 ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load budgets</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : !budget ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="wallet-plus-outline" size={30} /></View><AppText variant="h2">No budget yet</AppText><AppText style={[s.muted, s.center]}>Add your first monthly budget amount to start tracking spending.</AppText><PrimaryButton title="Add Budget Amount" onPress={openAddMonthly} /></Card> : <Card style={s.monthlyBudgetCard}><View style={s.rowBetween}><AppText variant="h3">Monthly Budget</AppText><PressableScale accessibilityRole="button" accessibilityLabel="Edit total budget" onPress={openEditMonthly} style={s.editBudgetButton}><AppIcon name="pencil-outline" size={20} color={colors.muted} /></PressableScale></View><AppText variant="hero" adjustsFontSizeToFit numberOfLines={1}>{currency(budget.amountCents)}</AppText><View style={s.budgetSummary}><View style={s.budgetSummaryItem}><AppText variant="small" style={s.muted}>Spent</AppText><AppText variant="h3" style={{ color: colors.deepForest }}>{compact(spentCents)}</AppText></View><View style={[s.budgetSummaryItem, s.budgetSummaryRight]}><AppText variant="small" style={s.muted}>{remainingCents < 0 ? 'Over' : 'Left'}</AppText><AppText variant="h3" style={{ color: remainingCents < 0 ? colors.danger : colors.deepForest }}>{compact(remainingCents)}</AppText></View></View><View style={s.row}><ProgressBar value={Math.min(100, percentage)} /><AppText variant="h3" style={s.budgetPercent}>{percentage}%</AppText></View><StatusChip warning={percentage >= 90}>{status}</StatusChip><SecondaryButton title="Add to Budget" icon="plus" onPress={openAddMonthly} /></Card>}
+        <View style={s.financeTools}>
+          <PressableScale accessibilityRole="button" accessibilityLabel="Manage wallets" onPress={() => router.push('/wallets' as never)} style={s.financeTool}>
+            <View style={s.financeToolIcon}><AppIcon name="wallet-outline" size={25} /></View>
+            <AppText variant="h3">Wallets</AppText>
+            <AppText variant="small" style={s.muted}>{wallets.length ? `${wallets.length} payment source${wallets.length === 1 ? '' : 's'}` : 'Add a payment source'}</AppText>
+            <View style={s.financeToolLink}><AppText variant="small" style={s.financeToolLinkText}>Manage</AppText><AppIcon name="arrow-right" size={17} color={colors.forest} /></View>
+          </PressableScale>
+          <PressableScale accessibilityRole="button" accessibilityLabel="Manage savings goals" onPress={() => router.push('/goals' as never)} style={s.financeTool}>
+            <View style={s.financeToolIcon}><AppIcon name="target" size={25} /></View>
+            <AppText variant="h3">Savings Goals</AppText>
+            <AppText variant="small" style={s.muted}>{goals.length ? `${goals.length} active goal${goals.length === 1 ? '' : 's'}` : 'Create your first goal'}</AppText>
+            <View style={s.financeToolLink}><AppText variant="small" style={s.financeToolLinkText}>Manage</AppText><AppIcon name="arrow-right" size={17} color={colors.forest} /></View>
+          </PressableScale>
+        </View>
         <AppText variant="h2">Category Budgets</AppText>
         {!budget ? <AppText style={s.muted}>Set a monthly budget before adding category limits.</AppText> : budget.categoryBudgets.length === 0 ? <Card style={s.noLimits}><AppText variant="h3">No category limits yet</AppText><AppText style={s.muted}>Tap a category below to add one.</AppText></Card> : null}
         {categories.map((category) => {
@@ -934,6 +950,11 @@ const s = StyleSheet.create({
   budgetPercent: { flexShrink: 0, minWidth: 54, textAlign: 'right' },
   addBudgetContext: { gap: 10, padding: 14, borderRadius: radii.md, backgroundColor: colors.pale },
   noLimits: { gap: 4, backgroundColor: 'rgba(255,253,247,.9)' },
+  financeTools: { flexDirection: 'row', gap: 10 },
+  financeTool: { flex: 1, minHeight: 166, padding: 15, gap: 7, borderRadius: radii.md, backgroundColor: 'rgba(255,253,247,.96)', ...shadow },
+  financeToolIcon: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' },
+  financeToolLink: { marginTop: 'auto', flexDirection: 'row', gap: 5, alignItems: 'center' },
+  financeToolLinkText: { color: colors.forest, fontFamily: 'JakartaBold' },
   segment: { flexDirection: 'row', borderRadius: radii.md, backgroundColor: colors.pale, padding: 4 },
   segmentActive: { flex: 1, height: 42, borderRadius: radii.sm, backgroundColor: colors.deepForest, alignItems: 'center', justifyContent: 'center' },
   segmentActiveText: { color: colors.surface },

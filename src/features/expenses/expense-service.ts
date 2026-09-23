@@ -7,6 +7,7 @@ type ExpenseRow = {
   amount: string | number;
   merchant: string;
   category_id: string;
+  wallet_id: string | null;
   transaction_date: string;
   notes: string | null;
   source: 'manual' | 'receipt';
@@ -27,6 +28,7 @@ function fromRow(row: ExpenseRow): Expense {
     amountCents: Math.round(amount * 100),
     merchant: row.merchant,
     categoryId: row.category_id,
+    walletId: row.wallet_id,
     transactionDate: row.transaction_date,
     notes: row.notes,
     source: row.source,
@@ -39,7 +41,7 @@ export async function getExpenses(): Promise<ExpenseResult<Expense[]>> {
   try {
     const { data, error } = await supabase
       .from('expenses')
-      .select('id,user_id,amount,merchant,category_id,transaction_date,notes,source,created_at,updated_at')
+      .select('id,user_id,amount,merchant,category_id,wallet_id,transaction_date,notes,source,created_at,updated_at')
       .order('transaction_date', { ascending: false })
       .order('created_at', { ascending: false });
 
@@ -64,11 +66,12 @@ export async function createExpense(input: CreateExpenseInput): Promise<ExpenseR
         amount,
         merchant: input.merchant,
         category_id: input.categoryId,
+        wallet_id: input.walletId || null,
         transaction_date: input.transactionDate,
         notes: input.notes || null,
         source: 'manual',
       })
-      .select('id,user_id,amount,merchant,category_id,transaction_date,notes,source,created_at,updated_at')
+      .select('id,user_id,amount,merchant,category_id,wallet_id,transaction_date,notes,source,created_at,updated_at')
       .single();
 
     if (error || !data) return { ok: false, message: SAFE_SAVE_ERROR };
@@ -86,11 +89,12 @@ export async function updateExpense(input: UpdateExpenseInput): Promise<ExpenseR
         amount: (input.amountCents / 100).toFixed(2),
         merchant: input.merchant,
         category_id: input.categoryId,
+        wallet_id: input.walletId || null,
         transaction_date: input.transactionDate,
         notes: input.notes || null,
       })
       .eq('id', input.id)
-      .select('id,user_id,amount,merchant,category_id,transaction_date,notes,source,created_at,updated_at')
+      .select('id,user_id,amount,merchant,category_id,wallet_id,transaction_date,notes,source,created_at,updated_at')
       .single();
 
     if (error || !data) return { ok: false, message: SAFE_UPDATE_ERROR };

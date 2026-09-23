@@ -22,6 +22,7 @@ import { BudgetProvider } from '@/features/budget/BudgetProvider';
 import { CategoriesProvider } from '@/features/categories/CategoriesProvider';
 import { DashboardCategoriesProvider } from '@/features/dashboard/DashboardCategoriesProvider';
 import { ExpensesProvider } from '@/features/expenses/ExpensesProvider';
+import { FinanceProvider } from '@/features/finance/FinanceProvider';
 import { NotificationsProvider } from '@/features/notifications/NotificationsProvider';
 import { ProfileProvider } from '@/features/profile/ProfileProvider';
 import { ReceiptProvider } from '@/features/receipts/ReceiptProvider';
@@ -49,7 +50,7 @@ export default function RootLayout() {
           <ProfileProvider>
             <SettingsProvider>
               <ExpensesProvider>
-                <ReceiptProvider><CategoriesProvider>
+                <FinanceProvider><ReceiptProvider><CategoriesProvider>
                   <BudgetProvider>
                     <DashboardCategoriesProvider>
                       <NotificationsProvider>
@@ -59,7 +60,7 @@ export default function RootLayout() {
                       </NotificationsProvider>
                     </DashboardCategoriesProvider>
                   </BudgetProvider>
-                </CategoriesProvider></ReceiptProvider>
+                </CategoriesProvider></ReceiptProvider></FinanceProvider>
               </ExpensesProvider>
             </SettingsProvider>
           </ProfileProvider>

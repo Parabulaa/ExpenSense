@@ -23,15 +23,15 @@ type IconName = Parameters<typeof AppIcon>[0]['name'];
 type MenuAction = {
   label: string;
   icon: IconName;
-  route: '/settings/account' | '/notifications' | '/settings/help';
+  route: '/profile' | '/notifications' | '/settings/help';
   x: number;
   y: number;
 };
 
 const ACTIONS: MenuAction[] = [
-  { label: 'Account', icon: 'account-outline', route: '/settings/account', x: 24, y: 6 },
-  { label: 'Notifications', icon: 'bell-outline', route: '/notifications', x: 0, y: 64 },
-  { label: 'FAQ', icon: 'help-circle-outline', route: '/settings/help', x: 35, y: 122 },
+  { label: 'Settings', icon: 'cog-outline', route: '/profile', x: 20, y: 4 },
+  { label: 'Notifications', icon: 'bell-outline', route: '/notifications', x: 20, y: 62 },
+  { label: 'FAQ', icon: 'help-circle-outline', route: '/settings/help', x: 20, y: 120 },
 ];
 
 export function FloatingRadialMenu() {
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
   host: {
     position: 'absolute',
     right: 12,
-    width: 210,
+    width: 205,
     height: 180,
     zIndex: 40,
   },
@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: 7,
+    gap: 8,
   },
   actionLabel: {
     maxWidth: 88,
