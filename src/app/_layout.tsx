@@ -22,6 +22,7 @@ import { BudgetProvider } from '@/features/budget/BudgetProvider';
 import { CategoriesProvider } from '@/features/categories/CategoriesProvider';
 import { DashboardCategoriesProvider } from '@/features/dashboard/DashboardCategoriesProvider';
 import { ExpensesProvider } from '@/features/expenses/ExpensesProvider';
+import { AddExpenseOverlayProvider } from '@/features/expenses/AddExpenseOverlayProvider';
 import { FinanceProvider } from '@/features/finance/FinanceProvider';
 import { NotificationsProvider } from '@/features/notifications/NotificationsProvider';
 import { ProfileProvider } from '@/features/profile/ProfileProvider';
@@ -55,7 +56,9 @@ export default function RootLayout() {
                     <DashboardCategoriesProvider>
                       <NotificationsProvider>
                         <ToastProvider>
-                          <RootNavigation />
+                          <AddExpenseOverlayProvider>
+                            <RootNavigation />
+                          </AddExpenseOverlayProvider>
                         </ToastProvider>
                       </NotificationsProvider>
                     </DashboardCategoriesProvider>

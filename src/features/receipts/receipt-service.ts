@@ -46,6 +46,7 @@ export async function saveReceiptExpense(draft: ReceiptDraft): Promise<ExpenseRe
       p_transaction_date: draft.transactionDate, p_notes: draft.notes.trim() || null, p_receipt_path: path,
       p_receipt_confidence: draft.confidence, p_receipt_subtotal: (draft.subtotalCents / 100).toFixed(2), p_receipt_tax: (draft.taxCents / 100).toFixed(2),
       p_items: draft.items.map((item) => ({ name: item.name, quantity: item.quantity, line_total: (item.lineTotalCents / 100).toFixed(2) })),
+      p_wallet_id: draft.walletId || null,
     });
     if (error || !data) {
       await supabase.storage.from('receipts').remove([path]);

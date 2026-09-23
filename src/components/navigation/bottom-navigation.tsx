@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, shadow } from '@/constants/theme';
 import { AppIcon, AppText } from '@/components/common/ui';
 import { PressableScale } from '@/components/common/motion';
+import { useAddExpenseOverlay } from '@/features/expenses/AddExpenseOverlayProvider';
 
 const items = [
   { label: 'Home', icon: 'home', path: '/home' },
@@ -31,6 +32,7 @@ export function useBottomNavInset() {
 }
 
 export function BottomNavigation() {
+  const { openAddExpense } = useAddExpenseOverlay();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -51,7 +53,7 @@ export function BottomNavigation() {
               accessibilityLabel={item.label}
               onPress={() => {
                 if (isScan) {
-                  router.push({ pathname: '/add-expense', params: { returnTo: pathname } } as never);
+                  openAddExpense();
                   return;
                 }
                 router.replace(item.path as never);

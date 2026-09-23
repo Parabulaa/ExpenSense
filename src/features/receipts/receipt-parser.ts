@@ -55,5 +55,5 @@ export function parseReceipt(rawText: string, image: ReceiptImage, providerConfi
   if (!items.length) issues.push('No line items were confidently detected');
   if (resolvedSubtotal && resolvedTotal && Math.abs(resolvedSubtotal + tax - resolvedTotal) > 2) issues.push('Subtotal and tax do not match the total');
   const confidence = Math.max(0, Math.min(100, Math.round(providerConfidence * 70 + Math.min(score, 8) / 8 * 30)));
-  return { image, merchant, transactionDate: dateFromText(rawText), items, subtotalCents: resolvedSubtotal, taxCents: tax, totalCents: resolvedTotal, categoryId: '', notes: '', rawText, confidence, structureScore: score, issues };
+  return { image, merchant, transactionDate: dateFromText(rawText), items, subtotalCents: resolvedSubtotal, taxCents: tax, totalCents: resolvedTotal, categoryId: '', walletId: '', notes: '', rawText, confidence, structureScore: score, issues };
 }

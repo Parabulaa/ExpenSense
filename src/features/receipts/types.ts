@@ -21,6 +21,7 @@ export type ReceiptDraft = {
   taxCents: number;
   totalCents: number;
   categoryId: string;
+  walletId: string;
   notes: string;
   rawText: string;
   confidence: number;

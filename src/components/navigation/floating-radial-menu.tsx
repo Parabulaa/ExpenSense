@@ -24,14 +24,16 @@ type MenuAction = {
   label: string;
   icon: IconName;
   route: '/profile' | '/notifications' | '/settings/help';
-  x: number;
-  y: number;
+  right: number;
+  top: number;
+  originX: number;
+  originY: number;
 };
 
 const ACTIONS: MenuAction[] = [
-  { label: 'Settings', icon: 'cog-outline', route: '/profile', x: 20, y: 4 },
-  { label: 'Notifications', icon: 'bell-outline', route: '/notifications', x: 20, y: 62 },
-  { label: 'FAQ', icon: 'help-circle-outline', route: '/settings/help', x: 20, y: 120 },
+  { label: 'Settings', icon: 'cog-outline', route: '/profile', right: 79, top: 4, originX: 70, originY: 3 },
+  { label: 'Notifications', icon: 'bell-outline', route: '/notifications', right: 64, top: 48, originX: 55, originY: -41 },
+  { label: 'FAQ', icon: 'help-circle-outline', route: '/settings/help', right: 9, top: 74, originX: 0, originY: -67 },
 ];
 
 export function FloatingRadialMenu() {
@@ -56,6 +58,11 @@ export function FloatingRadialMenu() {
       ) : null}
 
       <View pointerEvents="box-none" style={[styles.host, { top: insets.top + 4 }]}>
+        {open ? <View pointerEvents="none" style={styles.connectors}>
+          <View style={[styles.connector, styles.connectorSettings]} />
+          <View style={[styles.connector, styles.connectorNotifications]} />
+          <View style={[styles.connector, styles.connectorFaq]} />
+        </View> : null}
         {ACTIONS.map((action, index) => (
           <RadialAction
             action={action}
@@ -99,14 +106,14 @@ function RadialAction({ action, badge, index, open, onPress }: { action: MenuAct
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: progress.value,
     transform: [
-      { translateX: interpolate(progress.value, [0, 1], [182 - action.x, 0]) },
-      { translateY: interpolate(progress.value, [0, 1], [10 - action.y, 0]) },
+      { translateX: interpolate(progress.value, [0, 1], [action.originX, 0]) },
+      { translateY: interpolate(progress.value, [0, 1], [action.originY, 0]) },
       { scale: interpolate(progress.value, [0, 1], [0.54, 1]) },
     ],
   }));
 
   return (
-    <Animated.View pointerEvents={open ? 'auto' : 'none'} style={[styles.actionWrap, { left: action.x, top: action.y }, animatedStyle]}>
+    <Animated.View pointerEvents={open ? 'auto' : 'none'} style={[styles.actionWrap, { right: action.right, top: action.top }, animatedStyle]}>
       <AppText variant="small" numberOfLines={1} style={styles.actionLabel}>{action.label}</AppText>
       <PressableScale
         accessibilityRole="button"
@@ -134,22 +141,23 @@ const styles = StyleSheet.create({
   host: {
     position: 'absolute',
     right: 12,
-    width: 205,
-    height: 180,
+    width: 224,
+    height: 144,
     zIndex: 40,
   },
   trigger: {
     position: 'absolute',
     right: 4,
     top: 2,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,253,247,.97)',
     borderWidth: 1.5,
     borderColor: '#C6D3C1',
+    zIndex: 2,
     ...shadow,
   },
   triggerOpen: {
@@ -158,13 +166,15 @@ const styles = StyleSheet.create({
   },
   actionWrap: {
     position: 'absolute',
+    width: 150,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: 8,
+    zIndex: 2,
   },
   actionLabel: {
-    maxWidth: 88,
+    maxWidth: 96,
     paddingHorizontal: 7,
     paddingVertical: 3,
     borderRadius: radii.pill,
@@ -176,8 +186,8 @@ const styles = StyleSheet.create({
     lineHeight: 14,
   },
   action: {
-    width: 43,
-    height: 43,
+    width: 44,
+    height: 44,
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
@@ -201,4 +211,9 @@ const styles = StyleSheet.create({
     borderColor: colors.surface,
   },
   badgeText: { color: colors.surface, fontSize: 8, lineHeight: 10, fontFamily: 'JakartaBold' },
+  connectors: { ...StyleSheet.absoluteFill },
+  connector: { position: 'absolute', height: 1.5, borderRadius: 1, backgroundColor: 'rgba(77,112,82,.52)' },
+  connectorSettings: { left: 145, top: 25, width: 21 },
+  connectorNotifications: { left: 154, top: 50, width: 20, transform: [{ rotate: '-36deg' }] },
+  connectorFaq: { left: 192, top: 56, width: 1.5, height: 18 },
 });

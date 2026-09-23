@@ -21,8 +21,10 @@ import { useBudgets } from '@/features/budget/BudgetProvider';
 import { parseBudgetAmount } from '@/features/budget/validation';
 import { useCategories } from '@/features/categories/CategoriesProvider';
 import { MAX_DASHBOARD_CATEGORIES } from '@/features/dashboard/dashboard-data';
+import type { DashboardCategory } from '@/features/dashboard/dashboard-data';
 import { useDashboardCategories } from '@/features/dashboard/DashboardCategoriesProvider';
 import { useExpenses } from '@/features/expenses/ExpensesProvider';
+import { useAddExpenseOverlay } from '@/features/expenses/AddExpenseOverlayProvider';
 import { useFinance } from '@/features/finance/FinanceProvider';
 import { useProfile } from '@/features/profile/ProfileProvider';
 import type { Expense, ExpenseFormErrors, ExpenseFormValues } from '@/features/expenses/types';
@@ -43,6 +45,7 @@ const CATEGORY_TONES: Record<string, { background: string; foreground: string }>
 export { HomeScreen } from './home-screen';
 
 export function TransactionsScreen() {
+  const { openAddExpense } = useAddExpenseOverlay();
   const { categories } = useCategories();
   const { expenses, loading, loadError, refresh } = useExpenses();
   const bottomInset = useBottomNavInset();
@@ -115,7 +118,7 @@ export function TransactionsScreen() {
         <Animated.View layout={LinearTransition.duration(180)} style={s.transactionToolbar}>
           {searchOpen ? <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} style={s.searchExpanded}><AppIcon name="magnify" size={21} color={colors.muted} /><TextInput autoFocus accessibilityLabel="Search transactions" placeholder="Search transactions..." placeholderTextColor={colors.muted} value={query} onChangeText={setQuery} style={s.searchInput} /><PressableScale accessibilityLabel="Close transaction search" onPress={() => { setQuery(''); setSearchOpen(false); }} style={s.searchClose}><AppIcon name="close" size={19} /></PressableScale></Animated.View> : <><PressableScale accessibilityRole="button" accessibilityLabel="Open transaction search" onPress={() => setSearchOpen(true)} style={s.searchCompact}><AppIcon name="magnify" size={22} color={colors.deepForest} /></PressableScale><FilterButton label="Date" active={dateFilter !== 'all'} flex={0.9} onPress={() => setPicker('date')} /><FilterButton label="Category" active={categoryFilter !== 'all'} flex={1.25} onPress={() => setPicker('category')} /><FilterButton label="Sort" active={sort !== 'newest'} flex={0.9} onPress={() => setPicker('sort')} /></>}
         </Animated.View>
-        <Animated.View key={calendarMonth} entering={FadeIn.duration(180)}><SpendingCalendar expenses={expenses} month={calendarMonth} selectedDate={selectedCalendarDate} onMonthChange={(next) => { setCalendarMonth(next); setDateFilter('all'); setSelectedCalendarDate(null); }} onSelectDate={(date) => { setDateFilter('all'); setSelectedCalendarDate(date); }} /></Animated.View>
+        <Animated.View key={calendarMonth} entering={FadeIn.duration(180)}><SpendingCalendar expenses={expenses} categories={categories} month={calendarMonth} selectedDate={selectedCalendarDate} onMonthChange={(next) => { setCalendarMonth(next); setDateFilter('all'); setSelectedCalendarDate(null); }} onSelectDate={(date) => { setDateFilter('all'); setSelectedCalendarDate(date); }} /></Animated.View>
         {hasFilters ? <Pressable accessibilityRole="button" accessibilityLabel="Clear transaction filters" onPress={clearFilters} style={s.clearFilters}><AppIcon name="filter-remove-outline" size={17} /><AppText variant="small" style={s.clearFiltersText}>Clear filters</AppText></Pressable> : null}
 
         {loading && expenses.length === 0 ? (
@@ -132,7 +135,7 @@ export function TransactionsScreen() {
             <View style={s.emptyIcon}><AppIcon name="receipt-text-outline" size={31} /></View>
             <AppText variant="h2">{hasFilters ? 'No matching transactions' : 'No transactions yet'}</AppText>
             <AppText style={[s.muted, s.center]}>{hasFilters ? 'No transactions match these filters.' : 'Add your first expense to start tracking your spending.'}</AppText>
-            {hasFilters ? <SecondaryButton title="Clear Filters" onPress={clearFilters} /> : <PrimaryButton title="Add Expense" icon="plus" onPress={() => router.push('/add-expense')} />}
+            {hasFilters ? <SecondaryButton title="Clear Filters" onPress={clearFilters} /> : <PrimaryButton title="Add Expense" icon="plus" onPress={openAddExpense} />}
           </Card>
         ) : groups.map((group) => (
           <View key={group.date}>
@@ -170,7 +173,7 @@ function shiftMonth(month: string, delta: number) {
   return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function SpendingCalendar({ expenses, month, selectedDate, onMonthChange, onSelectDate }: { expenses: Expense[]; month: string; selectedDate: string | null; onMonthChange: (month: string) => void; onSelectDate: (date: string | null) => void }) {
+function SpendingCalendar({ expenses, categories, month, selectedDate, onMonthChange, onSelectDate }: { expenses: Expense[]; categories: DashboardCategory[]; month: string; selectedDate: string | null; onMonthChange: (month: string) => void; onSelectDate: (date: string | null) => void }) {
   const [year, monthNumber] = month.split('-').map(Number);
   const days = new Date(year, monthNumber, 0).getDate();
   const leading = new Date(year, monthNumber - 1, 1).getDay();
@@ -178,7 +181,9 @@ function SpendingCalendar({ expenses, month, selectedDate, onMonthChange, onSele
   while (cells.length % 7) cells.push(null);
   const monthExpenses = expenses.filter((expense) => expense.transactionDate.startsWith(month));
   const totals = new Map<string, number>();
+  const categoryTotals = new Map<string, Map<string, number>>();
   monthExpenses.forEach((expense) => totals.set(expense.transactionDate, (totals.get(expense.transactionDate) ?? 0) + expense.amountCents));
+  monthExpenses.forEach((expense) => { const day = categoryTotals.get(expense.transactionDate) ?? new Map<string, number>(); day.set(expense.categoryId, (day.get(expense.categoryId) ?? 0) + expense.amountCents); categoryTotals.set(expense.transactionDate, day); });
   const monthTotal = monthExpenses.reduce((sum, expense) => sum + expense.amountCents, 0);
   const selectedTotal = selectedDate ? totals.get(selectedDate) ?? 0 : 0;
 
@@ -188,19 +193,23 @@ function SpendingCalendar({ expenses, month, selectedDate, onMonthChange, onSele
       <View style={{ alignItems: 'center' }}><AppText variant="h2">{formatMonth(month)}</AppText><AppText variant="small" style={s.muted}>{monthExpenses.length} transaction{monthExpenses.length === 1 ? '' : 's'}</AppText></View>
       <PressableScale accessibilityRole="button" accessibilityLabel="Next spending month" onPress={() => onMonthChange(shiftMonth(month, 1))} style={s.calendarNav}><AppIcon name="chevron-right" size={21} /></PressableScale>
     </View>
+    <View style={s.calendarSummary}>
+      <View><AppText variant="small" style={s.muted}>Month spent</AppText><AppText variant="h3">{compactCurrency(monthTotal)}</AppText></View>
+      <View style={{ alignItems: 'center' }}><AppText variant="small" style={s.muted}>Active days</AppText><AppText variant="h3">{totals.size}</AppText></View>
+      <View style={{ alignItems: 'flex-end' }}><AppText variant="small" style={s.muted}>{selectedDate ? 'Selected day' : 'Daily average'}</AppText><AppText variant="h3">{compactCurrency(selectedDate ? selectedTotal : totals.size ? Math.round(monthTotal / totals.size) : 0)}</AppText></View>
+    </View>
     <View style={s.calendarWeek}>{CALENDAR_WEEKDAYS.map((label, index) => <View key={`${label}-${index}`} style={s.calendarCell}><AppText variant="small" style={s.calendarWeekday}>{label}</AppText></View>)}</View>
     <View style={s.calendarGrid}>{cells.map((day, index) => {
       if (!day) return <View key={`blank-${index}`} style={s.calendarCell} />;
       const date = `${month}-${String(day).padStart(2, '0')}`;
       const total = totals.get(date) ?? 0;
       const selected = date === selectedDate;
-      return <View key={date} style={s.calendarCell}><PressableScale scaleTo={0.92} accessibilityRole="button" accessibilityLabel={`${date}${total ? `, spent ${compactCurrency(total)}` : ', no spending'}`} accessibilityState={{ selected }} onPress={() => onSelectDate(selected ? null : date)} style={[s.calendarDay, total > 0 && s.calendarDayHasSpending, selected && s.calendarDaySelected]}><AppText variant="bodyMedium" style={selected ? s.calendarDaySelectedText : undefined}>{day}</AppText>{total > 0 ? <AppText numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[s.calendarAmount, selected && s.calendarDaySelectedText]}>{compactCurrency(total)}</AppText> : null}</PressableScale></View>;
+      const dominantId = [...(categoryTotals.get(date)?.entries() ?? [])].sort((a, b) => b[1] - a[1])[0]?.[0];
+      const category = categories.find(item => item.id === dominantId);
+      const categoryColor = category?.color ?? CATEGORY_TONES[dominantId ?? '']?.foreground ?? colors.forest;
+      const categoryLabel = category?.fullLabel ?? dominantId;
+      return <View key={date} style={s.calendarCell}><PressableScale scaleTo={0.92} accessibilityRole="button" accessibilityLabel={`${date}${total ? `, spent ${compactCurrency(total)}${categoryLabel ? `, mostly ${categoryLabel}` : ''}` : ', no spending'}`} accessibilityState={{ selected }} onPress={() => onSelectDate(selected ? null : date)} style={[s.calendarDay, total > 0 && s.calendarDayHasSpending, total > 0 && !selected && { backgroundColor: `${categoryColor}20`, borderColor: `${categoryColor}70` }, selected && s.calendarDaySelected]}><AppText variant="bodyMedium" style={selected ? s.calendarDaySelectedText : undefined}>{day}</AppText>{total > 0 ? <AppText numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[s.calendarAmount, !selected && { color: categoryColor }, selected && s.calendarDaySelectedText]}>{compactCurrency(total)}</AppText> : null}</PressableScale></View>;
     })}</View>
-    <View style={s.calendarSummary}>
-      <View><AppText variant="small" style={s.muted}>Month spent</AppText><AppText variant="h3">{compactCurrency(monthTotal)}</AppText></View>
-      <View style={{ alignItems: 'center' }}><AppText variant="small" style={s.muted}>Active days</AppText><AppText variant="h3">{totals.size}</AppText></View>
-      <View style={{ alignItems: 'flex-end' }}><AppText variant="small" style={s.muted}>{selectedDate ? 'Selected day' : 'Daily average'}</AppText><AppText variant="h3">{compactCurrency(selectedDate ? selectedTotal : totals.size ? Math.round(monthTotal / totals.size) : 0)}</AppText></View>
-    </View>
     {selectedDate ? <Pressable accessibilityRole="button" accessibilityLabel="Show every transaction in this month" onPress={() => onSelectDate(null)} style={s.calendarSelection}><AppText variant="small" style={s.calendarSelectionText}>Showing {formatExpenseDate(selectedDate)} · Tap to clear</AppText></Pressable> : null}
   </Card>;
 }
@@ -476,6 +485,7 @@ export function BudgetScreen() {
 }
 
 export function AnalyticsScreen() {
+  const { openAddExpense } = useAddExpenseOverlay();
   const { expenses, loading, loadError, refresh } = useExpenses();
   const { allCategories } = useCategories();
   const bottomInset = useBottomNavInset();
@@ -500,7 +510,7 @@ export function AnalyticsScreen() {
           <PressableScale onPress={() => setMode('spending')} style={[s.segmentHalf, mode === 'spending' && s.segmentActive]}><AppText variant="h3" style={mode === 'spending' ? s.segmentActiveText : s.muted}>Spending</AppText></PressableScale>
           <PressableScale onPress={() => setMode('trends')} style={[s.segmentHalf, mode === 'trends' && s.segmentActive]}><AppText variant="h3" style={mode === 'trends' ? s.segmentActiveText : s.muted}>Trends</AppText></PressableScale>
         </View>
-        {loading && expenses.length === 0 ? <Card style={s.analyticsLoading}><ActivityIndicator color={colors.deepForest} /><View style={s.analyticsSkeletonCircle} /><View style={s.skeletonLineWide} /></Card> : loadError ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load analytics.</AppText><AppText style={[s.muted, s.center]}>Check your connection and try again.</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : analytics.expenses.length === 0 ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="chart-donut" size={30} /></View><AppText variant="h2">No spending data yet</AppText><AppText style={[s.muted, s.center]}>Add expenses to start seeing your spending patterns.</AppText><PrimaryButton title="Add Expense" onPress={() => router.push('/add-expense')} /></Card> : mode === 'spending' ? <Card style={s.analyticsCard}><DonutChart slices={analytics.categorySlices} refreshKey={month}><AppText variant="title" adjustsFontSizeToFit numberOfLines={1}>{compactCurrency(analytics.totalCents)}</AppText><AppText style={s.muted}>Total Spending</AppText></DonutChart><View style={s.legendList}>{analytics.categorySlices.map((slice) => <View style={s.legend} key={slice.id}><View style={[s.legendDot, { backgroundColor: slice.color }]} /><AppText style={[s.muted, s.legendLabel]} numberOfLines={1}>{slice.label}</AppText><AppText style={[s.muted, s.legendValue]}>{formatPercent(slice.percentage)}</AppText></View>)}</View></Card> : <Card style={s.trendsCard}><View style={s.rowBetween}><View><AppText style={s.muted}>This month</AppText><AppText variant="title">{compactCurrency(analytics.totalCents)}</AppText></View><View style={s.trendChange}><AppIcon name={change !== null && change > 0 ? 'trending-up' : 'trending-down'} size={20} color={change !== null && change > 0 ? colors.danger : colors.success} /><AppText variant="h3" style={{ color: change !== null && change > 0 ? colors.danger : colors.success }}>{change === null ? 'No comparison' : `${change > 0 ? '+' : ''}${change}%`}</AppText></View></View>{previous.totalCents === 0 || analytics.expenses.length < 2 ? <View style={s.trendEmpty}><AppText variant="h2">Not enough history yet</AppText><AppText style={[s.muted, s.center]}>Keep tracking expenses and your trends will appear here.</AppText></View> : <><View style={s.barChart}>{analytics.dailyTotals.map((item) => <View key={item.day} style={s.barColumn}><View style={[s.bar, { height: Math.max(8, Math.round((item.amountCents / maxDay) * 130)) }]} /><AppText variant="small" style={s.muted}>{item.day}</AppText></View>)}</View><View style={s.trendMetrics}><TrendMetric label={`${formatMonth(priorMonth)} total`} value={compactCurrency(previous.totalCents)} /><TrendMetric label="Daily average" value={compactCurrency(analytics.averageDailyCents)} /><TrendMetric label="Highest-spend day" value={analytics.highestDay ? `${monthLabel.split(' ')[0]} ${analytics.highestDay.day} · ${compactCurrency(analytics.highestDay.amountCents)}` : '—'} /></View></>}</Card>}
+        {loading && expenses.length === 0 ? <Card style={s.analyticsLoading}><ActivityIndicator color={colors.deepForest} /><View style={s.analyticsSkeletonCircle} /><View style={s.skeletonLineWide} /></Card> : loadError ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load analytics.</AppText><AppText style={[s.muted, s.center]}>Check your connection and try again.</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : analytics.expenses.length === 0 ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="chart-donut" size={30} /></View><AppText variant="h2">No spending data yet</AppText><AppText style={[s.muted, s.center]}>Add expenses to start seeing your spending patterns.</AppText><PrimaryButton title="Add Expense" onPress={openAddExpense} /></Card> : mode === 'spending' ? <Card style={s.analyticsCard}><DonutChart slices={analytics.categorySlices} refreshKey={month}><AppText variant="title" adjustsFontSizeToFit numberOfLines={1}>{compactCurrency(analytics.totalCents)}</AppText><AppText style={s.muted}>Total Spending</AppText></DonutChart><View style={s.legendList}>{analytics.categorySlices.map((slice) => <View style={s.legend} key={slice.id}><View style={[s.legendDot, { backgroundColor: slice.color }]} /><AppText style={[s.muted, s.legendLabel]} numberOfLines={1}>{slice.label}</AppText><AppText style={[s.muted, s.legendValue]}>{formatPercent(slice.percentage)}</AppText></View>)}</View></Card> : <Card style={s.trendsCard}><View style={s.rowBetween}><View><AppText style={s.muted}>This month</AppText><AppText variant="title">{compactCurrency(analytics.totalCents)}</AppText></View><View style={s.trendChange}><AppIcon name={change !== null && change > 0 ? 'trending-up' : 'trending-down'} size={20} color={change !== null && change > 0 ? colors.danger : colors.success} /><AppText variant="h3" style={{ color: change !== null && change > 0 ? colors.danger : colors.success }}>{change === null ? 'No comparison' : `${change > 0 ? '+' : ''}${change}%`}</AppText></View></View>{previous.totalCents === 0 || analytics.expenses.length < 2 ? <View style={s.trendEmpty}><AppText variant="h2">Not enough history yet</AppText><AppText style={[s.muted, s.center]}>Keep tracking expenses and your trends will appear here.</AppText></View> : <><View style={s.barChart}>{analytics.dailyTotals.map((item) => <View key={item.day} style={s.barColumn}><View style={[s.bar, { height: Math.max(8, Math.round((item.amountCents / maxDay) * 130)) }]} /><AppText variant="small" style={s.muted}>{item.day}</AppText></View>)}</View><View style={s.trendMetrics}><TrendMetric label={`${formatMonth(priorMonth)} total`} value={compactCurrency(previous.totalCents)} /><TrendMetric label="Daily average" value={compactCurrency(analytics.averageDailyCents)} /><TrendMetric label="Highest-spend day" value={analytics.highestDay ? `${monthLabel.split(' ')[0]} ${analytics.highestDay.day} · ${compactCurrency(analytics.highestDay.amountCents)}` : '—'} /></View></>}</Card>}
         {analytics.expenses.length > 0 ? <InsightsLink month={month} /> : null}
       </View>
       <MonthPickerModal visible={monthPicker} title="Choose Analytics Month" value={monthDraft} onChange={setMonthDraft} onClose={() => setMonthPicker(false)} onConfirm={(value) => setMonth(value.slice(0, 7))} />
@@ -534,6 +544,7 @@ function InsightsLink({ month }: { month: string }) {
 }
 
 export function InsightsScreen() {
+  const { openAddExpense } = useAddExpenseOverlay();
   const params = useLocalSearchParams<{ month?: string }>();
   const { expenses, loading, loadError, refresh } = useExpenses();
   const { allCategories } = useCategories();
@@ -554,7 +565,7 @@ export function InsightsScreen() {
           </View>
           <Image source={assets.mascotScanning} contentFit="contain" style={s.insightMascot} />
         </View>
-        {loading && expenses.length === 0 ? <Card style={s.analyticsLoading}><ActivityIndicator color={colors.deepForest} /><View style={s.skeletonLineWide} /><View style={s.skeletonLine} /></Card> : loadError ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load insights.</AppText><AppText style={[s.muted, s.center]}>Check your connection and try again.</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : insights.length === 0 ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="lightbulb-outline" size={30} /></View><AppText variant="h2">No insights yet</AppText><AppText style={[s.muted, s.center]}>Add expenses for {formatMonth(month)} to reveal useful spending patterns.</AppText><PrimaryButton title="Add Expense" onPress={() => router.push('/add-expense')} /></Card> : insights.map((insight) => <PressableScale key={insight.id} disabled={!insight.destination} onPress={() => { if (!insight.destination) return; if (insight.destination === '/transactions' && insight.filterQuery) { router.push({ pathname: '/transactions', params: { q: insight.filterQuery } }); return; } router.push(insight.destination); }}><Card style={s.insightCard}><View style={s.insightIcon}><AppIcon name={insight.icon} size={32} color={colors.deepForest} /></View><View style={{ flex: 1 }}><AppText style={s.muted}>{insight.label}</AppText><AppText variant="h2">{insight.title}</AppText><AppText style={s.muted}>{insight.detail}</AppText></View>{insight.destination ? <AppIcon name="chevron-right" size={28} color={colors.deepForest} /> : null}</Card></PressableScale>)}
+        {loading && expenses.length === 0 ? <Card style={s.analyticsLoading}><ActivityIndicator color={colors.deepForest} /><View style={s.skeletonLineWide} /><View style={s.skeletonLine} /></Card> : loadError ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load insights.</AppText><AppText style={[s.muted, s.center]}>Check your connection and try again.</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : insights.length === 0 ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="lightbulb-outline" size={30} /></View><AppText variant="h2">No insights yet</AppText><AppText style={[s.muted, s.center]}>Add expenses for {formatMonth(month)} to reveal useful spending patterns.</AppText><PrimaryButton title="Add Expense" onPress={openAddExpense} /></Card> : insights.map((insight) => <PressableScale key={insight.id} disabled={!insight.destination} onPress={() => { if (!insight.destination) return; if (insight.destination === '/transactions' && insight.filterQuery) { router.push({ pathname: '/transactions', params: { q: insight.filterQuery } }); return; } router.push(insight.destination); }}><Card style={s.insightCard}><View style={s.insightIcon}><AppIcon name={insight.icon} size={32} color={colors.deepForest} /></View><View style={{ flex: 1 }}><AppText style={s.muted}>{insight.label}</AppText><AppText variant="h2">{insight.title}</AppText><AppText style={s.muted}>{insight.detail}</AppText></View>{insight.destination ? <AppIcon name="chevron-right" size={28} color={colors.deepForest} /> : null}</Card></PressableScale>)}
       </View>
     </Screen>
   );
@@ -885,7 +896,7 @@ const s = StyleSheet.create({
   calendarDaySelected: { backgroundColor: colors.deepForest, borderColor: colors.deepForest },
   calendarDaySelectedText: { color: colors.surface },
   calendarAmount: { width: '100%', paddingHorizontal: 1, textAlign: 'center', color: colors.forest, fontFamily: 'JakartaSemiBold', fontSize: 9, lineHeight: 12 },
-  calendarSummary: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 12 },
+  calendarSummary: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8, borderBottomWidth: 1, borderBottomColor: colors.line, paddingBottom: 12 },
   calendarSelection: { alignSelf: 'center', paddingHorizontal: 12, paddingVertical: 7, borderRadius: radii.pill, backgroundColor: colors.pale },
   calendarSelectionText: { color: colors.deepForest, fontFamily: 'JakartaSemiBold' },
   search: { height: 54, backgroundColor: 'rgba(232,238,227,.88)', borderRadius: radii.md, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 10 },
