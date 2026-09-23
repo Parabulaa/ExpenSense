@@ -26,6 +26,7 @@ import { useDashboardCategories } from '@/features/dashboard/DashboardCategories
 import { useExpenses } from '@/features/expenses/ExpensesProvider';
 import { useAddExpenseOverlay } from '@/features/expenses/AddExpenseOverlayProvider';
 import { useFinance } from '@/features/finance/FinanceProvider';
+import { AddWalletCard, HIDDEN_AMOUNT, WalletCardFace } from '@/features/finance/components/WalletCardFace';
 import { useProfile } from '@/features/profile/ProfileProvider';
 import type { Expense, ExpenseFormErrors, ExpenseFormValues } from '@/features/expenses/types';
 import { formatExpenseDate, normalizeAmountInput, todayLocalDate, validateExpenseForm } from '@/features/expenses/validation';
@@ -364,12 +365,12 @@ function InfoRow({ label, value, bold = false }: { label: string; value: string;
   );
 }
 
-export function BudgetScreen() {
+export function WalletScreen() {
   const { categories } = useCategories();
   const categoryLibrary = categories;
   const bottomInset = useBottomNavInset();
   const { expenses } = useExpenses();
-  const { wallets, goals } = useFinance();
+  const { wallets, goals, loading: walletsLoading, refresh: refreshFinance } = useFinance();
   const { budgets: monthlyBudgets, loading, error, refresh, saveMonthlyBudget, saveCategoryBudget, removeCategoryBudget } = useBudgets();
   const { showToast } = useToast();
   const currentMonth = todayLocalDate().slice(0, 7);
@@ -380,6 +381,9 @@ export function BudgetScreen() {
   const [amount, setAmount] = useState('');
   const [amountError, setAmountError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Balances are the one thing on this panel someone may not want read over
+  // their shoulder, so one toggle blanks every wallet-derived figure at once.
+  const [balancesHidden, setBalancesHidden] = useState(false);
   const budget = monthlyBudgets.find((item) => item.month === month);
   const monthExpenses = expenses.filter((item) => item.transactionDate.startsWith(month));
   const spentCents = monthExpenses.reduce((sum, item) => sum + item.amountCents, 0);
@@ -391,10 +395,18 @@ export function BudgetScreen() {
   const compact = (cents: number) => formatCompactPeso(Math.abs(cents), { alwaysShowDecimals: false });
   const monthLabel = new Intl.DateTimeFormat('en-PH', { month: 'long', year: 'numeric' }).format(new Date(`${month}-01T12:00:00`));
   const status = percentage >= 100 ? 'Budget exceeded' : percentage >= 90 ? 'Near budget limit' : percentage >= 70 ? 'Approaching limit' : 'On track';
+  const walletTotalCents = wallets.reduce((sum, item) => sum + item.balanceCents, 0);
+  const savedCents = goals.reduce((sum, item) => sum + item.currentCents, 0);
+  const secret = (value: string) => (balancesHidden ? HIDDEN_AMOUNT : value);
+
+  useFocusEffect(useCallback(() => { if (!consumeSkippedPanelRefresh('/wallet')) void refreshFinance(); }, [refreshFinance]));
 
   const openAddMonthly = () => { setAmount(''); setAmountError(null); setEditor({ type: 'addMonthly' }); };
   const openEditMonthly = () => { setAmount(budget ? (budget.amountCents / 100).toFixed(2) : ''); setAmountError(null); setEditor({ type: 'editMonthly' }); };
   const openCategory = (categoryId: string) => { const limit = budget?.categoryBudgets.find((item) => item.categoryId === categoryId); setAmount(limit ? (limit.amountCents / 100).toFixed(2) : ''); setAmountError(null); setEditor({ type: 'category', categoryId }); };
+  // Every wallet action lands on the same manage screen; the params only decide
+  // which sheet it opens with, so there is one place that edits a wallet.
+  const openWallets = (params: { wallet?: string; new?: '1' } = {}) => router.push({ pathname: '/wallets', params } as never);
   const save = async () => {
     if (!editor || saving) return;
     const cents = parseBudgetAmount(amount);
@@ -418,25 +430,102 @@ export function BudgetScreen() {
     showToast('Category limit removed.'); setEditor(null);
   };
   return (
-    <Screen embedded bottomInset={bottomInset} background={false} refreshing={loading} onRefresh={() => void refresh()}>
+    <Screen embedded bottomInset={bottomInset} background={false} refreshing={loading} onRefresh={() => { void refresh(); void refreshFinance(); }}>
       <View style={s.page}>
-        <AppText variant="hero">Budget</AppText>
-        <PressableScale accessibilityRole="button" accessibilityLabel={`Selected budget month: ${monthLabel}`} onPress={() => { setMonthDraft(`${month}-01`); setMonthPicker(true); }} style={s.budgetMonth}><AppText variant="h3">{monthLabel}</AppText><AppIcon name="calendar-month-outline" /></PressableScale>
-        {loading && monthlyBudgets.length === 0 ? <View style={s.skeletonCard} /> : error && monthlyBudgets.length === 0 ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load budgets</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : !budget ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="wallet-plus-outline" size={30} /></View><AppText variant="h2">No budget yet</AppText><AppText style={[s.muted, s.center]}>Add your first monthly budget amount to start tracking spending.</AppText><PrimaryButton title="Add Budget Amount" onPress={openAddMonthly} /></Card> : <Card style={s.monthlyBudgetCard}><View style={s.rowBetween}><AppText variant="h3">Monthly Budget</AppText><PressableScale accessibilityRole="button" accessibilityLabel="Edit total budget" onPress={openEditMonthly} style={s.editBudgetButton}><AppIcon name="pencil-outline" size={20} color={colors.muted} /></PressableScale></View><AppText variant="hero" adjustsFontSizeToFit numberOfLines={1}>{currency(budget.amountCents)}</AppText><View style={s.budgetSummary}><View style={s.budgetSummaryItem}><AppText variant="small" style={s.muted}>Spent</AppText><AppText variant="h3" style={{ color: colors.deepForest }}>{compact(spentCents)}</AppText></View><View style={[s.budgetSummaryItem, s.budgetSummaryRight]}><AppText variant="small" style={s.muted}>{remainingCents < 0 ? 'Over' : 'Left'}</AppText><AppText variant="h3" style={{ color: remainingCents < 0 ? colors.danger : colors.deepForest }}>{compact(remainingCents)}</AppText></View></View><View style={s.row}><ProgressBar value={Math.min(100, percentage)} /><AppText variant="h3" style={s.budgetPercent}>{percentage}%</AppText></View><StatusChip warning={percentage >= 90}>{status}</StatusChip><SecondaryButton title="Add to Budget" icon="plus" onPress={openAddMonthly} /></Card>}
-        <View style={s.financeTools}>
-          <PressableScale accessibilityRole="button" accessibilityLabel="Manage wallets" onPress={() => router.push('/wallets' as never)} style={s.financeTool}>
-            <View style={s.financeToolIcon}><AppIcon name="wallet-outline" size={25} /></View>
-            <AppText variant="h3">Wallets</AppText>
-            <AppText variant="small" style={s.muted}>{wallets.length ? `${wallets.length} payment source${wallets.length === 1 ? '' : 's'}` : 'Add a payment source'}</AppText>
-            <View style={s.financeToolLink}><AppText variant="small" style={s.financeToolLinkText}>Manage</AppText><AppIcon name="arrow-right" size={17} color={colors.forest} /></View>
-          </PressableScale>
-          <PressableScale accessibilityRole="button" accessibilityLabel="Manage savings goals" onPress={() => router.push('/goals' as never)} style={s.financeTool}>
-            <View style={s.financeToolIcon}><AppIcon name="target" size={25} /></View>
-            <AppText variant="h3">Savings Goals</AppText>
-            <AppText variant="small" style={s.muted}>{goals.length ? `${goals.length} active goal${goals.length === 1 ? '' : 's'}` : 'Create your first goal'}</AppText>
-            <View style={s.financeToolLink}><AppText variant="small" style={s.financeToolLinkText}>Manage</AppText><AppIcon name="arrow-right" size={17} color={colors.forest} /></View>
+        <AppText variant="hero">Wallet</AppText>
+
+        <View style={s.balanceCard}>
+          <View style={s.rowBetween}>
+            <AppText style={s.balanceCaption}>TOTAL BALANCE</AppText>
+            <PressableScale
+              accessibilityRole="button"
+              accessibilityLabel={balancesHidden ? 'Show balances' : 'Hide balances'}
+              hitSlop={8}
+              onPress={() => setBalancesHidden((value) => !value)}
+              style={s.balanceEye}
+            >
+              <AppIcon name={balancesHidden ? 'eye-off-outline' : 'eye-outline'} size={18} color={colors.white} />
+            </PressableScale>
+          </View>
+          <AppText adjustsFontSizeToFit numberOfLines={1} style={s.balanceValue}>{secret(currency(walletTotalCents))}</AppText>
+          <View style={s.balanceMetrics}>
+            <View style={s.balanceMetric}>
+              <AppText style={s.balanceCaption}>WALLETS</AppText>
+              <AppText numberOfLines={1} style={s.balanceMetricValue}>{wallets.length}</AppText>
+            </View>
+            <View style={s.balanceMetric}>
+              <AppText style={s.balanceCaption}>SAVED</AppText>
+              <AppText numberOfLines={1} style={s.balanceMetricValue}>{secret(compact(savedCents))}</AppText>
+            </View>
+            <View style={s.balanceMetric}>
+              <AppText style={s.balanceCaption}>LEFT TO SPEND</AppText>
+              <AppText numberOfLines={1} style={s.balanceMetricValue}>{budget ? secret(compact(remainingCents)) : '—'}</AppText>
+            </View>
+          </View>
+        </View>
+
+        <View style={s.sectionHead}>
+          <AppText variant="h2">My Wallets</AppText>
+          <PressableScale accessibilityRole="button" accessibilityLabel="Manage wallets" onPress={() => openWallets()} style={s.sectionLink}>
+            <AppText variant="small" style={s.sectionLinkText}>Manage{wallets.length ? ` (${wallets.length})` : ''}</AppText>
+            <AppIcon name="chevron-right" size={16} color={colors.forest} />
           </PressableScale>
         </View>
+        {walletsLoading && wallets.length === 0 ? (
+          <View style={s.walletGrid}>
+            <View style={s.walletCell}><View style={s.walletSkeleton} /></View>
+            <View style={s.walletCell}><View style={s.walletSkeleton} /></View>
+          </View>
+        ) : (
+          <View style={s.walletGrid}>
+            {wallets.map((wallet, index) => (
+              <View key={wallet.id} style={s.walletCell}>
+                <WalletCardFace
+                  wallet={wallet}
+                  index={index}
+                  hidden={balancesHidden}
+                  onPress={() => openWallets({ wallet: wallet.id })}
+                  onMore={() => openWallets({ wallet: wallet.id })}
+                />
+              </View>
+            ))}
+            <View style={s.walletCell}><AddWalletCard onPress={() => openWallets({ new: '1' })} /></View>
+          </View>
+        )}
+        {wallets.length ? (
+          <PressableScale accessibilityRole="button" accessibilityLabel="Add income or allowance" onPress={() => openWallets()} style={s.addMoneyRow}>
+            <AppIcon name="cash-plus" size={20} color={colors.forest} />
+            <AppText variant="bodyMedium" style={s.sectionLinkText}>Add income or allowance</AppText>
+          </PressableScale>
+        ) : (
+          <AppText style={s.muted}>Add a wallet to keep each source of money visible here.</AppText>
+        )}
+
+        <View style={s.sectionHead}>
+          <AppText variant="h2">Budget</AppText>
+          <PressableScale accessibilityRole="button" accessibilityLabel={`Selected budget month: ${monthLabel}`} onPress={() => { setMonthDraft(`${month}-01`); setMonthPicker(true); }} style={s.sectionLink}>
+            <AppText variant="small" style={s.sectionLinkText}>{monthLabel}</AppText>
+            <AppIcon name="calendar-month-outline" size={16} color={colors.forest} />
+          </PressableScale>
+        </View>
+        {loading && monthlyBudgets.length === 0 ? <View style={s.skeletonCard} /> : error && monthlyBudgets.length === 0 ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load budgets</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : !budget ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="wallet-plus-outline" size={30} /></View><AppText variant="h2">No budget yet</AppText><AppText style={[s.muted, s.center]}>Add your first monthly budget amount to start tracking spending.</AppText><PrimaryButton title="Add Budget Amount" onPress={openAddMonthly} /></Card> : <Card style={s.monthlyBudgetCard}><View style={s.rowBetween}><AppText variant="h3">Monthly Budget</AppText><PressableScale accessibilityRole="button" accessibilityLabel="Edit total budget" onPress={openEditMonthly} style={s.editBudgetButton}><AppIcon name="pencil-outline" size={20} color={colors.muted} /></PressableScale></View><AppText variant="hero" adjustsFontSizeToFit numberOfLines={1}>{currency(budget.amountCents)}</AppText><View style={s.budgetSummary}><View style={s.budgetSummaryItem}><AppText variant="small" style={s.muted}>Spent</AppText><AppText variant="h3" style={{ color: colors.deepForest }}>{compact(spentCents)}</AppText></View><View style={[s.budgetSummaryItem, s.budgetSummaryRight]}><AppText variant="small" style={s.muted}>{remainingCents < 0 ? 'Over' : 'Left'}</AppText><AppText variant="h3" style={{ color: remainingCents < 0 ? colors.danger : colors.deepForest }}>{compact(remainingCents)}</AppText></View></View><View style={s.row}><ProgressBar value={Math.min(100, percentage)} /><AppText variant="h3" style={s.budgetPercent}>{percentage}%</AppText></View><StatusChip warning={percentage >= 90}>{status}</StatusChip><SecondaryButton title="Add to Budget" icon="plus" onPress={openAddMonthly} /></Card>}
+
+        <View style={s.sectionHead}>
+          <AppText variant="h2">Savings Goals</AppText>
+          <PressableScale accessibilityRole="button" accessibilityLabel="Manage savings goals" onPress={() => router.push('/goals' as never)} style={s.sectionLink}>
+            <AppText variant="small" style={s.sectionLinkText}>Manage{goals.length ? ` (${goals.length})` : ''}</AppText>
+            <AppIcon name="chevron-right" size={16} color={colors.forest} />
+          </PressableScale>
+        </View>
+        <PressableScale accessibilityRole="button" accessibilityLabel="Open savings goals" onPress={() => router.push('/goals' as never)} style={s.goalsRow}>
+          <View style={s.goalsIcon}><AppIcon name="target" size={22} /></View>
+          <View style={s.budgetInfo}>
+            <AppText variant="h3">{goals.length ? `${goals.length} active goal${goals.length === 1 ? '' : 's'}` : 'No goals yet'}</AppText>
+            <AppText variant="small" style={s.muted}>{goals.length ? `${secret(compact(savedCents))} saved so far` : 'Create your first savings goal'}</AppText>
+          </View>
+          <AppIcon name="chevron-right" size={20} color={colors.muted} />
+        </PressableScale>
+
         <AppText variant="h2">Category Budgets</AppText>
         {!budget ? <AppText style={s.muted}>Set a monthly budget before adding category limits.</AppText> : budget.categoryBudgets.length === 0 ? <Card style={s.noLimits}><AppText variant="h3">No category limits yet</AppText><AppText style={s.muted}>Tap a category below to add one.</AppText></Card> : null}
         {categories.map((category) => {
@@ -952,7 +1041,6 @@ const s = StyleSheet.create({
   errorText: { color: colors.danger, marginTop: -8 },
   select: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   analyticsMonth: { minHeight: 68, borderRadius: radii.lg, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,253,247,.97)', ...shadow },
-  budgetMonth: { minHeight: 62, borderRadius: radii.lg, backgroundColor: 'rgba(255,253,247,.96)', borderWidth: 1, borderColor: colors.line, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   monthlyBudgetCard: { gap: 13, paddingVertical: 22 },
   editBudgetButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   budgetSummary: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
@@ -961,11 +1049,27 @@ const s = StyleSheet.create({
   budgetPercent: { flexShrink: 0, minWidth: 54, textAlign: 'right' },
   addBudgetContext: { gap: 10, padding: 14, borderRadius: radii.md, backgroundColor: colors.pale },
   noLimits: { gap: 4, backgroundColor: 'rgba(255,253,247,.9)' },
-  financeTools: { flexDirection: 'row', gap: 10 },
-  financeTool: { flex: 1, minHeight: 166, padding: 15, gap: 7, borderRadius: radii.md, backgroundColor: 'rgba(255,253,247,.96)', ...shadow },
-  financeToolIcon: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' },
-  financeToolLink: { marginTop: 'auto', flexDirection: 'row', gap: 5, alignItems: 'center' },
-  financeToolLinkText: { color: colors.forest, fontFamily: 'JakartaBold' },
+  /* Wallet panel: dark summary card, then a card-face grid of wallets. */
+  balanceCard: { borderRadius: radii.lg, padding: spacing.lg, gap: 6, backgroundColor: colors.deepForest, ...shadow },
+  balanceCaption: { color: 'rgba(255,255,255,.66)', fontFamily: 'JakartaSemiBold', fontSize: 9, lineHeight: 13, letterSpacing: 1.1 },
+  balanceEye: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,.14)' },
+  balanceValue: { color: colors.white, fontFamily: 'JakartaExtraBold', fontSize: 34, lineHeight: 41 },
+  balanceMetrics: { marginTop: 6, flexDirection: 'row', gap: 8 },
+  balanceMetric: { flex: 1, minWidth: 0, gap: 2, paddingVertical: 9, paddingHorizontal: 11, borderRadius: radii.sm, backgroundColor: 'rgba(255,255,255,.12)' },
+  balanceMetricValue: { color: colors.white, fontFamily: 'JakartaBold', fontSize: 15, lineHeight: 20 },
+  sectionHead: { marginTop: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  sectionLink: { minHeight: 34, flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 4 },
+  sectionLinkText: { color: colors.forest, fontFamily: 'JakartaBold' },
+  // Two columns with a gap; the cell holds the width so the card face itself
+  // only ever has to be 100% wide and keep its aspect ratio.
+  walletGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  // Fixed width, never flex-grow: a lone card in the last row must stay
+  // card-sized instead of stretching into a full-width slab.
+  walletCell: { width: '48%' },
+  walletSkeleton: { width: '100%', aspectRatio: 1.62, borderRadius: radii.md, backgroundColor: 'rgba(255,253,247,.9)' },
+  addMoneyRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: radii.md, backgroundColor: colors.pale },
+  goalsRow: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: radii.md, backgroundColor: 'rgba(255,253,247,.96)', ...shadow },
+  goalsIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' },
   segment: { flexDirection: 'row', borderRadius: radii.md, backgroundColor: colors.pale, padding: 4 },
   segmentActive: { flex: 1, height: 42, borderRadius: radii.sm, backgroundColor: colors.deepForest, alignItems: 'center', justifyContent: 'center' },
   segmentActiveText: { color: colors.surface },

@@ -699,7 +699,7 @@ export function HomeScreen() {
             label="Budget used"
             index={2}
             width={metricWidth}
-            onPress={() => router.push('/budget')}
+            onPress={() => router.push('/wallet')}
           />
           <MetricTile
             icon="wallet"
@@ -707,7 +707,7 @@ export function HomeScreen() {
             label={remaining < 0 ? 'Over budget' : 'Remaining'}
             index={3}
             width={metricWidth}
-            onPress={() => router.push('/budget')}
+            onPress={() => router.push('/wallet')}
           />
           <MetricTile
             icon="chart-bar"

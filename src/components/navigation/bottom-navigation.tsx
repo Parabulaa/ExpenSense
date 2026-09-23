@@ -11,7 +11,7 @@ const items = [
   { label: 'Transactions', icon: 'receipt-text-outline', path: '/transactions' },
   { label: 'Scan', icon: 'line-scan', path: '/add-expense', scan: true },
   { label: 'Analytics', icon: 'chart-bar', path: '/analytics' },
-  { label: 'Budget', icon: 'wallet-outline', path: '/budget' },
+  { label: 'Wallet', icon: 'wallet-outline', path: '/wallet' },
 ] as const;
 
 /** Height of the floating bar itself, excluding the safe-area gutter below it. */
@@ -44,7 +44,7 @@ export function BottomNavigation() {
     <View style={[styles.outer, { paddingBottom: bottomPadding }]} pointerEvents="box-none">
       <View style={[styles.wrap, { width: navigationWidth }]}>
         {items.map(item => {
-          const active = pathname === item.path || (item.label === 'Home' && pathname === '/categories') || (item.label === 'Analytics' && pathname === '/insights');
+          const active = pathname === item.path || (item.label === 'Home' && pathname === '/categories') || (item.label === 'Analytics' && pathname === '/insights') || (item.label === 'Wallet' && (pathname === '/wallets' || pathname === '/goals'));
           const isScan = 'scan' in item && item.scan;
           return (
             <PressableScale

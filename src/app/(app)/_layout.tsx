@@ -22,7 +22,7 @@ import { selectionFeedback } from '@/lib/haptics';
  * Horizontal order of the root panels. Scan is deliberately absent: opening the
  * camera is an explicit action, never something a stray swipe can trigger.
  */
-const ROOT_ORDER = ['/home', '/transactions', '/analytics', '/budget'] as const;
+const ROOT_ORDER = ['/home', '/transactions', '/analytics', '/wallet'] as const;
 
 const TRANSITION_MS = 280;
 const EXIT_MS = 150;

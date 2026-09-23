@@ -12,7 +12,7 @@ export type AppAlert = {
   title: string;
   detail: string;
   icon: 'wallet-outline' | 'alert-circle-outline' | 'chart-donut' | 'receipt-text-outline' | 'trending-up';
-  route?: '/budget' | '/insights' | '/transactions' | '/add-expense';
+  route?: '/wallet' | '/insights' | '/transactions' | '/add-expense';
 };
 
 const TONE_ORDER: Record<AlertTone, number> = { critical: 0, warning: 1, info: 2 };
@@ -59,7 +59,7 @@ export function buildAlerts(params: {
         title: 'Monthly budget exceeded',
         detail: `You've spent ${peso(spent)} of your ${peso(budget.amountCents)} budget this month.`,
         icon: 'alert-circle-outline',
-        route: '/budget',
+        route: '/wallet',
       });
     } else if (used >= threshold) {
       alerts.push({
@@ -68,7 +68,7 @@ export function buildAlerts(params: {
         title: `Monthly budget ${used}% used`,
         detail: `${peso(budget.amountCents - spent)} left of your ${peso(budget.amountCents)} budget.`,
         icon: 'wallet-outline',
-        route: '/budget',
+        route: '/wallet',
       });
     }
 
@@ -87,7 +87,7 @@ export function buildAlerts(params: {
         title: categoryUsed >= 100 ? `${label} is over its limit` : `${label} at ${categoryUsed}%`,
         detail: `${peso(categorySpent)} spent against a ${peso(limit.amountCents)} limit.`,
         icon: 'wallet-outline',
-        route: '/budget',
+        route: '/wallet',
       });
     });
   }

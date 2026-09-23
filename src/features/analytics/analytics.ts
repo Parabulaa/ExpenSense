@@ -32,7 +32,7 @@ export type AnalyticsInsight = {
   title: string;
   detail: string;
   icon: DashboardCategory['icon'];
-  destination?: '/transactions' | '/budget';
+  destination?: '/transactions' | '/wallet';
   /**
    * Seeds the Transactions search so the chevron lands on the rows the insight
    * is actually about, rather than the unfiltered list.
@@ -116,9 +116,9 @@ export function buildInsights(
   // to the "set a budget" branch rather than dividing by it.
   const limitUsed = top && categoryLimit ? percentOf(top.amountCents, categoryLimit.amountCents) : null;
   if (top && limitUsed !== null) {
-    insights.push({ id: 'recommendation', label: 'Recommendation', title: `${top.label} budget is ${formatPercent(limitUsed)} used`, detail: limitUsed >= 100 ? 'This category is over its limit. Review the budget or recent expenses.' : 'Keep an eye on this category as the month continues.', icon: 'briefcase-outline', destination: '/budget' });
+    insights.push({ id: 'recommendation', label: 'Recommendation', title: `${top.label} budget is ${formatPercent(limitUsed)} used`, detail: limitUsed >= 100 ? 'This category is over its limit. Review the budget or recent expenses.' : 'Keep an eye on this category as the month continues.', icon: 'briefcase-outline', destination: '/wallet' });
   } else if (top) {
-    insights.push({ id: 'recommendation', label: 'Recommendation', title: `Set a ${topCategory?.fullLabel ?? top.label} budget`, detail: 'Your largest spending category does not have a category limit yet.', icon: 'briefcase-outline', destination: '/budget' });
+    insights.push({ id: 'recommendation', label: 'Recommendation', title: `Set a ${topCategory?.fullLabel ?? top.label} budget`, detail: 'Your largest spending category does not have a category limit yet.', icon: 'briefcase-outline', destination: '/wallet' });
   }
   return insights.slice(0, 4);
 }

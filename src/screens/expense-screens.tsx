@@ -26,7 +26,7 @@ import { skipNextPanelRefresh } from '@/lib/panel-refresh';
 
 export function AddExpenseScreen() {
   const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
-  const safeReturn = returnTo === '/transactions' || returnTo === '/analytics' || returnTo === '/budget' ? returnTo : '/home';
+  const safeReturn = returnTo === '/transactions' || returnTo === '/analytics' || returnTo === '/wallet' ? returnTo : '/home';
   const close = () => {
     skipNextPanelRefresh(safeReturn);
     if (router.canGoBack()) router.back();
