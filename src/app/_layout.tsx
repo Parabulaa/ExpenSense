@@ -108,6 +108,12 @@ function RootNavigation() {
       }}
     >
       <Stack.Screen
+        name="onboarding"
+        options={{
+          gestureEnabled: false,
+        }}
+      />
+      <Stack.Screen
         name="add-expense"
         options={{
           presentation: 'transparentModal',

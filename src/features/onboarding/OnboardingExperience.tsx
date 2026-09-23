@@ -27,7 +27,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AppIcon, AppText, BackButton, Brand, Card, PrimaryButton, SecondaryButton } from '@/components/common/ui';
+import { AppIcon, AppText, Brand, Card, PrimaryButton, SecondaryButton } from '@/components/common/ui';
 import { assets, colors, radii } from '@/constants/theme';
 
 type OnboardingPageData = {
@@ -182,9 +182,6 @@ export default function OnboardingExperience() {
         <AnimatedBackgroundLayer reducedMotion={reducedMotion} />
 
         <View style={styles.header}>
-          <View style={styles.backButton}>
-            <BackButton />
-          </View>
           <Brand compact />
         </View>
 
@@ -762,12 +759,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 4,
-  },
-  backButton: {
-    position: 'absolute',
-    left: 18,
-    top: 10,
-    zIndex: 2,
   },
   viewport: {
     flex: 1,
