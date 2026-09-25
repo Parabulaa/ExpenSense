@@ -1,5 +1,5 @@
 import type { MonthAnalytics } from '@/features/analytics/analytics';
-import type { MonthlyBudget } from '@/features/budget/types';
+import { budgetUsage, type MonthlyBudget } from '@/features/budget/types';
 import type { DashboardCategory } from '@/features/dashboard/dashboard-data';
 import { formatPeso, percentOf } from '@/lib/format';
 
@@ -41,10 +41,10 @@ export function answerBudgetQuestion(question: string, context: BudgetAssistantC
     return reply(top ? `${top.label} is your highest category at ${formatPeso(top.amountCents)}, or ${Math.round(top.percentage)}% of this month’s spending.` : 'There are no expenses in the selected month yet.', { lastIntent: 'category', lastCategoryId: topCategory?.id });
   }
   if (/left|remain|available|over budget|budget status|budget/.test(query)) {
-    if (!context.budget || context.budget.amountCents <= 0) return reply(`You have spent ${formatPeso(context.current.totalCents)}, but no monthly budget is set for this month.`, { lastIntent: 'budget' });
-    const remaining = context.budget.amountCents - context.current.totalCents;
-    const used = percentOf(context.current.totalCents, context.budget.amountCents) ?? 0;
-    return reply(remaining < 0 ? `You are ${formatPeso(Math.abs(remaining))} over your ${formatPeso(context.budget.amountCents)} monthly budget (${used}% used).` : `You have ${formatPeso(remaining)} left from your ${formatPeso(context.budget.amountCents)} monthly budget (${used}% used).`, { lastIntent: 'budget' });
+    const usage = budgetUsage(context.budget, context.current.expenses);
+    if (!usage.hasBudget) return reply(`You have spent ${formatPeso(context.current.totalCents)}, but no category budgets are set for this month.`, { lastIntent: 'budget' });
+    const used = percentOf(usage.spentCents, usage.limitCents) ?? 0;
+    return reply(usage.remainingCents < 0 ? `You are ${formatPeso(Math.abs(usage.remainingCents))} over your ${formatPeso(usage.limitCents)} in category budgets (${used}% used).` : `You have ${formatPeso(usage.remainingCents)} left from your ${formatPeso(usage.limitCents)} in category budgets (${used}% used).`, { lastIntent: 'budget' });
   }
   if (/spent|spending|expense|total/.test(query)) return reply(`You have spent ${formatPeso(context.current.totalCents)} this month across ${context.current.expenses.length} transaction${context.current.expenses.length === 1 ? '' : 's'}.`, { lastIntent: 'spending' });
   if (/save|reduce|recommend|advice|cut/.test(query)) {

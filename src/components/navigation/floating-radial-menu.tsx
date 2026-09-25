@@ -28,12 +28,18 @@ type MenuAction = {
   top: number;
   originX: number;
   originY: number;
+  /**
+   * FAQ sits directly under the trigger, so a label to its left would run into
+   * the Notifications button. It gets its label underneath instead.
+   */
+  labelBelow?: boolean;
 };
 
 const ACTIONS: MenuAction[] = [
   { label: 'Settings', icon: 'cog-outline', route: '/profile', right: 79, top: 4, originX: 70, originY: 3 },
   { label: 'Notifications', icon: 'bell-outline', route: '/notifications', right: 64, top: 48, originX: 55, originY: -41 },
-  { label: 'FAQ', icon: 'help-circle-outline', route: '/settings/help', right: 9, top: 74, originX: 0, originY: -67 },
+  // `right` offsets the 60-wide column so the button stays centred under the trigger.
+  { label: 'FAQ', icon: 'help-circle-outline', route: '/settings/help', right: 1, top: 74, originX: 0, originY: -67, labelBelow: true },
 ];
 
 export function FloatingRadialMenu() {
@@ -113,8 +119,8 @@ function RadialAction({ action, badge, index, open, onPress }: { action: MenuAct
   }));
 
   return (
-    <Animated.View pointerEvents={open ? 'auto' : 'none'} style={[styles.actionWrap, { right: action.right, top: action.top }, animatedStyle]}>
-      <AppText variant="small" numberOfLines={1} style={styles.actionLabel}>{action.label}</AppText>
+    <Animated.View pointerEvents={open ? 'auto' : 'none'} style={[action.labelBelow ? styles.actionWrapBelow : styles.actionWrap, { right: action.right, top: action.top }, animatedStyle]}>
+      {action.labelBelow ? null : <AppText variant="small" numberOfLines={1} style={styles.actionLabel}>{action.label}</AppText>}
       <PressableScale
         accessibilityRole="button"
         accessibilityLabel={badge ? `${action.label}, ${badge} unread` : action.label}
@@ -125,6 +131,7 @@ function RadialAction({ action, badge, index, open, onPress }: { action: MenuAct
         <AppIcon name={action.icon} size={21} color={colors.deepForest} />
         {badge ? <View style={styles.badge}><AppText style={styles.badgeText}>{badge > 9 ? '9+' : badge}</AppText></View> : null}
       </PressableScale>
+      {action.labelBelow ? <AppText variant="small" numberOfLines={1} style={styles.actionLabel}>{action.label}</AppText> : null}
     </Animated.View>
   );
 }
@@ -171,6 +178,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: 8,
+    zIndex: 2,
+  },
+  actionWrapBelow: {
+    position: 'absolute',
+    width: 60,
+    alignItems: 'center',
+    gap: 4,
     zIndex: 2,
   },
   actionLabel: {

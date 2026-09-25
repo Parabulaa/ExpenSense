@@ -41,9 +41,13 @@ export function WalletCardFace({ wallet, index = 0, hidden = false, moreLabel, o
       scaleTo={0.97}
       style={[styles.card, { backgroundColor: accent }]}
     >
-      {/* Two soft discs give the flat colour some depth without artwork. */}
+      {/* Two soft discs and a faint type mark give the flat colour depth; all
+          three are background, never content. */}
       <View pointerEvents="none" style={styles.glowLarge} />
       <View pointerEvents="none" style={styles.glowSmall} />
+      <View pointerEvents="none" style={styles.watermark}>
+        <AppIcon name={meta.icon} size={64} color="rgba(255,255,255,.12)" />
+      </View>
 
       <View style={styles.top}>
         <View style={styles.identity}>
@@ -62,8 +66,6 @@ export function WalletCardFace({ wallet, index = 0, hidden = false, moreLabel, o
           </PressableScale>
         ) : null}
       </View>
-
-      <View style={styles.chip} />
 
       <View style={styles.bottom}>
         <AppText style={styles.caption}>BALANCE</AppText>
@@ -156,11 +158,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,.18)',
   },
-  chip: {
-    width: 27,
-    height: 19,
-    borderRadius: 5,
-    backgroundColor: 'rgba(255,255,255,.34)',
+  watermark: {
+    position: 'absolute',
+    right: 8,
+    top: '26%',
+    transform: [{ rotate: '-12deg' }],
   },
   bottom: { gap: 1 },
   caption: {

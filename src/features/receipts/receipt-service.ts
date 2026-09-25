@@ -32,25 +32,45 @@ export async function recognizeReceipt(image: ReceiptImage) {
   return { rawText: String(data.rawText), confidence: Number(data.confidence ?? 0) };
 }
 
-export async function saveReceiptExpense(draft: ReceiptDraft): Promise<ExpenseResult<{ id: string }>> {
+const DUPLICATE_MESSAGE = 'This receipt has already been saved, so your wallet was not changed again. If it is a different purchase, enter it manually.';
+
+/**
+ * Saves a confirmed receipt as an expense, cash-in or transfer through one
+ * database call, so the wallet change, budget effect and duplicate check
+ * happen together or not at all.
+ */
+export async function saveReceiptTransaction(draft: ReceiptDraft): Promise<ExpenseResult<{ id: string }>> {
+  if (draft.kind === 'unknown') return { ok: false, message: 'Choose whether this receipt is an expense, cash-in or transfer.' };
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return { ok: false, message: 'Sign in again before saving this receipt.' };
   const token = `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
   const path = `${auth.user.id}/${token}/receipt.jpg`;
+  const expense = draft.kind === 'expense';
   try {
     const bytes = await (await fetch(draft.image.uri)).arrayBuffer();
     const upload = await supabase.storage.from('receipts').upload(path, bytes, { contentType: 'image/jpeg', upsert: false });
     if (upload.error) return { ok: false, message: "Couldn't upload the receipt image. Try again." };
-    const { data, error } = await supabase.rpc('save_receipt_expense', {
-      p_merchant: draft.merchant.trim(), p_amount: (draft.totalCents / 100).toFixed(2), p_category_id: draft.categoryId,
-      p_transaction_date: draft.transactionDate, p_notes: draft.notes.trim() || null, p_receipt_path: path,
-      p_receipt_confidence: draft.confidence, p_receipt_subtotal: (draft.subtotalCents / 100).toFixed(2), p_receipt_tax: (draft.taxCents / 100).toFixed(2),
-      p_items: draft.items.map((item) => ({ name: item.name, quantity: item.quantity, line_total: (item.lineTotalCents / 100).toFixed(2) })),
+    const { data, error } = await supabase.rpc('save_receipt_transaction', {
+      p_type: draft.kind,
+      p_amount: (draft.totalCents / 100).toFixed(2),
+      p_fee: draft.kind === 'transfer' ? (draft.feeCents / 100).toFixed(2) : '0.00',
+      p_merchant: draft.merchant.trim(),
+      p_category_id: expense ? draft.categoryId : null,
       p_wallet_id: draft.walletId || null,
+      p_destination_wallet_id: draft.kind === 'transfer' ? draft.destinationWalletId || null : null,
+      p_transaction_date: draft.transactionDate,
+      p_transaction_time: draft.transactionTime,
+      p_notes: draft.notes.trim() || null,
+      p_receipt_path: path,
+      p_receipt_confidence: draft.confidence,
+      p_receipt_subtotal: expense ? (draft.subtotalCents / 100).toFixed(2) : null,
+      p_receipt_tax: expense ? (draft.taxCents / 100).toFixed(2) : null,
+      p_items: expense ? draft.items.map((item) => ({ name: item.name, quantity: item.quantity, line_total: (item.lineTotalCents / 100).toFixed(2) })) : [],
+      p_fingerprint: draft.fingerprint,
     });
     if (error || !data) {
       await supabase.storage.from('receipts').remove([path]);
-      return { ok: false, message: error?.message.includes('duplicate') ? 'This receipt may already be saved.' : "Couldn't save this receipt. Try again." };
+      return { ok: false, message: /duplicate/i.test(error?.message ?? '') ? DUPLICATE_MESSAGE : "Couldn't save this receipt. Try again." };
     }
     return { ok: true, data: { id: String(data) } };
   } catch {

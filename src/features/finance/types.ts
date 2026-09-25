@@ -1,9 +1,15 @@
 export type WalletType = 'cash' | 'gcash' | 'maya' | 'bank' | 'other';
 export type Wallet = { id: string; name: string; type: WalletType; balanceCents: number; icon: string | null; color: string | null; isDefault: boolean; status: 'active' | 'archived' };
-export type IncomeKind = 'income' | 'allowance';
-export type IncomeEntry = { id: string; walletId: string; amountCents: number; kind: IncomeKind; source: string; transactionDate: string; notes: string | null; createdAt: string };
+/** Income is earned money; cash-in is a top-up. Both raise a wallet and neither touches a budget. */
+export type IncomeKind = 'income' | 'cash_in';
+export type IncomeEntry = { id: string; walletId: string; amountCents: number; kind: IncomeKind; source: string; transactionDate: string; transactionTime: string | null; notes: string | null; createdAt: string };
+/** Source loses amount + fee, destination gains amount. Never spending, never income. */
+export type WalletTransfer = { id: string; fromWalletId: string; toWalletId: string; amountCents: number; feeCents: number; transactionDate: string; transactionTime: string | null; notes: string | null; createdAt: string };
 export type SavingsGoal = { id: string; name: string; targetCents: number; currentCents: number; targetDate: string | null; icon: string | null; category: string | null; status: 'active' | 'archived' };
 export type WalletInput = { id?: string; name: string; type: WalletType; balanceCents: number; color: string; isDefault: boolean };
-export type IncomeInput = { walletId: string; amountCents: number; kind: IncomeKind; source: string; transactionDate: string; notes?: string };
+export type IncomeInput = { walletId: string; amountCents: number; kind: IncomeKind; source: string; transactionDate: string; transactionTime: string; notes?: string };
+export type TransferInput = { fromWalletId: string; toWalletId: string; amountCents: number; feeCents: number; transactionDate: string; transactionTime: string; notes?: string };
 export type GoalInput = { id?: string; name: string; targetCents: number; currentCents?: number; targetDate?: string | null };
 export type FinanceResult<T> = { ok: true; data: T } | { ok: false; message: string };
+
+export const incomeKindLabels: Record<IncomeKind, string> = { income: 'Income', cash_in: 'Cash-in' };

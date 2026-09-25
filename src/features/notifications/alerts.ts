@@ -48,30 +48,8 @@ export function buildAlerts(params: {
   const budget = budgets.find((item) => item.month === month);
   const threshold = settings.budgetAlertThreshold;
 
-  if (settings.budgetAlerts && budget && budget.amountCents > 0) {
-    const spent = monthExpenses.reduce((sum, expense) => sum + expense.amountCents, 0);
-    const used = Math.round((spent / budget.amountCents) * 100);
-
-    if (used >= 100) {
-      alerts.push({
-        id: `budget:${month}:over`,
-        tone: 'critical',
-        title: 'Monthly budget exceeded',
-        detail: `You've spent ${peso(spent)} of your ${peso(budget.amountCents)} budget this month.`,
-        icon: 'alert-circle-outline',
-        route: '/wallet',
-      });
-    } else if (used >= threshold) {
-      alerts.push({
-        id: `budget:${month}:${threshold}`,
-        tone: 'warning',
-        title: `Monthly budget ${used}% used`,
-        detail: `${peso(budget.amountCents - spent)} left of your ${peso(budget.amountCents)} budget.`,
-        icon: 'wallet-outline',
-        route: '/wallet',
-      });
-    }
-
+  // Budgets are category limits only, so each limit raises its own alert.
+  if (settings.budgetAlerts && budget) {
     budget.categoryBudgets.forEach((limit) => {
       if (limit.amountCents <= 0) return;
       const categorySpent = monthExpenses

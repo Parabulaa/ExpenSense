@@ -1,5 +1,5 @@
 import { formatPercent, percentOf } from '@/lib/format';
-import type { MonthlyBudget } from '@/features/budget/types';
+import { budgetUsage, type MonthlyBudget } from '@/features/budget/types';
 import type { DashboardCategory } from '@/features/dashboard/dashboard-data';
 import type { Expense } from '@/features/expenses/types';
 
@@ -145,10 +145,11 @@ export function mascotInsight(
 
   const insights = buildInsights(current, previous, categories, budget);
 
+  const usage = budgetUsage(budget, current.expenses);
+
   // An overspend or a near-limit category is the most actionable thing to say.
-  if (budget && budget.amountCents > 0) {
-    const remaining = budget.amountCents - current.totalCents;
-    if (remaining < 0) return `You’re ${formatPeso(Math.abs(remaining))} over this month’s budget.`;
+  if (budget && usage.hasBudget) {
+    if (usage.remainingCents < 0) return `You’re ${formatPeso(Math.abs(usage.remainingCents))} over your category budgets this month.`;
 
     const pressured = budget.categoryBudgets
       .map((limit) => {
@@ -177,9 +178,8 @@ export function mascotInsight(
   const unusual = insights.find((insight) => insight.id === 'unusual');
   if (unusual) return `Your spending is ${unusual.title} than last month.`;
 
-  if (budget && budget.amountCents > 0) {
-    const remaining = budget.amountCents - current.totalCents;
-    return `You have ${formatPeso(remaining)} left in this month’s budget.`;
+  if (usage.hasBudget) {
+    return `You have ${formatPeso(usage.remainingCents)} left across your category budgets.`;
   }
 
   const top = insights.find((insight) => insight.id === 'top');

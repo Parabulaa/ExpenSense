@@ -14,12 +14,16 @@ import { Screen } from '@/components/common/screen';
 import { useToast } from '@/components/common/toast';
 import { AppIcon, AppText, BackButton, Card, FormInput, PrimaryButton, SecondaryButton, StatusChip } from '@/components/common/ui';
 import { assets, colors, radii, shadow, spacing } from '@/constants/theme';
+import { useBudgets } from '@/features/budget/BudgetProvider';
 import { useCategories } from '@/features/categories/CategoriesProvider';
 import { useExpenses } from '@/features/expenses/ExpensesProvider';
 import { useFinance } from '@/features/finance/FinanceProvider';
 import type { ExpenseFormErrors, ExpenseFormValues } from '@/features/expenses/types';
 import { useReceipt } from '@/features/receipts/ReceiptProvider';
-import { dateToLocalDate, formatExpenseDate, isValidLocalDate, localDateToDate, MAX_MERCHANT_LENGTH, MAX_NOTES_LENGTH, normalizeAmountInput, todayLocalDate, validateExpenseForm } from '@/features/expenses/validation';
+import { dateToLocalDate, formatDateTime, isFutureDateTime, isValidLocalDate, isValidLocalTime, localDateToDate, MAX_MERCHANT_LENGTH, MAX_NOTES_LENGTH, normalizeAmountInput, nowLocalTime, todayLocalDate, validateExpenseForm } from '@/features/expenses/validation';
+import { TimeSelector } from '@/components/common/time-selector';
+import { walletTypeMeta } from '@/features/finance/wallet-presentation';
+import type { ReceiptKind } from '@/features/receipts/types';
 import { selectionFeedback } from '@/lib/haptics';
 import { formatPeso } from '@/lib/format';
 import { skipNextPanelRefresh } from '@/lib/panel-refresh';
@@ -86,10 +90,10 @@ function ExpenseOption({ icon, title, description, disabled = false, onPress }: 
 export function ManualExpenseScreen() {
   const { findCategory } = useCategories();
   const { createExpense } = useExpenses();
-  const { wallets } = useFinance();
+  const { wallets, refresh: refreshFinance } = useFinance();
   const { showToast } = useToast();
   const submitting = useRef(false);
-  const [values, setValues] = useState<ExpenseFormValues>({ amount: '', merchant: '', categoryId: '', walletId: '', transactionDate: todayLocalDate(), notes: '' });
+  const [values, setValues] = useState<ExpenseFormValues>(() => ({ amount: '', merchant: '', categoryId: '', walletId: '', transactionDate: todayLocalDate(), transactionTime: nowLocalTime(), notes: '' }));
   const [errors, setErrors] = useState<ExpenseFormErrors>({});
   const [saving, setSaving] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
@@ -126,6 +130,8 @@ export function ManualExpenseScreen() {
       showToast(result.message, { tone: 'warning', icon: 'alert-circle-outline' });
       return;
     }
+    // The database already moved the wallet balance; reload so every screen agrees.
+    void refreshFinance();
     selectionFeedback();
     const category = findCategory(result.data.categoryId);
     const amount = (result.data.amountCents / 100).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -155,15 +161,15 @@ export function ManualExpenseScreen() {
         <FadeSlideIn index={2} style={styles.formFields}>
           <FormInput label="Merchant / Description" accessibilityLabel="Merchant or expense description" placeholder="Jollibee, Grab, School Supplies..." value={values.merchant} onChangeText={(value) => update('merchant', value)} autoCapitalize="words" returnKeyType="next" maxLength={MAX_MERCHANT_LENGTH} error={errors.merchant} />
           <FormButton label="Category" value={selectedCategory?.fullLabel ?? 'Select category'} icon={selectedCategory?.icon ?? 'shape-outline'} placeholder={!selectedCategory} error={errors.categoryId} onPress={() => { Keyboard.dismiss(); setCategoryOpen(true); }} />
-          <FormButton label="Wallet (optional)" value={selectedWallet?.name ?? (wallets.length ? 'Select wallet' : 'Add wallets in Budget')} icon="wallet-outline" placeholder={!selectedWallet} onPress={() => { Keyboard.dismiss(); if (wallets.length) setWalletOpen(true); else router.push('/wallets' as never); }} />
-          <FormButton label="Date" value={formatExpenseDate(values.transactionDate)} icon="calendar-outline" error={errors.transactionDate} onPress={() => { Keyboard.dismiss(); setDateOpen(true); }} />
+          <FormButton label="Wallet (optional)" value={selectedWallet?.name ?? (wallets.length ? 'Select wallet' : 'Add a wallet first')} icon="wallet-outline" placeholder={!selectedWallet} onPress={() => { Keyboard.dismiss(); if (wallets.length) setWalletOpen(true); else router.push('/wallets' as never); }} />
+          <FormButton label="Date & Time" value={formatDateTime(values.transactionDate, values.transactionTime)} icon="calendar-clock-outline" error={errors.transactionDate} onPress={() => { Keyboard.dismiss(); setDateOpen(true); }} />
           <FormInput label="Notes (optional)" accessibilityLabel="Optional expense notes" placeholder="Add context for this expense" value={values.notes} onChangeText={(value) => update('notes', value)} multiline textAlignVertical="top" maxLength={MAX_NOTES_LENGTH} error={errors.notes} hint={`${values.notes.length}/${MAX_NOTES_LENGTH}`} style={styles.notesInput} inputStyle={styles.notesInputText} />
         </FadeSlideIn>
         <PrimaryButton title="Save Expense" loadingTitle="Saving..." loading={saving} disabled={saving} icon="check" onPress={submit} />
       </View>
       <CategoryPicker visible={categoryOpen} selectedId={values.categoryId} onClose={() => setCategoryOpen(false)} onSelect={(id) => { update('categoryId', id); selectionFeedback(); setCategoryOpen(false); }} />
-      <SheetModal visible={walletOpen} title="Choose Wallet" onClose={() => setWalletOpen(false)}><View style={styles.walletPicker}>{wallets.map((wallet) => <PressableScale key={wallet.id} onPress={() => { update('walletId', wallet.id); setWalletOpen(false); }} style={[styles.walletChoice, values.walletId === wallet.id && styles.walletChoiceSelected]}><View style={styles.walletChoiceCopy}><AppIcon name="wallet-outline" /><View><AppText variant="h3">{wallet.name}</AppText><AppText variant="small" style={styles.muted}>{wallet.isDefault ? 'Default wallet' : wallet.type}</AppText></View></View><AppIcon name={values.walletId === wallet.id ? 'check-circle' : 'circle-outline'} color={colors.success} /></PressableScale>)}</View></SheetModal>
-      {dateOpen ? <ExpenseDatePicker value={values.transactionDate} onClose={() => setDateOpen(false)} onSelect={(date) => { update('transactionDate', date); setDateOpen(false); }} /> : null}
+      <WalletPicker visible={walletOpen} selectedId={values.walletId} onClose={() => setWalletOpen(false)} onSelect={(id) => { update('walletId', id); setWalletOpen(false); }} />
+      {dateOpen ? <ExpenseDatePicker value={values.transactionDate} time={values.transactionTime} onClose={() => setDateOpen(false)} onSelect={(date, time) => { setValues((current) => ({ ...current, transactionDate: date, transactionTime: time })); setErrors((current) => ({ ...current, transactionDate: undefined })); setDateOpen(false); }} /> : null}
     </Screen>
   );
 }
@@ -220,11 +226,39 @@ function CategoryPicker({ visible, selectedId, onClose, onSelect }: { visible: b
   );
 }
 
-function ExpenseDatePicker({ value, onClose, onSelect }: { value: string; onClose: () => void; onSelect: (value: string) => void }) {
-  const [draft, setDraft] = useState(value);
-  const validDraft = isValidLocalDate(draft) && draft <= todayLocalDate();
+/** Wallet chooser shared by every form that moves money, so each lists wallets the same way. */
+export function WalletPicker({ visible, selectedId, title = 'Choose Wallet', excludeId, onClose, onSelect }: { visible: boolean; selectedId: string; title?: string; excludeId?: string; onClose: () => void; onSelect: (id: string) => void }) {
+  const { wallets } = useFinance();
   return (
-    <SheetModal visible title="Transaction Date" onClose={onClose}>
+    <SheetModal visible={visible} title={title} onClose={onClose}>
+      <View style={styles.walletPicker}>
+        {wallets.filter((wallet) => wallet.id !== excludeId).map((wallet) => {
+          const selected = selectedId === wallet.id;
+          return (
+            <PressableScale key={wallet.id} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => onSelect(wallet.id)} style={[styles.walletChoice, selected && styles.walletChoiceSelected]}>
+              <View style={styles.walletChoiceCopy}>
+                <View style={[styles.walletColor, { backgroundColor: wallet.color ?? colors.forest }]} />
+                <View>
+                  <AppText variant="h3">{wallet.name}</AppText>
+                  <AppText variant="small" style={styles.muted}>{walletTypeMeta(wallet.type).label} · {formatPeso(wallet.balanceCents, { alwaysShowDecimals: true })}{wallet.isDefault ? ' · Default' : ''}</AppText>
+                </View>
+              </View>
+              <AppIcon name={selected ? 'check-circle' : 'circle-outline'} color={colors.success} />
+            </PressableScale>
+          );
+        })}
+      </View>
+    </SheetModal>
+  );
+}
+
+export function ExpenseDatePicker({ value, time, title = 'Date & Time', onClose, onSelect }: { value: string; time: string; title?: string; onClose: () => void; onSelect: (value: string, time: string) => void }) {
+  const [draft, setDraft] = useState(value);
+  const [timeDraft, setTimeDraft] = useState(isValidLocalTime(time) ? time : nowLocalTime());
+  const validDate = isValidLocalDate(draft) && draft <= todayLocalDate();
+  const future = validDate && isFutureDateTime(draft, timeDraft);
+  return (
+    <SheetModal visible title={title} onClose={onClose}>
       {Platform.OS === 'web' ? (
         // The community picker is native-only, so web gets the in-app calendar
         // rather than making the user type a date by hand.
@@ -234,8 +268,9 @@ function ExpenseDatePicker({ value, onClose, onSelect }: { value: string; onClos
           <DateTimePicker value={localDateToDate(draft)} mode="date" display={Platform.OS === 'ios' ? 'inline' : 'default'} maximumDate={localDateToDate(todayLocalDate())} accentColor={colors.deepForest} onChange={(event, date) => { if (event.type === 'set' && date) setDraft(dateToLocalDate(date)); if (Platform.OS === 'android' && event.type === 'dismissed') onClose(); }} />
         </View>
       )}
-      <AppText style={styles.selectedDate}>{validDraft ? formatExpenseDate(draft) : 'Choose a valid date'}</AppText>
-      <PrimaryButton title="Use This Date" disabled={!validDraft} onPress={() => onSelect(draft)} />
+      <TimeSelector value={timeDraft} onChange={setTimeDraft} />
+      <AppText style={[styles.selectedDate, future && styles.errorText]}>{!validDate ? 'Choose a valid date' : future ? 'That time is still in the future' : formatDateTime(draft, timeDraft)}</AppText>
+      <PrimaryButton title="Use This Date & Time" disabled={!validDate || future} onPress={() => onSelect(draft, timeDraft)} />
     </SheetModal>
   );
 }
@@ -256,12 +291,133 @@ export function ProcessingScreen() {
   return <Screen scroll={false} variant={4}><View style={styles.processing}><Animated.Image entering={FadeIn.duration(350)} source={assets.mascotSuccess} resizeMode="contain" style={styles.processMascot} /><AppText variant="title">Reading receipt…</AppText><AppText style={styles.muted}>Keep ExpenSense open while we securely read this image.</AppText><View style={styles.steps}>{steps.map((step, index) => { const done = completed.includes(step as never); const active = progress === step; return <Animated.View entering={FadeInDown.delay(index * 60)} key={step} style={styles.step}><View style={[styles.stepCircle, done && styles.stepDone]}>{done ? <AppIcon name="check" size={18} color={colors.surface} /> : active ? <ActivityIndicator size="small" color={colors.forest} /> : null}</View><AppText variant="h3" style={!done && !active ? styles.muted : undefined}>{step}</AppText></Animated.View>; })}</View></View></Screen>;
 }
 
+const RECEIPT_KINDS: { id: Exclude<ReceiptKind, 'unknown'>; label: string; icon: Parameters<typeof AppIcon>[0]['name'] }[] = [
+  { id: 'expense', label: 'Expense', icon: 'cart-outline' },
+  { id: 'cash_in', label: 'Cash-in', icon: 'cash-plus' },
+  { id: 'transfer', label: 'Transfer', icon: 'swap-horizontal' },
+];
+
+/**
+ * Peso field that keeps what the user typed while reporting cents upward, so
+ * editing "350.5" never snaps to "350.50" mid-keystroke.
+ */
+function MoneyField({ label, cents, onChange, style }: { label?: string; cents: number; onChange: (cents: number) => void; style?: object }) {
+  const [text, setText] = useState(cents ? (cents / 100).toFixed(2) : '');
+  return <FormInput label={label} icon={label ? 'currency-php' : undefined} placeholder="0.00" value={text} keyboardType="decimal-pad" inputMode="decimal" onChangeText={(value) => { const next = normalizeAmountInput(value, text); setText(next); onChange(Math.round((Number(next) || 0) * 100)); }} style={style} />;
+}
+
+function ChangeRow({ label, before, after }: { label: string; before: number; after: number }) {
+  const money = (value: number) => `${value < 0 ? '−' : ''}${formatPeso(Math.abs(value), { alwaysShowDecimals: true })}`;
+  return (
+    <View style={styles.changeRow}>
+      <AppText variant="bodyMedium" style={styles.changeLabel} numberOfLines={1}>{label}</AppText>
+      <AppText variant="small" style={styles.muted}>{money(before)}</AppText>
+      <AppIcon name="arrow-right" size={14} color={colors.muted} />
+      <AppText variant="small" style={[styles.changeAfter, after < 0 && { color: colors.danger }]}>{money(after)}</AppText>
+    </View>
+  );
+}
+
 export function ReceiptReviewScreen() {
-  const { draft, updateDraft, save, saving, reset } = useReceipt(); const { refresh } = useExpenses(); const { findCategory } = useCategories(); const { wallets } = useFinance(); const { showToast } = useToast(); const [categoryOpen, setCategoryOpen] = useState(false); const [walletOpen, setWalletOpen] = useState(false);
+  const { draft, updateDraft, save, saving, reset } = useReceipt();
+  const { expenses, refresh } = useExpenses();
+  const { findCategory } = useCategories();
+  const { budgets } = useBudgets();
+  const { wallets, refresh: refreshFinance } = useFinance();
+  const { showToast } = useToast();
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [walletOpen, setWalletOpen] = useState<'source' | 'destination' | null>(null);
+  const [dateOpen, setDateOpen] = useState(false);
   useEffect(() => { if (draft && !draft.walletId && wallets.length) updateDraft({ walletId: (wallets.find(wallet => wallet.isDefault) ?? wallets[0]).id }); }, [draft, updateDraft, wallets]);
   if (!draft) return <Screen variant={4}><View style={styles.failed}><AppText variant="h2">No receipt is ready to review.</AppText><PrimaryButton title="Scan a Receipt" onPress={() => router.replace('/scanner')} /></View></Screen>;
-  const confirm = async () => { if (!draft.merchant.trim() || !draft.categoryId || draft.totalCents <= 0 || (wallets.length > 0 && !draft.walletId)) { showToast('Confirm the merchant, category, wallet, and total first.', { tone: 'warning' }); return; } const result = await save(); if (!result.ok) { showToast(result.message, { tone: 'warning' }); return; } await refresh(); reset(); showToast('Receipt expense saved.', { icon: 'check-circle-outline' }); router.replace('/transactions'); };
-  return <Screen variant={4}><View style={styles.formPage}><BackButton /><Card style={{ gap: 16 }}><View style={styles.reviewTop}><View style={styles.receiptPhoto}><Image source={{ uri: draft.image.uri }} contentFit="cover" style={styles.fill} /></View><View style={styles.optionCopy}><AppText variant="h2">Review receipt</AppText><StatusChip warning={draft.issues.length > 0}>{draft.issues.length ? 'Needs Review' : 'Ready'}</StatusChip><AppText style={styles.muted}>{draft.confidence}% recognition confidence</AppText></View></View>{draft.issues.map((issue) => <AppText key={issue} variant="small" style={styles.warningText}>• {issue}</AppText>)}</Card><FormInput label="Merchant" value={draft.merchant} onChangeText={(merchant) => updateDraft({ merchant })} maxLength={80} /><FormInput label="Date (YYYY-MM-DD)" value={draft.transactionDate} onChangeText={(transactionDate) => updateDraft({ transactionDate })} /><FormButton label="Category" value={findCategory(draft.categoryId)?.fullLabel ?? 'Select category'} icon="shape-outline" placeholder={!draft.categoryId} onPress={() => setCategoryOpen(true)} /><FormButton label="Wallet" value={wallets.find(wallet => wallet.id === draft.walletId)?.name ?? (wallets.length ? 'Select wallet' : 'No wallet')} icon="wallet-outline" placeholder={!draft.walletId} onPress={() => wallets.length ? setWalletOpen(true) : router.push('/wallets' as never)} /><Card style={{ gap: 12 }}><AppText variant="h2">Items ({draft.items.length})</AppText>{draft.items.map((item) => <View key={item.id} style={styles.itemEditRow}><FormInput value={item.name} onChangeText={(name) => updateDraft({ items: draft.items.map((current) => current.id === item.id ? { ...current, name } : current) })} style={styles.itemNameInput} /><FormInput value={(item.lineTotalCents / 100).toFixed(2)} keyboardType="decimal-pad" onChangeText={(value) => updateDraft({ items: draft.items.map((current) => current.id === item.id ? { ...current, lineTotalCents: Math.round((Number(value) || 0) * 100) } : current) })} style={styles.itemAmountInput} /></View>)}</Card><FormInput label="Subtotal" value={(draft.subtotalCents / 100).toFixed(2)} keyboardType="decimal-pad" onChangeText={(value) => updateDraft({ subtotalCents: Math.round((Number(value) || 0) * 100) })} /><FormInput label="Tax" value={(draft.taxCents / 100).toFixed(2)} keyboardType="decimal-pad" onChangeText={(value) => updateDraft({ taxCents: Math.round((Number(value) || 0) * 100) })} /><FormInput label="Total" value={(draft.totalCents / 100).toFixed(2)} keyboardType="decimal-pad" onChangeText={(value) => updateDraft({ totalCents: Math.round((Number(value) || 0) * 100) })} /><FormInput label="Notes (optional)" value={draft.notes} onChangeText={(notes) => updateDraft({ notes })} /><PrimaryButton title="Confirm & Save" loadingTitle="Saving receipt…" loading={saving} disabled={saving} onPress={confirm} /></View><CategoryPicker visible={categoryOpen} selectedId={draft.categoryId} onClose={() => setCategoryOpen(false)} onSelect={(categoryId) => { updateDraft({ categoryId }); setCategoryOpen(false); }} /><SheetModal visible={walletOpen} title="Choose Wallet" onClose={() => setWalletOpen(false)}><View style={styles.walletPicker}>{wallets.map(wallet => <PressableScale key={wallet.id} onPress={() => { updateDraft({ walletId: wallet.id }); setWalletOpen(false); }} style={[styles.walletChoice, draft.walletId === wallet.id && styles.walletChoiceSelected]}><View style={styles.walletChoiceCopy}><View style={[styles.walletColor, { backgroundColor: wallet.color ?? colors.forest }]} /><View><AppText variant="h3">{wallet.name}</AppText><AppText variant="small" style={styles.muted}>{formatPeso(wallet.balanceCents, { alwaysShowDecimals: true })}</AppText></View></View><AppIcon name={draft.walletId === wallet.id ? 'check-circle' : 'circle-outline'} color={colors.success} /></PressableScale>)}</View></SheetModal></Screen>;
+
+  const kind = draft.kind;
+  const source = wallets.find((wallet) => wallet.id === draft.walletId);
+  const destination = wallets.find((wallet) => wallet.id === draft.destinationWalletId);
+  const category = findCategory(draft.categoryId);
+  const merchantLabel = kind === 'cash_in' ? 'Source' : kind === 'transfer' ? 'Description' : 'Merchant';
+  const walletLabel = kind === 'cash_in' ? 'Add to wallet' : kind === 'transfer' ? 'From wallet' : 'Paid from wallet';
+
+  // Preview of exactly what confirming will change — nothing moves until then.
+  const month = draft.transactionDate.slice(0, 7);
+  const limit = budgets.find((item) => item.month === month)?.categoryBudgets.find((item) => item.categoryId === draft.categoryId);
+  const categorySpent = expenses.filter((item) => item.categoryId === draft.categoryId && item.transactionDate.startsWith(month)).reduce((sum, item) => sum + item.amountCents, 0);
+  const changes: { label: string; before: number; after: number }[] = [];
+  if (source && kind === 'expense') changes.push({ label: source.name, before: source.balanceCents, after: source.balanceCents - draft.totalCents });
+  if (source && kind === 'cash_in') changes.push({ label: source.name, before: source.balanceCents, after: source.balanceCents + draft.totalCents });
+  if (source && kind === 'transfer') changes.push({ label: source.name, before: source.balanceCents, after: source.balanceCents - draft.totalCents - draft.feeCents });
+  if (destination && kind === 'transfer') changes.push({ label: destination.name, before: destination.balanceCents, after: destination.balanceCents + draft.totalCents });
+  if (kind === 'expense' && category && limit) changes.push({ label: `${category.fullLabel} budget left`, before: limit.amountCents - categorySpent, after: limit.amountCents - categorySpent - draft.totalCents });
+
+  const problem = (() => {
+    if (kind === 'unknown') return 'Choose whether this is an expense, cash-in or transfer.';
+    if (draft.totalCents <= 0) return 'Enter an amount greater than zero.';
+    if (!isValidLocalDate(draft.transactionDate) || !isValidLocalTime(draft.transactionTime) || isFutureDateTime(draft.transactionDate, draft.transactionTime)) return 'Choose a valid date and time.';
+    if (kind === 'expense' && (!draft.merchant.trim() || !draft.categoryId)) return 'Confirm the merchant and category.';
+    if (kind === 'expense' && wallets.length > 0 && !draft.walletId) return 'Choose the wallet you paid from.';
+    if (kind === 'cash_in' && !draft.walletId) return wallets.length ? 'Choose the wallet that received the cash-in.' : 'Add a wallet before saving a cash-in.';
+    if (kind === 'transfer' && (!draft.walletId || !draft.destinationWalletId)) return wallets.length < 2 ? 'Transfers need at least two wallets.' : 'Choose both wallets for this transfer.';
+    if (kind === 'transfer' && draft.walletId === draft.destinationWalletId) return 'Choose two different wallets.';
+    return null;
+  })();
+
+  const confirm = async () => {
+    if (problem) { showToast(problem, { tone: 'warning' }); return; }
+    const result = await save();
+    if (!result.ok) { showToast(result.message, { tone: 'warning' }); return; }
+    await Promise.all([refresh(), refreshFinance()]);
+    reset();
+    showToast(kind === 'expense' ? 'Receipt expense saved.' : kind === 'cash_in' ? 'Cash-in saved to your wallet.' : 'Transfer saved.', { icon: 'check-circle-outline' });
+    router.replace('/transactions');
+  };
+  const detectedLabel = RECEIPT_KINDS.find((item) => item.id === draft.detected.kind)?.label;
+
+  return <Screen variant={4}><View style={styles.formPage}>
+    <BackButton />
+    <Card style={{ gap: 16 }}>
+      <View style={styles.reviewTop}>
+        <View style={styles.receiptPhoto}><Image source={{ uri: draft.image.uri }} contentFit="cover" style={styles.fill} /></View>
+        <View style={styles.optionCopy}>
+          <AppText variant="h2">Review receipt</AppText>
+          <StatusChip warning={draft.issues.length > 0}>{draft.issues.length ? 'Needs Review' : 'Ready'}</StatusChip>
+          <AppText style={styles.muted}>{draft.confidence}% recognition confidence</AppText>
+        </View>
+      </View>
+      {draft.issues.map((issue) => <AppText key={issue} variant="small" style={styles.warningText}>• {issue}</AppText>)}
+    </Card>
+
+    <View style={styles.fieldGroup}>
+      <AppText variant="bodyMedium" style={styles.fieldLabel}>Transaction type</AppText>
+      <AppText variant="small" style={styles.muted}>{detectedLabel ? `Detected as ${detectedLabel} (${draft.detected.confidence}% sure) · ${draft.detected.signals.join(', ')}` : "We couldn't tell what kind of receipt this is. Choose one."}</AppText>
+      <View style={styles.kindRow}>{RECEIPT_KINDS.map((option) => { const selected = kind === option.id; return <PressableScale key={option.id} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => { selectionFeedback(); updateDraft({ kind: option.id }); }} style={[styles.kindOption, selected && styles.kindOptionSelected]}><AppIcon name={option.icon} size={20} color={selected ? colors.surface : colors.deepForest} /><AppText variant="small" style={selected ? styles.kindTextSelected : styles.kindText}>{option.label}</AppText></PressableScale>; })}</View>
+    </View>
+
+    {kind !== 'unknown' ? <>
+      <FormInput label={merchantLabel} value={draft.merchant} onChangeText={(merchant) => updateDraft({ merchant })} maxLength={80} />
+      <FormButton label="Date & Time" value={formatDateTime(draft.transactionDate, draft.transactionTime)} icon="calendar-clock-outline" onPress={() => setDateOpen(true)} />
+      {kind === 'expense' ? <FormButton label="Category" value={category?.fullLabel ?? 'Select category'} icon={category?.icon ?? 'shape-outline'} placeholder={!draft.categoryId} onPress={() => setCategoryOpen(true)} /> : null}
+      <FormButton label={walletLabel} value={source?.name ?? (wallets.length ? 'Select wallet' : 'Add a wallet first')} icon="wallet-outline" placeholder={!source} onPress={() => wallets.length ? setWalletOpen('source') : router.push('/wallets' as never)} />
+      {kind === 'transfer' ? <FormButton label="To wallet" value={destination?.name ?? (wallets.length > 1 ? 'Select wallet' : 'Add another wallet first')} icon="wallet-plus-outline" placeholder={!destination} onPress={() => wallets.length > 1 ? setWalletOpen('destination') : router.push('/wallets' as never)} /> : null}
+      {kind === 'expense' ? <>
+        <Card style={{ gap: 12 }}><AppText variant="h2">Items ({draft.items.length})</AppText>{draft.items.map((item) => <View key={item.id} style={styles.itemEditRow}><FormInput value={item.name} onChangeText={(name) => updateDraft({ items: draft.items.map((current) => current.id === item.id ? { ...current, name } : current) })} style={styles.itemNameInput} /><MoneyField cents={item.lineTotalCents} onChange={(lineTotalCents) => updateDraft({ items: draft.items.map((current) => current.id === item.id ? { ...current, lineTotalCents } : current) })} style={styles.itemAmountInput} /></View>)}</Card>
+        <MoneyField label="Subtotal" cents={draft.subtotalCents} onChange={(subtotalCents) => updateDraft({ subtotalCents })} />
+        <MoneyField label="Tax" cents={draft.taxCents} onChange={(taxCents) => updateDraft({ taxCents })} />
+      </> : null}
+      <MoneyField label={kind === 'expense' ? 'Total' : 'Amount'} cents={draft.totalCents} onChange={(totalCents) => updateDraft({ totalCents })} />
+      {kind === 'transfer' ? <MoneyField label="Transfer fee" cents={draft.feeCents} onChange={(feeCents) => updateDraft({ feeCents })} /> : null}
+      <FormInput label="Notes (optional)" value={draft.notes} onChangeText={(notes) => updateDraft({ notes })} />
+      {changes.length ? <Card style={{ gap: 10 }}>
+        <AppText variant="h3">After you confirm</AppText>
+        {changes.map((change) => <ChangeRow key={change.label} {...change} />)}
+        <AppText variant="small" style={styles.muted}>{kind === 'expense' ? 'Counts as spending in this category.' : kind === 'cash_in' ? 'Adds money to the wallet. It is not spending and does not change any budget.' : 'Moves money between wallets. It is not spending or income, and budgets are unchanged.'}</AppText>
+      </Card> : null}
+    </> : null}
+    <PrimaryButton title="Confirm & Save" loadingTitle="Saving receipt…" loading={saving} disabled={saving || kind === 'unknown'} onPress={confirm} />
+  </View>
+  <CategoryPicker visible={categoryOpen} selectedId={draft.categoryId} onClose={() => setCategoryOpen(false)} onSelect={(categoryId) => { updateDraft({ categoryId }); setCategoryOpen(false); }} />
+  <WalletPicker visible={walletOpen !== null} title={walletOpen === 'destination' ? 'Transfer To' : kind === 'transfer' ? 'Transfer From' : 'Choose Wallet'} selectedId={walletOpen === 'destination' ? draft.destinationWalletId : draft.walletId} excludeId={kind === 'transfer' ? (walletOpen === 'destination' ? draft.walletId : draft.destinationWalletId) : undefined} onClose={() => setWalletOpen(null)} onSelect={(id) => { updateDraft(walletOpen === 'destination' ? { destinationWalletId: id } : { walletId: id }); setWalletOpen(null); }} />
+  {dateOpen ? <ExpenseDatePicker value={draft.transactionDate} time={draft.transactionTime} onClose={() => setDateOpen(false)} onSelect={(transactionDate, transactionTime) => { updateDraft({ transactionDate, transactionTime }); setDateOpen(false); }} /> : null}
+  </Screen>;
 }
 
 export function RecognitionFailedScreen() {
@@ -300,5 +456,7 @@ const styles = StyleSheet.create({
   scannerPage: { flex: 1, padding: 24, justifyContent: 'center' }, camera: { height: '86%', borderRadius: 24, overflow: 'hidden', backgroundColor: '#1D271F', borderWidth: 4, borderColor: '#DCE7D8' }, cameraTop: { height: 70, flexDirection: 'row', justifyContent: 'space-between', padding: 20, zIndex: 3 }, scanReceipt: { position: 'absolute', width: '58%', height: '60%', top: '16%', left: '21%', transform: [{ rotate: '-4deg' }] }, scanFrame: { position: 'absolute', width: '72%', height: '58%', top: '17%', left: '14%', tintColor: '#3CE8B0' }, cameraBottom: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 170, backgroundColor: 'rgba(0,0,0,.64)', alignItems: 'center', justifyContent: 'space-around', padding: 18 }, captureRow: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' }, capture: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.surface, borderWidth: 5, borderColor: colors.white },
   processing: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 24, padding: 30 }, processMascot: { width: 250, height: 220 }, steps: { gap: 16 }, step: { flexDirection: 'row', alignItems: 'center', gap: 16 }, stepCircle: { width: 34, height: 34, borderRadius: 17, borderWidth: 2, borderColor: '#B7C0BD', alignItems: 'center', justifyContent: 'center' }, stepDone: { backgroundColor: colors.success, borderColor: colors.success },
   reviewTop: { flexDirection: 'row', gap: 16 }, receiptPhoto: { width: '42%', height: 210, borderRadius: 14, backgroundColor: '#59442E', padding: 8 }, failed: { flex: 1, justifyContent: 'center', padding: 28, gap: 18 }, failedMascot: { width: 260, height: 240, alignSelf: 'center' },
+  kindRow: { flexDirection: 'row', gap: 8 }, kindOption: { flex: 1, minHeight: 64, borderRadius: radii.md, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', gap: 4 }, kindOptionSelected: { backgroundColor: colors.deepForest, borderColor: colors.deepForest }, kindText: { color: colors.deepForest, fontFamily: 'JakartaSemiBold' }, kindTextSelected: { color: colors.surface, fontFamily: 'JakartaSemiBold' },
+  changeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 }, changeLabel: { flex: 1, minWidth: 0 }, changeAfter: { color: colors.deepForest, fontFamily: 'JakartaBold' },
   warningText: { color: '#9A6400' }, itemEditRow: { flexDirection: 'row', gap: 8, alignItems: 'center' }, itemNameInput: { flex: 1 }, itemAmountInput: { width: 104 },
 });

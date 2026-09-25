@@ -8,7 +8,7 @@ import { colors, radii, spacing } from '@/constants/theme';
 import { useCategories } from '@/features/categories/CategoriesProvider';
 import { useBudgets } from '@/features/budget/BudgetProvider';
 import { useExpenses } from '@/features/expenses/ExpensesProvider';
-import { formatExpenseDate, todayLocalDate } from '@/features/expenses/validation';
+import { formatDateTime, todayLocalDate } from '@/features/expenses/validation';
 
 const PESO = '₱';
 
@@ -73,7 +73,7 @@ export function CategoryDetailScreen() {
             <AppText variant="hero" numberOfLines={1} adjustsFontSizeToFit style={styles.amount}>
               {formatMoney(spent)}
             </AppText>
-            <AppText style={styles.muted}>{limit > 0 ? `of ${formatMoney(limit)} budget` : 'Set a limit from Budget'}</AppText>
+            <AppText style={styles.muted}>{limit > 0 ? `of ${formatMoney(limit)} budget` : 'Set a budget from Wallet'}</AppText>
 
             <View style={styles.progressRow}>
               <ProgressBar value={Math.min(100, usage)} height={14} />
@@ -106,7 +106,7 @@ export function CategoryDetailScreen() {
                 </View>
                 <View style={styles.transactionCopy}>
                   <AppText variant="h3" numberOfLines={1}>{item.merchant}</AppText>
-                  <AppText variant="small" style={styles.muted}>{formatExpenseDate(item.transactionDate)}</AppText>
+                  <AppText variant="small" style={styles.muted}>{formatDateTime(item.transactionDate, item.transactionTime)}</AppText>
                 </View>
                 <AppText variant="h3">-{formatMoney(item.amountCents / 100)}</AppText>
               </Card>

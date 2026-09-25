@@ -8,6 +8,8 @@ export type Expense = {
   categoryId: string;
   walletId: string | null;
   transactionDate: string;
+  /** `HH:MM`, or null for rows saved before times were recorded. */
+  transactionTime: string | null;
   notes: string | null;
   source: ExpenseSource;
   createdAt: string;
@@ -19,6 +21,7 @@ export type CreateExpenseInput = {
   merchant: string;
   categoryId: string;
   transactionDate: string;
+  transactionTime: string;
   notes?: string;
   walletId?: string | null;
 };
@@ -30,6 +33,7 @@ export type ExpenseFormValues = {
   merchant: string;
   categoryId: string;
   transactionDate: string;
+  transactionTime: string;
   notes: string;
   walletId: string;
 };

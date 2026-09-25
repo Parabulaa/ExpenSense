@@ -12,6 +12,43 @@ export function todayLocalDate() {
   return `${year}-${month}-${day}`;
 }
 
+/** Current local time as `HH:MM` (24-hour), the format every transaction stores. */
+export function nowLocalTime() {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+}
+
+export function isValidLocalTime(value: string) {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
+
+/** Postgres returns `HH:MM:SS`; the app works in `HH:MM`. */
+export function normalizeTime(value: string | null | undefined) {
+  if (!value) return null;
+  const short = value.slice(0, 5);
+  return isValidLocalTime(short) ? short : null;
+}
+
+/** "3:05 PM" */
+export function formatTime(value: string | null | undefined) {
+  const time = normalizeTime(value);
+  if (!time) return '';
+  const [hours, minutes] = time.split(':').map(Number);
+  return `${hours % 12 || 12}:${String(minutes).padStart(2, '0')} ${hours < 12 ? 'AM' : 'PM'}`;
+}
+
+/** "Sep 25, 2026 · 3:05 PM", or just the date for older rows saved without a time. */
+export function formatDateTime(date: string, time: string | null | undefined) {
+  const clock = formatTime(time);
+  return clock ? `${formatExpenseDate(date)} · ${clock}` : formatExpenseDate(date);
+}
+
+/** A date-time pair is in the future when it is later than this moment. */
+export function isFutureDateTime(date: string, time: string) {
+  const today = todayLocalDate();
+  return date > today || (date === today && time > nowLocalTime());
+}
+
 export function isValidLocalDate(value: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return false;
@@ -85,6 +122,8 @@ export function validateExpenseForm(values: ExpenseFormValues): {
 
   if (!isValidLocalDate(values.transactionDate)) errors.transactionDate = 'Choose a valid date.';
   else if (values.transactionDate > todayLocalDate()) errors.transactionDate = 'Expense date cannot be in the future.';
+  else if (!isValidLocalTime(values.transactionTime)) errors.transactionDate = 'Choose a valid time.';
+  else if (isFutureDateTime(values.transactionDate, values.transactionTime)) errors.transactionDate = 'Expense time cannot be in the future.';
 
   if (notes.length > MAX_NOTES_LENGTH) errors.notes = `Use ${MAX_NOTES_LENGTH} characters or fewer.`;
 
@@ -97,6 +136,7 @@ export function validateExpenseForm(values: ExpenseFormValues): {
       merchant,
       categoryId: values.categoryId,
       transactionDate: values.transactionDate,
+      transactionTime: values.transactionTime,
       notes,
       walletId: values.walletId || null,
     },

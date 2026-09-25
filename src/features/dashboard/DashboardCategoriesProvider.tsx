@@ -40,13 +40,15 @@ const DashboardCategoriesContext = createContext<DashboardCategoriesValue | null
 export function DashboardCategoriesProvider({ children }: PropsWithChildren) {
   const { categories: categoryLibrary } = useCategories();
   const [categories, setCategories] = useState<DashboardCategory[]>(defaultDashboardCategories);
+  // Hidden or archived categories drop off the grid; the library only holds
+  // active ones, so resolving against it filters them out.
   const resolvedCategories = useMemo(
-    () => categories.map((selected) => categoryLibrary.find((item) => item.id === selected.id) ?? selected),
+    () => categories.flatMap((selected) => categoryLibrary.filter((item) => item.id === selected.id)),
     [categories, categoryLibrary],
   );
 
-  const isFull = categories.length >= MAX_DASHBOARD_CATEGORIES;
-  const canRemove = categories.length > MIN_DASHBOARD_CATEGORIES;
+  const isFull = resolvedCategories.length >= MAX_DASHBOARD_CATEGORIES;
+  const canRemove = resolvedCategories.length > MIN_DASHBOARD_CATEGORIES;
 
   const isOnDashboard = useCallback(
     (id: string) => categories.some((category) => category.id === id),
@@ -56,9 +58,11 @@ export function DashboardCategoriesProvider({ children }: PropsWithChildren) {
   const addCategory = useCallback((id: string) => {
     let added = false;
 
-    setCategories((current) => {
-      if (current.length >= MAX_DASHBOARD_CATEGORIES) return current;
-      if (current.some((category) => category.id === id)) return current;
+    setCategories((selection) => {
+      // Hidden categories no longer occupy a slot.
+      const current = selection.filter((category) => categoryLibrary.some((item) => item.id === category.id));
+      if (current.length >= MAX_DASHBOARD_CATEGORIES) return selection;
+      if (current.some((category) => category.id === id)) return selection;
 
       const next = categoryLibrary.find((category) => category.id === id);
       if (!next) return current;

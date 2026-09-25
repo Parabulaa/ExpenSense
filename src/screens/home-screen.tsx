@@ -23,9 +23,9 @@ import { useBottomNavInset } from '@/components/navigation/bottom-navigation';
 import { assets, colors, radii, shadow, spacing } from '@/constants/theme';
 import { analyticsForMonth, mascotInsight, previousMonth } from '@/features/analytics/analytics';
 import {
-  dashboardMonths,
   dashboardPeriods,
   MAX_DASHBOARD_CATEGORIES,
+  periodRange,
   type DashboardCategory,
   type DashboardPeriod,
 } from '@/features/dashboard/dashboard-data';
@@ -33,14 +33,16 @@ import { useDashboardCategories } from '@/features/dashboard/DashboardCategories
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useExpenses } from '@/features/expenses/ExpensesProvider';
 import { useToast } from '@/components/common/toast';
-import { warningFeedback } from '@/lib/haptics';
+import { selectionFeedback, warningFeedback } from '@/lib/haptics';
+import { formatPeso, percentOf } from '@/lib/format';
+import { budgetUsage } from '@/features/budget/types';
+import { useFinance } from '@/features/finance/FinanceProvider';
 import { useBudgets } from '@/features/budget/BudgetProvider';
 import { useCategories } from '@/features/categories/CategoriesProvider';
 import { useProfile } from '@/features/profile/ProfileProvider';
 import { answerBudgetQuestion, type BudgetAssistantMemory } from '@/features/assistant/offline-budget-assistant';
 import { consumeSkippedPanelRefresh } from '@/lib/panel-refresh';
 
-const PESO = '₱';
 const GRID_GAP = 10;
 /** Vertical rhythm between the page's stacked sections. */
 const PAGE_GAP = 18;
@@ -74,8 +76,9 @@ function resolveFirstName(user: ReturnType<typeof useAuth>['user']) {
   return 'there';
 }
 
-function formatMoney(value: number) {
-  return `${PESO}${value.toLocaleString('en-US')}`;
+/** Peso amounts from integer cents, matching the rest of the app. */
+function formatCents(cents: number) {
+  return formatPeso(cents);
 }
 
 /**
@@ -189,44 +192,6 @@ function MetricTile({
         </AppText>
       </PressableScale>
     </FadeSlideIn>
-  );
-}
-
-function OptionMenu<T extends string>({
-  options,
-  selected,
-  align = 'left',
-  onSelect,
-}: {
-  options: readonly T[];
-  selected: T;
-  align?: 'left' | 'right';
-  onSelect: (option: T) => void;
-}) {
-  return (
-    <View style={[styles.optionMenu, align === 'right' && styles.optionMenuRight]}>
-      {options.map((option) => {
-        const active = option === selected;
-        return (
-          <Pressable
-            key={option}
-            accessibilityRole="menuitem"
-            accessibilityState={{ selected: active }}
-            onPress={() => onSelect(option)}
-            style={({ pressed }) => [
-              styles.option,
-              active && styles.optionActive,
-              pressed && styles.optionPressed,
-            ]}
-          >
-            <AppText variant="small" style={active && styles.optionTextActive}>
-              {option}
-            </AppText>
-            {active ? <AppIcon name="check" size={15} color={colors.deepForest} /> : null}
-          </Pressable>
-        );
-      })}
-    </View>
   );
 }
 
@@ -388,14 +353,14 @@ export function HomeScreen() {
   const { user } = useAuth();
   const { expenses, loading: expensesLoading, loadError, refresh: refreshExpenses } = useExpenses();
   const { budgets, loading: budgetsLoading, refresh: refreshBudgets } = useBudgets();
+  const { incomeEntries, loading: financeLoading, refresh: refreshFinance } = useFinance();
   const { allCategories } = useCategories();
   const { displayName: profileName } = useProfile();
   const { width } = useWindowDimensions();
   const bottomInset = useBottomNavInset();
-  const [selectedMonthId, setSelectedMonthId] = useState(dashboardMonths[0].id);
-  const [period, setPeriod] = useState<DashboardPeriod>('This Month');
-  const [monthMenuOpen, setMonthMenuOpen] = useState(false);
-  const [periodMenuOpen, setPeriodMenuOpen] = useState(false);
+  const [period, setPeriod] = useState<DashboardPeriod>('Month');
+  // 0 is the current week/month/year; each arrow tap moves one period.
+  const [offset, setOffset] = useState(0);
   const {
     categories,
     isFull: atCategoryLimit,
@@ -420,31 +385,45 @@ export function HomeScreen() {
   // greeting immediately, with the auth metadata as the fallback.
   const firstName = profileName.trim() ? profileName.trim().split(/\s+/)[0] : resolveFirstName(user);
   const greeting = useMemo(() => greetingForHour(new Date().getHours()), []);
-  const baseMonth = dashboardMonths.find((item) => item.id === selectedMonthId) ?? dashboardMonths[0];
+  const range = useMemo(() => periodRange(period, offset), [offset, period]);
+  // Insights and the assistant speak in months, so they follow the month the
+  // selected period ends in.
+  const selectedMonthId = range.month;
   const savedBudget = budgets.find((item) => item.month === selectedMonthId);
-  const monthExpenses = useMemo(
-    () => expenses.filter((expense) => expense.transactionDate.startsWith(selectedMonthId)),
-    [expenses, selectedMonthId],
+  const inRange = useCallback((date: string) => date >= range.start && date <= range.end, [range.end, range.start]);
+  const periodExpenses = useMemo(() => expenses.filter((expense) => inRange(expense.transactionDate)), [expenses, inRange]);
+  const periodIncomeCents = useMemo(
+    () => incomeEntries.filter((entry) => entry.kind === 'income' && inRange(entry.transactionDate)).reduce((sum, entry) => sum + entry.amountCents, 0),
+    [inRange, incomeEntries],
   );
-  const realSpent = monthExpenses.reduce((total, expense) => total + expense.amountCents, 0) / 100;
-  const realBars = useMemo(() => {
-    const totals = Array.from({ length: 6 }, () => 0);
-    monthExpenses.forEach((expense) => {
-      const day = Number(expense.transactionDate.slice(8, 10));
-      totals[Math.min(5, Math.floor((day - 1) / 5))] += expense.amountCents;
-    });
+  const spentCents = periodExpenses.reduce((total, expense) => total + expense.amountCents, 0);
+  const bars = useMemo(() => {
+    const totals = range.buckets.map(([from, to]) => periodExpenses
+      .filter((expense) => expense.transactionDate >= from && expense.transactionDate <= to)
+      .reduce((sum, expense) => sum + expense.amountCents, 0));
     const largest = Math.max(...totals, 0);
     return largest === 0 ? totals : totals.map((total) => Math.max(0.12, total / largest));
-  }, [monthExpenses]);
-  const month = useMemo(() => ({
-    ...baseMonth,
-    budget: savedBudget ? savedBudget.amountCents / 100 : 0,
-    spent: realSpent,
-    transactions: monthExpenses.length,
-    bars: realBars,
-  }), [baseMonth, monthExpenses.length, realBars, realSpent, savedBudget]);
-  const usage = month.budget > 0 ? Math.round((month.spent / month.budget) * 100) : 0;
-  const remaining = month.budget - month.spent;
+  }, [periodExpenses, range.buckets]);
+  // Budgets are monthly category limits. A month uses its own; a year adds up
+  // each of its months; a week has no budget of its own.
+  const budget = useMemo(() => {
+    if (period === 'Week') return null;
+    const months = period === 'Month' ? [range.month] : Array.from({ length: 12 }, (_, index) => `${range.start.slice(0, 4)}-${String(index + 1).padStart(2, '0')}`);
+    return months.reduce((total, monthId) => {
+      const usage = budgetUsage(budgets.find((item) => item.month === monthId), periodExpenses.filter((expense) => expense.transactionDate.startsWith(monthId)));
+      return { limitCents: total.limitCents + usage.limitCents, spentCents: total.spentCents + usage.spentCents };
+    }, { limitCents: 0, spentCents: 0 });
+  }, [budgets, period, periodExpenses, range.month, range.start]);
+  const hasBudget = Boolean(budget && budget.limitCents > 0);
+  const usage = budget && hasBudget ? percentOf(budget.spentCents, budget.limitCents) ?? 0 : 0;
+  const remainingCents = budget ? budget.limitCents - budget.spentCents : 0;
+  const budgetCaption = budgetsLoading
+    ? 'Checking budget…'
+    : period === 'Week'
+      ? 'Category budgets are tracked monthly'
+      : hasBudget && budget
+        ? `${formatCents(budget.spentCents)} of ${formatCents(budget.limitCents)} budgeted`
+        : 'No category budgets set';
   // Shares the Phase 7 analytics pipeline with the Insights screen, so the
   // mascot can never contradict what Analytics reports.
   const insights = useMemo(() => {
@@ -487,7 +466,8 @@ export function HomeScreen() {
     if (consumeSkippedPanelRefresh('/home')) return;
     void refreshExpenses();
     void refreshBudgets();
-  }, [refreshBudgets, refreshExpenses]));
+    void refreshFinance();
+  }, [refreshBudgets, refreshExpenses, refreshFinance]));
 
   const contentWidth = Math.min(width, 480);
   const compact = contentWidth < 360;
@@ -593,79 +573,39 @@ export function HomeScreen() {
           ]}
         >
           <Card style={[styles.summaryCard, { width: dashboardWidth }]}>
-            <View style={styles.selectorBar}>
-              <View style={styles.monthAnchor}>
-                <PressableScale
-                  accessibilityRole="button"
-                  accessibilityLabel={`Selected month: ${month.label}`}
-                  accessibilityState={{ expanded: monthMenuOpen }}
-                  onPress={() => {
-                    setMonthMenuOpen((open) => !open);
-                    setPeriodMenuOpen(false);
-                  }}
-                  style={styles.monthButton}
-                >
-                  <AppText
-                    variant="h2"
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    style={[styles.monthText, { fontSize: compact ? 17 : 20 }]}
+            <View style={styles.periodSegments} accessibilityRole="tablist">
+              {dashboardPeriods.map((option) => {
+                const active = option === period;
+                return (
+                  <PressableScale
+                    key={option}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: active }}
+                    onPress={() => { if (!active) { selectionFeedback(); setPeriod(option); setOffset(0); } }}
+                    style={[styles.periodSegment, active && styles.periodSegmentActive]}
                   >
-                    {month.label}
-                  </AppText>
-                  <AppIcon
-                    name={monthMenuOpen ? 'chevron-up' : 'chevron-down'}
-                    size={18}
-                    color={colors.muted}
-                  />
-                </PressableScale>
+                    <AppText style={[styles.periodText, active && styles.periodTextActive]}>{option}</AppText>
+                  </PressableScale>
+                );
+              })}
+            </View>
 
-                {monthMenuOpen ? (
-                  <OptionMenu
-                    options={dashboardMonths.map((item) => item.label)}
-                    selected={month.label}
-                    onSelect={(label) => {
-                      const next = dashboardMonths.find((item) => item.label === label);
-                      if (next) setSelectedMonthId(next.id);
-                      setMonthMenuOpen(false);
-                    }}
-                  />
-                ) : null}
-              </View>
-
-              <View style={styles.periodAnchor}>
-                <PressableScale
-                  accessibilityRole="button"
-                  accessibilityLabel={`Selected period: ${period}`}
-                  accessibilityState={{ expanded: periodMenuOpen }}
-                  onPress={() => {
-                    setPeriodMenuOpen((open) => !open);
-                    setMonthMenuOpen(false);
-                  }}
-                  style={[styles.periodChip, { paddingHorizontal: compact ? 10 : 13 }]}
-                >
-                  <AppText style={styles.periodText} numberOfLines={1}>
-                    {period}
-                  </AppText>
-                  <AppIcon
-                    name={periodMenuOpen ? 'chevron-up' : 'chevron-down'}
-                    size={18}
-                    color={colors.deepForest}
-                  />
-                </PressableScale>
-
-                {periodMenuOpen ? (
-                  <OptionMenu
-                    options={dashboardPeriods}
-                    selected={period}
-                    align="right"
-                    onSelect={(nextPeriod) => {
-                      setPeriod(nextPeriod);
-                      setPeriodMenuOpen(false);
-                    }}
-                  />
-                ) : null}
-              </View>
+            <View style={styles.selectorBar}>
+              <PressableScale accessibilityRole="button" accessibilityLabel={`Previous ${period.toLowerCase()}`} hitSlop={6} onPress={() => { selectionFeedback(); setOffset((value) => value - 1); }} style={styles.arrowButton}>
+                <AppIcon name="chevron-left" size={22} color={colors.deepForest} />
+              </PressableScale>
+              <AppText
+                variant="h2"
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                accessibilityLabel={`Showing ${range.label}`}
+                style={[styles.monthText, { fontSize: compact ? 17 : 20 }]}
+              >
+                {range.label}
+              </AppText>
+              <PressableScale accessibilityRole="button" accessibilityLabel={`Next ${period.toLowerCase()}`} accessibilityState={{ disabled: offset >= 0 }} disabled={offset >= 0} hitSlop={6} onPress={() => { selectionFeedback(); setOffset((value) => Math.min(0, value + 1)); }} style={[styles.arrowButton, offset >= 0 && styles.arrowButtonDisabled]}>
+                <AppIcon name="chevron-right" size={22} color={offset >= 0 ? colors.muted : colors.deepForest} />
+              </PressableScale>
             </View>
 
             <AppText variant="subtitle" style={styles.summaryLabel}>Total Spent</AppText>
@@ -673,46 +613,46 @@ export function HomeScreen() {
             <View style={styles.totalRow}>
               <View style={styles.totalCopy}>
                 <AppText variant="hero" numberOfLines={1} adjustsFontSizeToFit style={styles.totalAmount}>
-                  {expensesLoading ? '—' : formatMoney(month.spent)}
+                  {expensesLoading ? '—' : formatCents(spentCents)}
                 </AppText>
-                <AppText variant="subtitle" style={styles.summaryMuted}>
-                  {budgetsLoading ? 'Checking budget…' : month.budget > 0 ? `of ${formatMoney(month.budget)} budget` : 'No monthly budget set'}
-                </AppText>
+                <AppText variant="subtitle" style={styles.summaryMuted}>{budgetCaption}</AppText>
               </View>
-              <SparkBars key={month.id} bars={month.bars} />
+              <SparkBars key={`${period}-${offset}`} bars={bars} />
             </View>
 
-            <View style={styles.progressRow}>
-              <ProgressBar value={Math.min(100, usage)} height={14} />
-              <AppText variant="h3" style={styles.usageText}>
-                {usage}% used
-              </AppText>
-            </View>
+            {hasBudget ? (
+              <View style={styles.progressRow}>
+                <ProgressBar value={Math.min(100, usage)} height={14} />
+                <AppText variant="h3" style={styles.usageText}>
+                  {usage}% used
+                </AppText>
+              </View>
+            ) : null}
             {loadError ? <AppText variant="small" style={styles.dataError}>Expense data could not be refreshed.</AppText> : null}
           </Card>
         </FadeSlideIn>
 
         <View style={styles.metricRow}>
           <MetricTile
-            icon="chart-pie"
-            value={expensesLoading || budgetsLoading ? '—' : month.budget > 0 ? `${usage}%` : 'Not set'}
-            label="Budget used"
+            icon="cash-plus"
+            value={financeLoading && !incomeEntries.length ? '—' : formatCents(periodIncomeCents)}
+            label="Income"
             index={2}
             width={metricWidth}
-            onPress={() => router.push('/wallet')}
+            onPress={() => router.push('/transactions')}
           />
           <MetricTile
             icon="wallet"
-            value={expensesLoading || budgetsLoading ? '—' : month.budget > 0 ? formatMoney(Math.abs(remaining)) : 'Not set'}
-            label={remaining < 0 ? 'Over budget' : 'Remaining'}
+            value={expensesLoading || budgetsLoading ? '—' : hasBudget ? formatCents(Math.abs(remainingCents)) : 'Not set'}
+            label={hasBudget && remainingCents < 0 ? 'Over budget' : 'Budget left'}
             index={3}
             width={metricWidth}
             onPress={() => router.push('/wallet')}
           />
           <MetricTile
             icon="chart-bar"
-            value={expensesLoading ? '—' : String(month.transactions)}
-            label="Transactions"
+            value={expensesLoading ? '—' : String(periodExpenses.length)}
+            label="Expenses"
             index={4}
             width={metricWidth}
             onPress={() => router.push('/transactions')}
@@ -972,74 +912,44 @@ const styles = StyleSheet.create({
     minHeight: 42,
     zIndex: 30,
   },
-  // Takes the leftover width and shrinks first, so the two controls can never
-  // run into each other.
-  monthAnchor: {
-    position: 'relative',
+  // The label takes the leftover width between the arrows and shrinks first,
+  // so a long week range can never push an arrow off the card.
+  monthText: {
     flex: 1,
     minWidth: 0,
-    zIndex: 32,
-  },
-  periodAnchor: {
-    position: 'relative',
-    flexGrow: 0,
-    flexShrink: 0,
-    alignItems: 'flex-end',
-    zIndex: 31,
-  },
-  monthButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    minHeight: 42,
-  },
-  monthText: {
-    flexShrink: 1,
     lineHeight: 26,
+    textAlign: 'center',
   },
-  periodChip: {
-    minHeight: 42,
-    flexDirection: 'row',
+  arrowButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
-    gap: 5,
+    justifyContent: 'center',
+    backgroundColor: colors.pale,
+  },
+  arrowButtonDisabled: { opacity: 0.45 },
+  periodSegments: {
+    flexDirection: 'row',
+    gap: 4,
+    padding: 4,
     borderRadius: radii.pill,
     backgroundColor: colors.pale,
   },
+  periodSegment: {
+    flex: 1,
+    minHeight: 34,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  periodSegmentActive: { backgroundColor: colors.deepForest },
   periodText: {
     color: colors.text,
     fontFamily: 'JakartaMedium',
     fontSize: 12,
   },
-  optionMenu: {
-    position: 'absolute',
-    top: 44,
-    left: 0,
-    width: 190,
-    borderRadius: 14,
-    padding: 6,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.line,
-    zIndex: 50,
-    ...shadow,
-  },
-  optionMenuRight: {
-    left: undefined,
-    right: 0,
-    width: 158,
-  },
-  option: {
-    minHeight: 38,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  optionActive: { backgroundColor: colors.pale },
-  optionPressed: { opacity: 0.7 },
-  optionTextActive: { color: colors.deepForest, fontFamily: 'JakartaSemiBold' },
+  periodTextActive: { color: colors.surface, fontFamily: 'JakartaSemiBold' },
   summaryLabel: { color: colors.muted, marginTop: 3 },
   totalRow: {
     flexDirection: 'row',

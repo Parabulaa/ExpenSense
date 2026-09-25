@@ -424,9 +424,10 @@ export function PrivacyDataScreen() {
           <AppText variant="h3">What we store</AppText>
           <View style={s.divider} />
           <BulletRow icon="account-outline" title="Account" body="Your email and the display name you choose." />
-          <BulletRow icon="receipt-text-outline" title="Expenses" body="Amounts, merchants, categories, dates and notes you enter." />
-          <BulletRow icon="wallet-outline" title="Budgets" body="Monthly totals and any category limits you set." />
-          <BulletRow icon="shape-outline" title="Categories" body="The default set plus any categories you create." />
+          <BulletRow icon="receipt-text-outline" title="Transactions" body="Expenses, income, cash-ins and transfers: amounts, merchants, categories, dates, times and notes." />
+          <BulletRow icon="wallet-outline" title="Wallets and budgets" body="Your wallets and their balances, plus the category budgets you set." />
+          <BulletRow icon="image-outline" title="Receipts" body="Receipt images you confirm, stored privately in your own folder." />
+          <BulletRow icon="shape-outline" title="Categories" body="The default set, which ones you hid, and any categories you create." />
         </Card>
       </FadeSlideIn>
 
@@ -467,15 +468,23 @@ export function PrivacyDataScreen() {
 const FAQ: { question: string; answer: string }[] = [
   {
     question: 'How do I add an expense?',
-    answer: 'Tap the centre Scan button in the bottom navigation, then choose "Enter Manually". Fill in the amount, merchant, category and date, then save.',
+    answer: 'Tap the centre Scan button in the bottom navigation, then choose "Manual Entry". Fill in the amount, merchant, category, wallet, date and time, then save.',
   },
   {
     question: 'Can I scan a receipt?',
-    answer: 'Not yet. Receipt scanning is designed but not implemented, so the option is marked as coming later rather than pretending to read your receipt.',
+    answer: 'Yes. Scan or upload a receipt and ExpenSense reads it, then tells you whether it looks like an expense, a cash-in or a transfer. Nothing changes in your wallets or budgets until you review the details and tap Confirm, and the same receipt can never be saved twice.',
   },
   {
     question: 'How do I set a budget?',
-    answer: 'Open Budget from the bottom navigation, pick a month, then set a monthly total. You can also add per-category limits to track individual spending areas.',
+    answer: 'Open Wallet from the bottom navigation, go to Category Budgets, use the arrows to pick a month, then tap a category to set its budget. Your budget is the sum of your category budgets.',
+  },
+  {
+    question: 'What is the difference between income, cash-in and a transfer?',
+    answer: 'Income is money you earned. A cash-in is a top-up from outside your wallets. A transfer moves money between two of your wallets, and any transfer fee comes out of the wallet you sent from. None of them count as spending or change a budget.',
+  },
+  {
+    question: 'Can I hide a category I never use?',
+    answer: 'Yes. In Categories, tap the eye icon next to a default category, or edit a custom one and choose Hide Category. Past transactions keep it, and you can show it again from Hidden Categories.',
   },
   {
     question: 'Where do the insights come from?',

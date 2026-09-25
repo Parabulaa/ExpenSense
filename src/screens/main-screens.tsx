@@ -3,7 +3,6 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
-import { Calendar } from '@/components/common/calendar';
 import { DraggableBottomSheet } from '@/components/common/draggable-bottom-sheet';
 import { FadeSlideIn, PressableScale } from '@/components/common/motion';
 import { Screen } from '@/components/common/screen';
@@ -18,6 +17,7 @@ import { DonutChart } from '@/features/analytics/DonutChart';
 import { AuthDialog } from '@/features/auth/components/AuthDialog';
 import { authCopy } from '@/features/auth/copy';
 import { useBudgets } from '@/features/budget/BudgetProvider';
+import { budgetUsage } from '@/features/budget/types';
 import { parseBudgetAmount } from '@/features/budget/validation';
 import { useCategories } from '@/features/categories/CategoriesProvider';
 import { MAX_DASHBOARD_CATEGORIES } from '@/features/dashboard/dashboard-data';
@@ -27,9 +27,11 @@ import { useExpenses } from '@/features/expenses/ExpensesProvider';
 import { useAddExpenseOverlay } from '@/features/expenses/AddExpenseOverlayProvider';
 import { useFinance } from '@/features/finance/FinanceProvider';
 import { AddWalletCard, HIDDEN_AMOUNT, WalletCardFace } from '@/features/finance/components/WalletCardFace';
+import { incomeKindLabels, type IncomeEntry, type Wallet, type WalletTransfer } from '@/features/finance/types';
 import { useProfile } from '@/features/profile/ProfileProvider';
 import type { Expense, ExpenseFormErrors, ExpenseFormValues } from '@/features/expenses/types';
-import { formatExpenseDate, normalizeAmountInput, todayLocalDate, validateExpenseForm } from '@/features/expenses/validation';
+import { formatDateTime, formatExpenseDate, formatTime, normalizeAmountInput, nowLocalTime, todayLocalDate, validateExpenseForm } from '@/features/expenses/validation';
+import { ExpenseDatePicker, WalletPicker } from '@/screens/expense-screens';
 import { formatCompactPeso, formatPercent, formatPeso, percentOf } from '@/lib/format';
 import { selectionFeedback, warningFeedback } from '@/lib/haptics';
 import { consumeSkippedPanelRefresh } from '@/lib/panel-refresh';
@@ -47,8 +49,10 @@ export { HomeScreen } from './home-screen';
 
 export function TransactionsScreen() {
   const { openAddExpense } = useAddExpenseOverlay();
-  const { categories } = useCategories();
-  const { expenses, loading, loadError, refresh } = useExpenses();
+  const { categories, findCategory } = useCategories();
+  const { expenses, loading: expensesLoading, loadError, refresh } = useExpenses();
+  const { wallets, incomeEntries, transfers, loading: financeLoading, refresh: refreshFinance } = useFinance();
+  const loading = expensesLoading || financeLoading;
   const bottomInset = useBottomNavInset();
   // Analytics insights link here with a `q` so the chevron lands on the rows the
   // insight is about instead of the unfiltered list.
@@ -75,61 +79,69 @@ export function TransactionsScreen() {
   const [picker, setPicker] = useState<PickerKind>(null);
   const [calendarMonth, setCalendarMonth] = useState(todayLocalDate().slice(0, 7));
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
+  const [openEntry, setOpenEntry] = useState<LedgerEntry | null>(null);
 
   useFocusEffect(useCallback(() => {
     if (consumeSkippedPanelRefresh('/transactions')) return;
     void refresh();
-  }, [refresh]));
+    void refreshFinance();
+  }, [refresh, refreshFinance]));
 
-  const visibleExpenses = useMemo(() => {
+  // Every money movement, from the same rows the wallets and budgets use.
+  const ledger = useMemo(() => buildLedger({ expenses, incomeEntries, transfers, wallets, findCategory }), [expenses, findCategory, incomeEntries, transfers, wallets]);
+
+  const visibleEntries = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
     const today = todayLocalDate();
     const now = new Date(`${today}T12:00:00`);
     const cutoff = new Date(now);
-    cutoff.setDate(cutoff.getDate() - (dateFilter === 'last7' ? 6 : 29));
+    cutoff.setDate(cutoff.getDate() - (dateFilter === 'last7' ? 6 : dateFilter === 'week' ? now.getDay() : 29));
     const cutoffValue = localDateString(cutoff);
-    const filtered = expenses.filter((expense) => {
-      const category = categories.find((item) => item.id === expense.categoryId);
-      const matchesQuery = !needle || `${expense.merchant} ${category?.fullLabel ?? ''} ${expense.notes ?? ''}`.toLocaleLowerCase().includes(needle);
-      const matchesCategory = categoryFilter === 'all' || expense.categoryId === categoryFilter;
-      const matchesDisplayedMonth = expense.transactionDate.startsWith(calendarMonth);
-      const matchesCalendarDate = !selectedCalendarDate || expense.transactionDate === selectedCalendarDate;
-      const matchesDate = dateFilter === 'all' ||
-        (dateFilter === 'today' && expense.transactionDate === today) ||
-        (dateFilter === 'month' && expense.transactionDate.startsWith(calendarMonth)) ||
-        ((dateFilter === 'last7' || dateFilter === 'last30') && expense.transactionDate >= cutoffValue && expense.transactionDate <= today);
+    const filtered = ledger.filter((entry) => {
+      const matchesQuery = !needle || entry.searchText.includes(needle);
+      // A category only applies to expenses, so choosing one shows only spending.
+      const matchesCategory = categoryFilter === 'all' || (entry.kind === 'expense' && entry.categoryId === categoryFilter);
+      // Relative ranges can cross a month boundary, so only the "whole month"
+      // views are tied to the calendar's month.
+      const tiedToMonth = dateFilter === 'all' || dateFilter === 'month';
+      const matchesDisplayedMonth = !tiedToMonth || entry.date.startsWith(calendarMonth);
+      const matchesCalendarDate = !selectedCalendarDate || entry.date === selectedCalendarDate;
+      const matchesDate = dateFilter === 'all' || dateFilter === 'month' ||
+        (dateFilter === 'today' && entry.date === today) ||
+        ((dateFilter === 'week' || dateFilter === 'last7' || dateFilter === 'last30') && entry.date >= cutoffValue && entry.date <= today);
       return matchesDisplayedMonth && matchesQuery && matchesCategory && matchesDate && matchesCalendarDate;
     });
     return [...filtered].sort((a, b) => {
-      if (sort === 'oldest') return a.transactionDate.localeCompare(b.transactionDate) || a.createdAt.localeCompare(b.createdAt);
+      if (sort === 'oldest') return compareLedger(b, a);
       if (sort === 'highest') return b.amountCents - a.amountCents;
       if (sort === 'lowest') return a.amountCents - b.amountCents;
-      return b.transactionDate.localeCompare(a.transactionDate) || b.createdAt.localeCompare(a.createdAt);
+      return compareLedger(a, b);
     });
-  }, [calendarMonth, categories, categoryFilter, dateFilter, expenses, query, selectedCalendarDate, sort]);
+  }, [calendarMonth, categoryFilter, dateFilter, ledger, query, selectedCalendarDate, sort]);
 
-  const groups = useMemo(() => groupExpensesByDate(visibleExpenses), [visibleExpenses]);
+  const groups = useMemo(() => groupByDate(visibleEntries), [visibleEntries]);
   const hasFilters = Boolean(query.trim()) || dateFilter !== 'all' || categoryFilter !== 'all' || sort !== 'newest' || Boolean(selectedCalendarDate);
   const clearFilters = () => { setQuery(''); setSearchOpen(false); setDateFilter('all'); setCategoryFilter('all'); setSort('newest'); setSelectedCalendarDate(null); };
+  const reload = () => { void refresh(); void refreshFinance(); };
 
   return (
-    <Screen embedded bottomInset={bottomInset} background={false} refreshing={loading && expenses.length > 0} onRefresh={() => void refresh()}>
+    <Screen embedded bottomInset={bottomInset} background={false} refreshing={loading && ledger.length > 0} onRefresh={reload}>
       <View style={s.page}>
         <AppText variant="hero">Transactions</AppText>
         <Animated.View layout={LinearTransition.duration(180)} style={s.transactionToolbar}>
-          {searchOpen ? <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} style={s.searchExpanded}><AppIcon name="magnify" size={21} color={colors.muted} /><TextInput autoFocus accessibilityLabel="Search transactions" placeholder="Search transactions..." placeholderTextColor={colors.muted} value={query} onChangeText={setQuery} style={s.searchInput} /><PressableScale accessibilityLabel="Close transaction search" onPress={() => { setQuery(''); setSearchOpen(false); }} style={s.searchClose}><AppIcon name="close" size={19} /></PressableScale></Animated.View> : <><PressableScale accessibilityRole="button" accessibilityLabel="Open transaction search" onPress={() => setSearchOpen(true)} style={s.searchCompact}><AppIcon name="magnify" size={22} color={colors.deepForest} /></PressableScale><FilterButton label="Date" active={dateFilter !== 'all'} flex={0.9} onPress={() => setPicker('date')} /><FilterButton label="Category" active={categoryFilter !== 'all'} flex={1.25} onPress={() => setPicker('category')} /><FilterButton label="Sort" active={sort !== 'newest'} flex={0.9} onPress={() => setPicker('sort')} /></>}
+          {searchOpen ? <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} style={s.searchExpanded}><AppIcon name="magnify" size={21} color={colors.muted} /><TextInput autoFocus accessibilityLabel="Search transactions" placeholder="Search transactions..." placeholderTextColor={colors.muted} value={query} onChangeText={setQuery} style={s.searchInput} /><PressableScale accessibilityLabel="Close transaction search" onPress={() => { setQuery(''); setSearchOpen(false); }} style={s.searchClose}><AppIcon name="close" size={19} /></PressableScale></Animated.View> : <><PressableScale accessibilityRole="button" accessibilityLabel="Open transaction search" onPress={() => setSearchOpen(true)} style={s.searchCompact}><AppIcon name="magnify" size={22} color={colors.deepForest} /></PressableScale><FilterButton label={dateFilter === 'all' ? 'Date' : DATE_LABELS[dateFilter]} active={dateFilter !== 'all'} flex={0.9} onPress={() => setPicker('date')} /><FilterButton label="Category" active={categoryFilter !== 'all'} flex={1.25} onPress={() => setPicker('category')} /><FilterButton label="Sort" active={sort !== 'newest'} flex={0.9} onPress={() => setPicker('sort')} /></>}
         </Animated.View>
         <Animated.View key={calendarMonth} entering={FadeIn.duration(180)}><SpendingCalendar expenses={expenses} categories={categories} month={calendarMonth} selectedDate={selectedCalendarDate} onMonthChange={(next) => { setCalendarMonth(next); setDateFilter('all'); setSelectedCalendarDate(null); }} onSelectDate={(date) => { setDateFilter('all'); setSelectedCalendarDate(date); }} /></Animated.View>
         {hasFilters ? <Pressable accessibilityRole="button" accessibilityLabel="Clear transaction filters" onPress={clearFilters} style={s.clearFilters}><AppIcon name="filter-remove-outline" size={17} /><AppText variant="small" style={s.clearFiltersText}>Clear filters</AppText></Pressable> : null}
 
-        {loading && expenses.length === 0 ? (
+        {loading && ledger.length === 0 ? (
           <View style={s.skeletonList}>{[0, 1, 2].map((item) => <View key={item} style={s.skeletonCard}><View style={s.skeletonIcon} /><View style={s.skeletonCopy}><View style={s.skeletonLineWide} /><View style={s.skeletonLine} /></View></View>)}</View>
-        ) : loadError && expenses.length === 0 ? (
+        ) : loadError && ledger.length === 0 ? (
           <Card style={s.emptyCard}>
             <View style={s.emptyIcon}><AppIcon name="cloud-alert-outline" size={30} /></View>
             <AppText variant="h2">Couldn&apos;t load transactions</AppText>
             <AppText style={[s.muted, s.center]}>{loadError}</AppText>
-            <SecondaryButton title="Try Again" onPress={() => void refresh()} />
+            <SecondaryButton title="Try Again" onPress={reload} />
           </Card>
         ) : groups.length === 0 ? (
           <Card style={s.emptyCard}>
@@ -141,20 +153,21 @@ export function TransactionsScreen() {
         ) : groups.map((group) => (
           <View key={group.date}>
             <AppText variant="h2" style={s.group}>{group.label}</AppText>
-            {group.expenses.map((expense) => <ExpenseRow key={expense.id} expense={expense} />)}
+            {group.entries.map((entry) => <LedgerRow key={entry.key} entry={entry} onOpen={() => entry.kind === 'expense' ? router.push(`/transaction/${entry.id}` as never) : setOpenEntry(entry)} />)}
           </View>
         ))}
       </View>
-      <TransactionPicker kind={picker} dateFilter={dateFilter} categoryFilter={categoryFilter} sort={sort} onDate={(value) => { setDateFilter(value); setSelectedCalendarDate(null); if (value === 'today') setCalendarMonth(todayLocalDate().slice(0, 7)); }} onCategory={setCategoryFilter} onSort={setSort} onClose={() => setPicker(null)} />
+      <TransactionPicker kind={picker} dateFilter={dateFilter} categoryFilter={categoryFilter} sort={sort} onDate={(value) => { setDateFilter(value); setSelectedCalendarDate(null); if (value !== 'all') setCalendarMonth(todayLocalDate().slice(0, 7)); }} onCategory={setCategoryFilter} onSort={setSort} onClose={() => setPicker(null)} />
+      <MoneyMovementSheet entry={openEntry} onClose={() => setOpenEntry(null)} />
     </Screen>
   );
 }
 
-type DateFilter = 'all' | 'today' | 'last7' | 'month' | 'last30';
+type DateFilter = 'all' | 'today' | 'week' | 'last7' | 'month' | 'last30';
 type SortOption = 'newest' | 'oldest' | 'highest' | 'lowest';
 type PickerKind = 'date' | 'category' | 'sort' | null;
-const DATE_LABELS: Record<DateFilter, string> = { all: 'Date', today: 'Today', last7: 'Last 7 Days', month: 'This Month', last30: 'Last 30 Days' };
-const SORT_LABELS: Record<SortOption, string> = { newest: 'Sort', oldest: 'Oldest', highest: 'Highest', lowest: 'Lowest' };
+const DATE_LABELS: Record<DateFilter, string> = { all: 'All Dates', today: 'Today', week: 'This Week', last7: 'Last 7 Days', month: 'This Month', last30: 'Last 30 Days' };
+const SORT_LABELS: Record<SortOption, string> = { newest: 'Newest', oldest: 'Oldest', highest: 'Highest', lowest: 'Lowest' };
 
 function localDateString(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -191,7 +204,7 @@ function SpendingCalendar({ expenses, categories, month, selectedDate, onMonthCh
   return <Card style={s.spendingCalendar}>
     <View style={s.calendarHeader}>
       <PressableScale accessibilityRole="button" accessibilityLabel="Previous spending month" onPress={() => onMonthChange(shiftMonth(month, -1))} style={s.calendarNav}><AppIcon name="chevron-left" size={21} /></PressableScale>
-      <View style={{ alignItems: 'center' }}><AppText variant="h2">{formatMonth(month)}</AppText><AppText variant="small" style={s.muted}>{monthExpenses.length} transaction{monthExpenses.length === 1 ? '' : 's'}</AppText></View>
+      <View style={{ alignItems: 'center' }}><AppText variant="h2">{formatMonth(month)}</AppText><AppText variant="small" style={s.muted}>{monthExpenses.length} expense{monthExpenses.length === 1 ? '' : 's'}</AppText></View>
       <PressableScale accessibilityRole="button" accessibilityLabel="Next spending month" onPress={() => onMonthChange(shiftMonth(month, 1))} style={s.calendarNav}><AppIcon name="chevron-right" size={21} /></PressableScale>
     </View>
     <View style={s.calendarSummary}>
@@ -242,42 +255,125 @@ function TransactionPicker({ kind, dateFilter, categoryFilter, sort, onDate, onC
   return <DraggableBottomSheet visible onClose={onClose}><AppText variant="h2">{kind === 'date' ? 'Filter by Date' : kind === 'sort' ? 'Sort Transactions' : 'Filter by Category'}</AppText><View style={s.pickerOptions}>{options.map((option) => <PressableScale key={option.id} onPress={() => choose(option.id)} accessibilityRole="button" accessibilityState={{ selected: selected === option.id }} style={[s.pickerOption, selected === option.id && s.pickerOptionSelected]}>{option.icon ? <View style={s.pickerOptionIcon}><AppIcon name={option.icon} size={21} /></View> : null}<AppText variant="bodyMedium" style={s.pickerOptionCopy}>{option.label}</AppText>{selected === option.id ? <AppIcon name="check-circle" color={colors.deepForest} /> : null}</PressableScale>)}</View></DraggableBottomSheet>;
 }
 
-function ExpenseRow({ expense }: { expense: Expense }) {
-  const { findCategory } = useCategories();
-  const category = findCategory(expense.categoryId);
+type LedgerKind = 'expense' | 'income' | 'cash_in' | 'transfer';
+
+/** One row of the unified history, whatever kind of money movement it is. */
+type LedgerEntry = {
+  key: string;
+  id: string;
+  kind: LedgerKind;
+  date: string;
+  time: string | null;
+  createdAt: string;
+  amountCents: number;
+  feeCents: number;
+  title: string;
+  subtitle: string;
+  icon: Parameters<typeof AppIcon>[0]['name'];
+  categoryId: string | null;
+  notes: string | null;
+  searchText: string;
+};
+
+const LEDGER_KIND_LABELS: Record<LedgerKind, string> = { expense: 'Expense', income: 'Income', cash_in: 'Cash-in', transfer: 'Transfer' };
+
+function buildLedger({ expenses, incomeEntries, transfers, wallets, findCategory }: { expenses: Expense[]; incomeEntries: IncomeEntry[]; transfers: WalletTransfer[]; wallets: Wallet[]; findCategory: (id: string | undefined) => DashboardCategory | null }): LedgerEntry[] {
+  const walletName = (id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? null;
+  const rows: LedgerEntry[] = [
+    ...expenses.map((expense): LedgerEntry => {
+      const category = findCategory(expense.categoryId);
+      const label = category?.fullLabel ?? 'Expense';
+      const wallet = walletName(expense.walletId);
+      return { key: `expense-${expense.id}`, id: expense.id, kind: 'expense', date: expense.transactionDate, time: expense.transactionTime, createdAt: expense.createdAt, amountCents: expense.amountCents, feeCents: 0, title: expense.merchant, subtitle: [label, wallet].filter(Boolean).join(' · '), icon: category?.icon ?? 'receipt-text-outline', categoryId: expense.categoryId, notes: expense.notes, searchText: '' };
+    }),
+    ...incomeEntries.map((entry): LedgerEntry => ({ key: `income-${entry.id}`, id: entry.id, kind: entry.kind, date: entry.transactionDate, time: entry.transactionTime, createdAt: entry.createdAt, amountCents: entry.amountCents, feeCents: 0, title: entry.source, subtitle: [incomeKindLabels[entry.kind], walletName(entry.walletId)].filter(Boolean).join(' · '), icon: entry.kind === 'cash_in' ? 'cash-plus' : 'cash-multiple', categoryId: null, notes: entry.notes, searchText: '' })),
+    ...transfers.map((transfer): LedgerEntry => ({ key: `transfer-${transfer.id}`, id: transfer.id, kind: 'transfer', date: transfer.transactionDate, time: transfer.transactionTime, createdAt: transfer.createdAt, amountCents: transfer.amountCents, feeCents: transfer.feeCents, title: `${walletName(transfer.fromWalletId) ?? 'Wallet'} → ${walletName(transfer.toWalletId) ?? 'Wallet'}`, subtitle: `Transfer${transfer.feeCents ? ` · ${formatPeso(transfer.feeCents)} fee` : ''}`, icon: 'swap-horizontal', categoryId: null, notes: transfer.notes, searchText: '' })),
+  ];
+  return rows.map((row) => ({ ...row, searchText: `${row.title} ${row.subtitle} ${LEDGER_KIND_LABELS[row.kind]} ${row.notes ?? ''}`.toLocaleLowerCase() }));
+}
+
+/** Newest first: date, then time of day, then when it was recorded. */
+function compareLedger(a: LedgerEntry, b: LedgerEntry) {
+  return b.date.localeCompare(a.date) || (b.time ?? '').localeCompare(a.time ?? '') || b.createdAt.localeCompare(a.createdAt);
+}
+
+function LedgerRow({ entry, onOpen }: { entry: LedgerEntry; onOpen: () => void }) {
+  const incoming = entry.kind === 'income' || entry.kind === 'cash_in';
+  const sign = entry.kind === 'expense' ? '−' : incoming ? '+' : '';
+  const clock = formatTime(entry.time);
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${expense.merchant}, ${category?.fullLabel ?? 'Expense'}`} onPress={() => router.push(`/transaction/${expense.id}` as never)} style={({ pressed }) => pressed && { opacity: 0.78 }}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${entry.title}, ${entry.subtitle}`} onPress={onOpen} style={({ pressed }) => pressed && { opacity: 0.78 }}>
       <Card style={s.transaction}>
-        <View style={s.roundIcon}><AppIcon name={category?.icon ?? 'receipt-text-outline'} size={24} color={colors.deepForest} /></View>
+        <View style={[s.roundIcon, incoming && s.roundIconIncoming]}><AppIcon name={entry.icon} size={24} color={incoming ? colors.success : colors.deepForest} /></View>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <AppText variant="h3" numberOfLines={2}>{expense.merchant}</AppText>
-          <AppText style={s.muted} numberOfLines={2}>{category?.fullLabel ?? expense.categoryId}</AppText>
+          <AppText variant="h3" numberOfLines={2}>{entry.title}</AppText>
+          <AppText style={s.muted} numberOfLines={2}>{clock ? `${entry.subtitle} · ${clock}` : entry.subtitle}</AppText>
         </View>
-        <AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={s.transactionAmount}>−{formatCompactPeso(expense.amountCents)}</AppText>
+        <AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={[s.transactionAmount, incoming && { color: colors.success }]}>{sign}{formatCompactPeso(entry.amountCents)}</AppText>
       </Card>
     </Pressable>
   );
 }
 
-function groupExpensesByDate(expenses: Expense[]) {
+function groupByDate(entries: LedgerEntry[]) {
   const today = todayLocalDate();
   const yesterdayDate = new Date();
   yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-  const yesterday = `${yesterdayDate.getFullYear()}-${String(yesterdayDate.getMonth() + 1).padStart(2, '0')}-${String(yesterdayDate.getDate()).padStart(2, '0')}`;
-  const groups = new Map<string, Expense[]>();
-  expenses.forEach((expense) => groups.set(expense.transactionDate, [...(groups.get(expense.transactionDate) ?? []), expense]));
-  return [...groups.entries()].map(([date, items]) => ({ date, label: date === today ? 'Today' : date === yesterday ? 'Yesterday' : formatExpenseDate(date), expenses: items }));
+  const yesterday = localDateString(yesterdayDate);
+  const groups = new Map<string, LedgerEntry[]>();
+  entries.forEach((entry) => groups.set(entry.date, [...(groups.get(entry.date) ?? []), entry]));
+  return [...groups.entries()].map(([date, items]) => ({ date, label: date === today ? 'Today' : date === yesterday ? 'Yesterday' : formatExpenseDate(date), entries: items }));
+}
+
+/** Details for money that moved between or into wallets; expenses have their own screen. */
+function MoneyMovementSheet({ entry, onClose }: { entry: LedgerEntry | null; onClose: () => void }) {
+  const { deleteIncome, deleteTransfer } = useFinance();
+  const { showToast } = useToast();
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const close = () => { setConfirming(false); onClose(); };
+  const remove = async () => {
+    if (!entry || deleting) return;
+    setDeleting(true);
+    const result = entry.kind === 'transfer' ? await deleteTransfer(entry.id) : await deleteIncome(entry.id);
+    setDeleting(false);
+    if (!result.ok) { showToast(result.message, { tone: 'warning' }); return; }
+    warningFeedback();
+    showToast(entry.kind === 'transfer' ? 'Transfer deleted. Both wallets were restored.' : `${LEDGER_KIND_LABELS[entry.kind]} deleted. The wallet was adjusted.`);
+    close();
+  };
+  return (
+    <>
+      <DraggableBottomSheet visible={Boolean(entry) && !confirming} disabled={deleting} onClose={close}>
+        {entry ? <>
+          <View style={s.rowBetween}><AppText variant="h2" style={{ flex: 1 }} numberOfLines={2}>{entry.title}</AppText><StatusChip>{LEDGER_KIND_LABELS[entry.kind]}</StatusChip></View>
+          <View style={{ gap: 12 }}>
+            <InfoRow label="Amount" value={formatPeso(entry.amountCents, { alwaysShowDecimals: true })} bold />
+            {entry.kind === 'transfer' ? <InfoRow label="Transfer fee" value={formatPeso(entry.feeCents, { alwaysShowDecimals: true })} /> : null}
+            <InfoRow label="When" value={formatDateTime(entry.date, entry.time)} />
+            <InfoRow label="Details" value={entry.subtitle} />
+            {entry.notes ? <InfoRow label="Notes" value={entry.notes} /> : null}
+          </View>
+          <AppText variant="small" style={s.muted}>{entry.kind === 'transfer' ? 'Transfers move money between wallets. They are not spending or income.' : 'Money in raises the wallet balance. It never counts as spending or changes a budget.'}</AppText>
+          <SecondaryButton title="Delete" icon="delete-outline" onPress={() => setConfirming(true)} />
+        </> : null}
+      </DraggableBottomSheet>
+      <AuthDialog visible={Boolean(entry) && confirming} title={entry?.kind === 'transfer' ? 'Delete transfer?' : 'Delete this entry?'} message={entry?.kind === 'transfer' ? 'Both wallet balances will be restored.' : 'The amount will be removed from the wallet balance.'} primaryAction={{ label: 'Delete', destructive: true, loading: deleting, onPress: () => void remove() }} secondaryAction={{ label: 'Cancel', onPress: () => setConfirming(false) }} onRequestClose={() => setConfirming(false)} />
+    </>
+  );
 }
 
 export function TransactionDetailsScreen() {
   const { findCategory } = useCategories();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { expenses, loading, deleteExpense } = useExpenses();
+  const { wallets, refresh: refreshFinance } = useFinance();
   const { showToast } = useToast();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const expense = expenses.find((item) => item.id === id);
   const category = findCategory(expense?.categoryId);
+  const wallet = wallets.find((item) => item.id === expense?.walletId);
 
   const remove = async () => {
     if (!expense || deleting) return;
@@ -285,8 +381,10 @@ export function TransactionDetailsScreen() {
     const result = await deleteExpense(expense.id);
     setDeleting(false);
     if (!result.ok) { showToast(result.message, { tone: 'warning' }); return; }
+    // The database returned the amount to its wallet; reload so every screen agrees.
+    void refreshFinance();
     warningFeedback();
-    showToast('Transaction deleted.');
+    showToast(wallet ? `Transaction deleted. ${wallet.name} was refunded.` : 'Transaction deleted.');
     setConfirmDelete(false);
     router.replace('/transactions');
   };
@@ -308,15 +406,16 @@ export function TransactionDetailsScreen() {
             <AppIcon name={category?.icon ?? 'receipt-text-outline'} size={35} />
           </View>
           <AppText variant="h2">{expense.merchant}</AppText>
-          <AppText variant="hero">₱{(expense.amountCents / 100).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</AppText>
-          <AppText style={s.muted}>{formatExpenseDate(expense.transactionDate)}</AppText>
+          <AppText variant="hero">{formatPeso(expense.amountCents, { alwaysShowDecimals: true })}</AppText>
+          <AppText style={s.muted}>{formatDateTime(expense.transactionDate, expense.transactionTime)}</AppText>
           {expense.source === 'receipt' ? <StatusChip>Verified</StatusChip> : <StatusChip>Manual entry</StatusChip>}
         </FadeSlideIn>
         <FadeSlideIn delay={80}><Card style={{ gap: 12 }}>
           <InfoRow label="Category" value={category?.fullLabel ?? expense.categoryId} />
+          <InfoRow label="Wallet" value={wallet?.name ?? 'No wallet'} />
           <InfoRow label="Source" value={expense.source === 'receipt' ? 'Receipt' : 'Manual'} />
           <View style={s.divider} />
-          <InfoRow label="Total" value={`₱${(expense.amountCents / 100).toFixed(2)}`} bold />
+          <InfoRow label="Total" value={formatPeso(expense.amountCents, { alwaysShowDecimals: true })} bold />
           {expense.notes ? <><View style={s.divider} /><AppText style={s.muted}>Notes</AppText><AppText>{expense.notes}</AppText></> : null}
         </Card></FadeSlideIn>
         <FadeSlideIn delay={150} style={s.actions}>
@@ -324,7 +423,7 @@ export function TransactionDetailsScreen() {
           <PressableScale accessibilityRole="button" accessibilityLabel="Delete transaction" onPress={() => setConfirmDelete(true)} style={s.delete}><AppIcon name="delete-outline" color={colors.danger} /><AppText variant="h3" style={{ color: colors.danger }}>Delete</AppText></PressableScale>
         </FadeSlideIn>
       </View>
-      <AuthDialog visible={confirmDelete} title="Delete transaction?" message="This transaction will be permanently removed from your expense history." primaryAction={{ label: 'Delete', destructive: true, loading: deleting, onPress: () => void remove() }} secondaryAction={{ label: 'Cancel', onPress: () => setConfirmDelete(false) }} onRequestClose={() => setConfirmDelete(false)} />
+      <AuthDialog visible={confirmDelete} title="Delete transaction?" message={wallet ? `This expense will be removed and ${formatPeso(expense.amountCents)} returned to ${wallet.name}.` : 'This transaction will be permanently removed from your expense history.'} primaryAction={{ label: 'Delete', destructive: true, loading: deleting, onPress: () => void remove() }} secondaryAction={{ label: 'Cancel', onPress: () => setConfirmDelete(false) }} onRequestClose={() => setConfirmDelete(false)} />
     </Screen>
   );
 }
@@ -333,14 +432,17 @@ export function EditTransactionScreen() {
   const { categories } = useCategories();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { expenses, updateExpense } = useExpenses();
+  const { wallets, refresh: refreshFinance } = useFinance();
   const { showToast } = useToast();
   const expense = expenses.find((item) => item.id === id);
   const submitting = useRef(false);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<ExpenseFormErrors>({});
-  const [values, setValues] = useState<ExpenseFormValues>(() => expense ? { amount: (expense.amountCents / 100).toFixed(2), merchant: expense.merchant, categoryId: expense.categoryId, walletId: expense.walletId ?? '', transactionDate: expense.transactionDate, notes: expense.notes ?? '' } : { amount: '', merchant: '', categoryId: '', walletId: '', transactionDate: todayLocalDate(), notes: '' });
+  const [picker, setPicker] = useState<'wallet' | 'date' | null>(null);
+  const [values, setValues] = useState<ExpenseFormValues>(() => expense ? { amount: (expense.amountCents / 100).toFixed(2), merchant: expense.merchant, categoryId: expense.categoryId, walletId: expense.walletId ?? '', transactionDate: expense.transactionDate, transactionTime: expense.transactionTime ?? '12:00', notes: expense.notes ?? '' } : { amount: '', merchant: '', categoryId: '', walletId: '', transactionDate: todayLocalDate(), transactionTime: nowLocalTime(), notes: '' });
   if (!expense) return <Screen variant={8}><View style={s.page}><BackButton /><Card style={s.emptyCard}><AppText variant="h2">Transaction not found</AppText></Card></View></Screen>;
   const update = <K extends keyof ExpenseFormValues>(key: K, value: ExpenseFormValues[K]) => { setValues((current) => ({ ...current, [key]: value })); setErrors((current) => ({ ...current, [key]: undefined })); };
+  const selectedWallet = wallets.find((item) => item.id === values.walletId);
   const save = async () => {
     if (submitting.current) return;
     Keyboard.dismiss();
@@ -348,36 +450,63 @@ export function EditTransactionScreen() {
     setErrors(validation.errors);
     if (!validation.input) return;
     submitting.current = true; setSaving(true);
+    // The database reverses the original wallet effect before applying the new one.
     const result = await updateExpense({ id: expense.id, ...validation.input });
     submitting.current = false; setSaving(false);
     if (!result.ok) { showToast(result.message, { tone: 'warning' }); return; }
+    void refreshFinance();
     selectionFeedback(); showToast('Transaction updated.'); router.replace(`/transaction/${expense.id}` as never);
   };
-  return <Screen variant={8} bottomInset={40}><View style={s.page}><View style={s.editHeader}><BackButton /><View><AppText variant="title">Edit Transaction</AppText><AppText style={s.muted}>Update the saved expense.</AppText></View></View><FormInput label="Amount" icon="currency-php" value={values.amount} onChangeText={(value) => update('amount', normalizeAmountInput(value, values.amount))} keyboardType="decimal-pad" error={errors.amount} /><QuickAmountButtons value={values.amount} onSelect={(amount) => update('amount', String(amount))} /><FormInput label="Merchant / Description" value={values.merchant} onChangeText={(value) => update('merchant', value)} error={errors.merchant} /><AppText variant="bodyMedium">Category</AppText><View style={s.editCategories}>{categories.map((category) => <PressableScale key={category.id} onPress={() => update('categoryId', category.id)} style={[s.editCategory, values.categoryId === category.id && s.editCategoryActive]}><AppIcon name={category.icon} size={18} color={values.categoryId === category.id ? colors.surface : colors.deepForest} /><AppText variant="small" style={values.categoryId === category.id ? s.editCategoryTextActive : undefined}>{category.label}</AppText></PressableScale>)}</View>{errors.categoryId ? <AppText variant="small" style={s.errorText}>{errors.categoryId}</AppText> : null}<FormInput label="Date" placeholder="YYYY-MM-DD" value={values.transactionDate} onChangeText={(value) => update('transactionDate', value)} error={errors.transactionDate} /><FormInput label="Notes (optional)" value={values.notes} onChangeText={(value) => update('notes', value)} multiline style={s.editNotes} error={errors.notes} /><PrimaryButton title={saving ? 'Saving Changes…' : 'Save Changes'} disabled={saving} onPress={() => void save()} /></View></Screen>;
+  return <Screen variant={8} bottomInset={40}><View style={s.page}><View style={s.editHeader}><BackButton /><View><AppText variant="title">Edit Transaction</AppText><AppText style={s.muted}>Update the saved expense.</AppText></View></View><FormInput label="Amount" icon="currency-php" value={values.amount} onChangeText={(value) => update('amount', normalizeAmountInput(value, values.amount))} keyboardType="decimal-pad" error={errors.amount} /><QuickAmountButtons value={values.amount} onSelect={(amount) => update('amount', String(amount))} /><FormInput label="Merchant / Description" value={values.merchant} onChangeText={(value) => update('merchant', value)} error={errors.merchant} /><AppText variant="bodyMedium">Category</AppText><View style={s.editCategories}>{categories.map((category) => <PressableScale key={category.id} onPress={() => update('categoryId', category.id)} style={[s.editCategory, values.categoryId === category.id && s.editCategoryActive]}><AppIcon name={category.icon} size={18} color={values.categoryId === category.id ? colors.surface : colors.deepForest} /><AppText variant="small" style={values.categoryId === category.id ? s.editCategoryTextActive : undefined}>{category.fullLabel}</AppText></PressableScale>)}</View>{errors.categoryId ? <AppText variant="small" style={s.errorText}>{errors.categoryId}</AppText> : null}<EditField label="Wallet" value={selectedWallet?.name ?? 'No wallet'} icon="wallet-outline" onPress={() => wallets.length ? setPicker('wallet') : router.push('/wallets' as never)} /><EditField label="Date & Time" value={formatDateTime(values.transactionDate, values.transactionTime)} icon="calendar-clock-outline" error={errors.transactionDate} onPress={() => setPicker('date')} /><FormInput label="Notes (optional)" value={values.notes} onChangeText={(value) => update('notes', value)} multiline style={s.editNotes} error={errors.notes} /><PrimaryButton title={saving ? 'Saving Changes…' : 'Save Changes'} disabled={saving} onPress={() => void save()} /></View>
+    <WalletPicker visible={picker === 'wallet'} selectedId={values.walletId} onClose={() => setPicker(null)} onSelect={(walletId) => { update('walletId', walletId); setPicker(null); }} />
+    {picker === 'date' ? <ExpenseDatePicker value={values.transactionDate} time={values.transactionTime} onClose={() => setPicker(null)} onSelect={(transactionDate, transactionTime) => { setValues((current) => ({ ...current, transactionDate, transactionTime })); setErrors((current) => ({ ...current, transactionDate: undefined })); setPicker(null); }} /> : null}
+  </Screen>;
+}
+
+function EditField({ label, value, icon, error, onPress }: { label: string; value: string; icon: Parameters<typeof AppIcon>[0]['name']; error?: string; onPress: () => void }) {
+  return (
+    <View style={{ gap: 7 }}>
+      <AppText variant="bodyMedium">{label}</AppText>
+      <PressableScale accessibilityRole="button" accessibilityLabel={`${label}: ${value}`} onPress={onPress} style={error ? [s.editField, s.editFieldError] : s.editField}>
+        <AppIcon name={icon} size={21} color={error ? colors.danger : colors.forest} />
+        <AppText numberOfLines={1} style={s.editFieldText}>{value}</AppText>
+        <AppIcon name="chevron-down" size={20} color={colors.muted} />
+      </PressableScale>
+      {error ? <AppText variant="small" style={s.errorText}>{error}</AppText> : null}
+    </View>
+  );
 }
 
 function InfoRow({ label, value, bold = false }: { label: string; value: string; bold?: boolean }) {
   return (
     <View style={s.rowBetween}>
       <AppText variant={bold ? 'h3' : 'body'} style={s.muted}>{label}</AppText>
-      <AppText variant={bold ? 'h3' : 'body'}>{value}</AppText>
+      <AppText variant={bold ? 'h3' : 'body'} style={s.infoValue}>{value}</AppText>
+    </View>
+  );
+}
+
+/** Previous / next arrows around a period label — the one way dates are stepped through in the app. */
+function PeriodStepper({ label, onPrevious, onNext, nextDisabled = false, subject }: { label: string; onPrevious: () => void; onNext: () => void; nextDisabled?: boolean; subject: string }) {
+  return (
+    <View style={s.stepper}>
+      <PressableScale accessibilityRole="button" accessibilityLabel={`Previous ${subject}`} hitSlop={6} onPress={() => { selectionFeedback(); onPrevious(); }} style={s.stepperButton}><AppIcon name="chevron-left" size={22} /></PressableScale>
+      <AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit style={s.stepperLabel}>{label}</AppText>
+      <PressableScale accessibilityRole="button" accessibilityLabel={`Next ${subject}`} accessibilityState={{ disabled: nextDisabled }} disabled={nextDisabled} hitSlop={6} onPress={() => { selectionFeedback(); onNext(); }} style={[s.stepperButton, nextDisabled && s.stepperButtonDisabled]}><AppIcon name="chevron-right" size={22} color={nextDisabled ? colors.muted : colors.deepForest} /></PressableScale>
     </View>
   );
 }
 
 export function WalletScreen() {
   const { categories } = useCategories();
-  const categoryLibrary = categories;
   const bottomInset = useBottomNavInset();
   const { expenses } = useExpenses();
   const { wallets, goals, loading: walletsLoading, refresh: refreshFinance } = useFinance();
-  const { budgets: monthlyBudgets, loading, error, refresh, saveMonthlyBudget, saveCategoryBudget, removeCategoryBudget } = useBudgets();
+  const { budgets: monthlyBudgets, loading, error, refresh, saveCategoryBudget, removeCategoryBudget } = useBudgets();
   const { showToast } = useToast();
   const currentMonth = todayLocalDate().slice(0, 7);
   const [month, setMonth] = useState(currentMonth);
-  const [monthPicker, setMonthPicker] = useState(false);
-  const [monthDraft, setMonthDraft] = useState(`${currentMonth}-01`);
-  const [editor, setEditor] = useState<{ type: 'addMonthly' } | { type: 'editMonthly' } | { type: 'category'; categoryId: string } | null>(null);
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
   const [amountError, setAmountError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -386,48 +515,37 @@ export function WalletScreen() {
   const [balancesHidden, setBalancesHidden] = useState(false);
   const budget = monthlyBudgets.find((item) => item.month === month);
   const monthExpenses = expenses.filter((item) => item.transactionDate.startsWith(month));
-  const spentCents = monthExpenses.reduce((sum, item) => sum + item.amountCents, 0);
-  const remainingCents = (budget?.amountCents ?? 0) - spentCents;
-  // Null when no budget exists or it's zero, so a missing budget can never
-  // produce an Infinity/NaN percentage.
-  const percentage = percentOf(spentCents, budget?.amountCents) ?? 0;
+  const usage = budgetUsage(budget, monthExpenses);
   const currency = (cents: number) => formatPeso(Math.abs(cents), { alwaysShowDecimals: true });
   const compact = (cents: number) => formatCompactPeso(Math.abs(cents), { alwaysShowDecimals: false });
-  const monthLabel = new Intl.DateTimeFormat('en-PH', { month: 'long', year: 'numeric' }).format(new Date(`${month}-01T12:00:00`));
-  const status = percentage >= 100 ? 'Budget exceeded' : percentage >= 90 ? 'Near budget limit' : percentage >= 70 ? 'Approaching limit' : 'On track';
+  const monthLabel = formatMonth(month);
   const walletTotalCents = wallets.reduce((sum, item) => sum + item.balanceCents, 0);
   const savedCents = goals.reduce((sum, item) => sum + item.currentCents, 0);
   const secret = (value: string) => (balancesHidden ? HIDDEN_AMOUNT : value);
+  const editingLabel = categories.find((item) => item.id === editingCategory)?.fullLabel ?? 'Category';
+  const editingLimit = budget?.categoryBudgets.find((item) => item.categoryId === editingCategory);
 
-  useFocusEffect(useCallback(() => { if (!consumeSkippedPanelRefresh('/wallet')) void refreshFinance(); }, [refreshFinance]));
+  useFocusEffect(useCallback(() => { if (!consumeSkippedPanelRefresh('/wallet')) { void refreshFinance(); void refresh(); } }, [refresh, refreshFinance]));
 
-  const openAddMonthly = () => { setAmount(''); setAmountError(null); setEditor({ type: 'addMonthly' }); };
-  const openEditMonthly = () => { setAmount(budget ? (budget.amountCents / 100).toFixed(2) : ''); setAmountError(null); setEditor({ type: 'editMonthly' }); };
-  const openCategory = (categoryId: string) => { const limit = budget?.categoryBudgets.find((item) => item.categoryId === categoryId); setAmount(limit ? (limit.amountCents / 100).toFixed(2) : ''); setAmountError(null); setEditor({ type: 'category', categoryId }); };
+  const openCategory = (categoryId: string) => { const limit = budget?.categoryBudgets.find((item) => item.categoryId === categoryId); setAmount(limit ? (limit.amountCents / 100).toFixed(2) : ''); setAmountError(null); setEditingCategory(categoryId); };
   // Every wallet action lands on the same manage screen; the params only decide
   // which sheet it opens with, so there is one place that edits a wallet.
-  const openWallets = (params: { wallet?: string; new?: '1' } = {}) => router.push({ pathname: '/wallets', params } as never);
+  const openWallets = (params: { wallet?: string; new?: '1'; add?: '1'; transfer?: '1' } = {}) => router.push({ pathname: '/wallets', params } as never);
   const save = async () => {
-    if (!editor || saving) return;
+    if (!editingCategory || saving) return;
     const cents = parseBudgetAmount(amount);
     if (!cents) { setAmountError('Enter a valid amount greater than zero.'); return; }
     setSaving(true);
-    const result = editor.type === 'addMonthly'
-      ? await saveMonthlyBudget(month, (budget?.amountCents ?? 0) + cents)
-      : editor.type === 'editMonthly'
-        ? await saveMonthlyBudget(month, cents)
-        : budget ? await saveCategoryBudget(budget.id, editor.categoryId, cents) : { ok: false as const, message: 'Add a monthly budget first.' };
+    const result = await saveCategoryBudget(month, editingCategory, cents);
     setSaving(false);
     if (!result.ok) { showToast(result.message, { tone: 'warning' }); return; }
-    selectionFeedback(); showToast(editor.type === 'addMonthly' ? 'Budget amount added.' : editor.type === 'editMonthly' ? 'Total budget updated.' : 'Category limit saved.'); setEditor(null);
+    selectionFeedback(); showToast(`${editingLabel} budget saved for ${monthLabel}.`); setEditingCategory(null);
   };
   const removeLimit = async () => {
-    if (!budget || editor?.type !== 'category') return;
-    const limit = budget.categoryBudgets.find((item) => item.categoryId === editor.categoryId);
-    if (!limit) return;
-    setSaving(true); const result = await removeCategoryBudget(budget.id, limit.id); setSaving(false);
+    if (!budget || !editingLimit) return;
+    setSaving(true); const result = await removeCategoryBudget(budget.id, editingLimit.id); setSaving(false);
     if (!result.ok) { showToast(result.message, { tone: 'warning' }); return; }
-    showToast('Category limit removed.'); setEditor(null);
+    showToast(`${editingLabel} budget removed.`); setEditingCategory(null);
   };
   return (
     <Screen embedded bottomInset={bottomInset} background={false} refreshing={loading} onRefresh={() => { void refresh(); void refreshFinance(); }}>
@@ -456,10 +574,6 @@ export function WalletScreen() {
             <View style={s.balanceMetric}>
               <AppText style={s.balanceCaption}>SAVED</AppText>
               <AppText numberOfLines={1} style={s.balanceMetricValue}>{secret(compact(savedCents))}</AppText>
-            </View>
-            <View style={s.balanceMetric}>
-              <AppText style={s.balanceCaption}>LEFT TO SPEND</AppText>
-              <AppText numberOfLines={1} style={s.balanceMetricValue}>{budget ? secret(compact(remainingCents)) : '—'}</AppText>
             </View>
           </View>
         </View>
@@ -493,22 +607,21 @@ export function WalletScreen() {
           </View>
         )}
         {wallets.length ? (
-          <PressableScale accessibilityRole="button" accessibilityLabel="Add income or allowance" onPress={() => openWallets()} style={s.addMoneyRow}>
-            <AppIcon name="cash-plus" size={20} color={colors.forest} />
-            <AppText variant="bodyMedium" style={s.sectionLinkText}>Add income or allowance</AppText>
-          </PressableScale>
+          <View style={s.walletActions}>
+            <PressableScale accessibilityRole="button" accessibilityLabel="Add income" onPress={() => openWallets({ add: '1' })} style={s.addMoneyRow}>
+              <AppIcon name="cash-plus" size={20} color={colors.forest} />
+              <AppText variant="bodyMedium" style={s.sectionLinkText}>Add income</AppText>
+            </PressableScale>
+            {wallets.length > 1 ? (
+              <PressableScale accessibilityRole="button" accessibilityLabel="Transfer between wallets" onPress={() => openWallets({ transfer: '1' })} style={s.addMoneyRow}>
+                <AppIcon name="swap-horizontal" size={20} color={colors.forest} />
+                <AppText variant="bodyMedium" style={s.sectionLinkText}>Transfer</AppText>
+              </PressableScale>
+            ) : null}
+          </View>
         ) : (
           <AppText style={s.muted}>Add a wallet to keep each source of money visible here.</AppText>
         )}
-
-        <View style={s.sectionHead}>
-          <AppText variant="h2">Budget</AppText>
-          <PressableScale accessibilityRole="button" accessibilityLabel={`Selected budget month: ${monthLabel}`} onPress={() => { setMonthDraft(`${month}-01`); setMonthPicker(true); }} style={s.sectionLink}>
-            <AppText variant="small" style={s.sectionLinkText}>{monthLabel}</AppText>
-            <AppIcon name="calendar-month-outline" size={16} color={colors.forest} />
-          </PressableScale>
-        </View>
-        {loading && monthlyBudgets.length === 0 ? <View style={s.skeletonCard} /> : error && monthlyBudgets.length === 0 ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load budgets</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : !budget ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="wallet-plus-outline" size={30} /></View><AppText variant="h2">No budget yet</AppText><AppText style={[s.muted, s.center]}>Add your first monthly budget amount to start tracking spending.</AppText><PrimaryButton title="Add Budget Amount" onPress={openAddMonthly} /></Card> : <Card style={s.monthlyBudgetCard}><View style={s.rowBetween}><AppText variant="h3">Monthly Budget</AppText><PressableScale accessibilityRole="button" accessibilityLabel="Edit total budget" onPress={openEditMonthly} style={s.editBudgetButton}><AppIcon name="pencil-outline" size={20} color={colors.muted} /></PressableScale></View><AppText variant="hero" adjustsFontSizeToFit numberOfLines={1}>{currency(budget.amountCents)}</AppText><View style={s.budgetSummary}><View style={s.budgetSummaryItem}><AppText variant="small" style={s.muted}>Spent</AppText><AppText variant="h3" style={{ color: colors.deepForest }}>{compact(spentCents)}</AppText></View><View style={[s.budgetSummaryItem, s.budgetSummaryRight]}><AppText variant="small" style={s.muted}>{remainingCents < 0 ? 'Over' : 'Left'}</AppText><AppText variant="h3" style={{ color: remainingCents < 0 ? colors.danger : colors.deepForest }}>{compact(remainingCents)}</AppText></View></View><View style={s.row}><ProgressBar value={Math.min(100, percentage)} /><AppText variant="h3" style={s.budgetPercent}>{percentage}%</AppText></View><StatusChip warning={percentage >= 90}>{status}</StatusChip><SecondaryButton title="Add to Budget" icon="plus" onPress={openAddMonthly} /></Card>}
 
         <View style={s.sectionHead}>
           <AppText variant="h2">Savings Goals</AppText>
@@ -527,7 +640,16 @@ export function WalletScreen() {
         </PressableScale>
 
         <AppText variant="h2">Category Budgets</AppText>
-        {!budget ? <AppText style={s.muted}>Set a monthly budget before adding category limits.</AppText> : budget.categoryBudgets.length === 0 ? <Card style={s.noLimits}><AppText variant="h3">No category limits yet</AppText><AppText style={s.muted}>Tap a category below to add one.</AppText></Card> : null}
+        <PeriodStepper subject="budget month" label={monthLabel} onPrevious={() => setMonth(shiftMonth(month, -1))} onNext={() => setMonth(shiftMonth(month, 1))} />
+        {loading && monthlyBudgets.length === 0 ? <View style={s.skeletonCard} /> : error && monthlyBudgets.length === 0 ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load budgets</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : usage.hasBudget ? (
+          <Card style={s.budgetTotals}>
+            <View style={s.rowBetween}>
+              <AppText variant="small" style={s.muted}>{compact(usage.spentCents)} spent of {compact(usage.limitCents)}</AppText>
+              <AppText variant="small" style={{ color: usage.remainingCents < 0 ? colors.danger : colors.deepForest }}>{compact(usage.remainingCents)} {usage.remainingCents < 0 ? 'over' : 'left'}</AppText>
+            </View>
+            <ProgressBar value={Math.min(100, percentOf(usage.spentCents, usage.limitCents) ?? 0)} height={9} />
+          </Card>
+        ) : <AppText style={s.muted}>No category budgets for {monthLabel} yet. Tap a category to set one.</AppText>}
         {categories.map((category) => {
           const limit = budget?.categoryBudgets.find((item) => item.categoryId === category.id);
           const categorySpent = monthExpenses.filter((item) => item.categoryId === category.id).reduce((sum, item) => sum + item.amountCents, 0);
@@ -538,21 +660,20 @@ export function WalletScreen() {
             key={category.id}
             accessibilityRole="button"
             accessibilityLabel={`${limit ? 'Edit' : 'Set'} ${category.fullLabel} budget`}
-            accessibilityHint={budget ? 'Opens the category budget editor' : 'Set a monthly budget first'}
+            accessibilityHint="Opens the category budget editor"
             hitSlop={4}
-            onPress={() => budget ? openCategory(category.id) : openAddMonthly()}
+            onPress={() => openCategory(category.id)}
             style={s.budgetRow}
           >
             <View style={[s.budgetIcon, { backgroundColor: category.color ? `${category.color}22` : CATEGORY_TONES[category.id]?.background ?? colors.pale }]}>
               <AppIcon name={category.icon} size={22} color={category.color ?? CATEGORY_TONES[category.id]?.foreground ?? colors.deepForest} />
             </View>
             <View style={s.budgetInfo}>
-              {/* Two lines so "Food & Dining" wraps instead of becoming "Food &...". */}
               <AppText variant="h3" numberOfLines={2}>{category.fullLabel}</AppText>
               <ProgressBar value={Math.min(100, categoryPercent)} height={9} />
             </View>
             <View style={s.budgetValues}>
-              <AppText variant="h3">{limit ? compact(limit.amountCents) : 'Set limit'}</AppText>
+              <AppText variant="h3">{limit ? compact(limit.amountCents) : 'Set budget'}</AppText>
               <AppText variant="small" style={{ color: categoryPercent >= 100 ? colors.danger : colors.deepForest }}>{compact(categorySpent)} spent</AppText>
               {categoryRemaining !== null ? <AppText variant="small" style={{ color: categoryRemaining < 0 ? colors.danger : colors.muted }}>{compact(categoryRemaining)} {categoryRemaining < 0 ? 'over' : 'left'}</AppText> : null}
             </View>
@@ -560,14 +681,13 @@ export function WalletScreen() {
           </PressableScale>);
         })}
       </View>
-      <DraggableBottomSheet visible={monthPicker} onClose={() => setMonthPicker(false)}>{(dismiss) => <><AppText variant="h2">Choose Budget Month</AppText><Calendar value={monthDraft} onSelect={setMonthDraft} /><AppText style={s.selectedMonthPreview}>{formatMonth(monthDraft.slice(0, 7))}</AppText><PrimaryButton title="Use This Month" onPress={() => { setMonth(monthDraft.slice(0, 7)); dismiss(); }} /></>}</DraggableBottomSheet>
-      <DraggableBottomSheet visible={Boolean(editor)} disabled={saving} onClose={() => setEditor(null)}>
-        <AppText variant="h2">{editor?.type === 'addMonthly' ? 'Add Budget Amount' : editor?.type === 'editMonthly' ? 'Edit Total Budget' : `Set ${categoryLibrary.find((item) => item.id === (editor?.type === 'category' ? editor.categoryId : ''))?.fullLabel ?? 'Category'} Limit`}</AppText>
-        {editor?.type === 'addMonthly' ? <View style={s.addBudgetContext}><InfoRow label="Current budget" value={currency(budget?.amountCents ?? 0)} /><InfoRow label="Amount to add" value={currency(Math.round((Number(amount) || 0) * 100))} /><InfoRow bold label="New budget" value={currency((budget?.amountCents ?? 0) + Math.round((Number(amount) || 0) * 100))} /></View> : null}
-        <FormInput label={editor?.type === 'addMonthly' ? 'Amount to add' : 'Amount'} icon="currency-php" placeholder="0.00" value={amount} onChangeText={(value) => { setAmount(normalizeAmountInput(value, amount)); setAmountError(null); }} keyboardType="decimal-pad" error={amountError ?? undefined} />
+      <DraggableBottomSheet visible={editingCategory !== null} disabled={saving} onClose={() => setEditingCategory(null)}>
+        <AppText variant="h2">{editingLabel} Budget</AppText>
+        <AppText style={s.muted}>{monthLabel}</AppText>
+        <FormInput label="Budget amount" icon="currency-php" placeholder="0.00" value={amount} onChangeText={(value) => { setAmount(normalizeAmountInput(value, amount)); setAmountError(null); }} keyboardType="decimal-pad" error={amountError ?? undefined} />
         <QuickAmountButtons value={amount} onSelect={(value) => { setAmount(String(value)); setAmountError(null); }} />
-        <PrimaryButton title={saving ? 'Saving…' : editor?.type === 'addMonthly' ? `Add ${formatPeso(Math.round((Number(amount) || 0) * 100))}` : editor?.type === 'editMonthly' ? 'Save Total Budget' : 'Save Category Limit'} disabled={saving} onPress={() => void save()} />
-        {editor?.type === 'category' && budget?.categoryBudgets.some((item) => item.categoryId === editor.categoryId) ? <SecondaryButton title="Remove Category Limit" disabled={saving} onPress={() => void removeLimit()} /> : null}
+        <PrimaryButton title={saving ? 'Saving…' : 'Save Budget'} disabled={saving} onPress={() => void save()} />
+        {editingLimit ? <SecondaryButton title="Remove Budget" disabled={saving} onPress={() => void removeLimit()} /> : null}
       </DraggableBottomSheet>
     </Screen>
   );
@@ -579,8 +699,6 @@ export function AnalyticsScreen() {
   const { allCategories } = useCategories();
   const bottomInset = useBottomNavInset();
   const [month, setMonth] = useState(todayLocalDate().slice(0, 7));
-  const [monthDraft, setMonthDraft] = useState(`${month}-01`);
-  const [monthPicker, setMonthPicker] = useState(false);
   const [mode, setMode] = useState<'spending' | 'trends'>('spending');
   useFocusEffect(useCallback(() => { if (!consumeSkippedPanelRefresh('/analytics')) void refresh(); }, [refresh]));
   const analytics = useMemo(() => analyticsForMonth(expenses, allCategories, month), [allCategories, expenses, month]);
@@ -594,7 +712,7 @@ export function AnalyticsScreen() {
       <View style={s.page}>
         <AppText variant="hero">Analytics</AppText>
         <AppText style={s.muted}>A clearer view of your spending.</AppText>
-        <PressableScale accessibilityRole="button" accessibilityLabel={`Selected analytics month: ${monthLabel}`} onPress={() => { setMonthDraft(`${month}-01`); setMonthPicker(true); }} style={s.analyticsMonth}><AppText variant="h2">{monthLabel}</AppText><AppIcon name="calendar-month-outline" /></PressableScale>
+        <PeriodStepper subject="analytics month" label={monthLabel} onPrevious={() => setMonth(shiftMonth(month, -1))} onNext={() => setMonth(shiftMonth(month, 1))} nextDisabled={month >= todayLocalDate().slice(0, 7)} />
         <View style={s.segment}>
           <PressableScale onPress={() => setMode('spending')} style={[s.segmentHalf, mode === 'spending' && s.segmentActive]}><AppText variant="h3" style={mode === 'spending' ? s.segmentActiveText : s.muted}>Spending</AppText></PressableScale>
           <PressableScale onPress={() => setMode('trends')} style={[s.segmentHalf, mode === 'trends' && s.segmentActive]}><AppText variant="h3" style={mode === 'trends' ? s.segmentActiveText : s.muted}>Trends</AppText></PressableScale>
@@ -602,7 +720,6 @@ export function AnalyticsScreen() {
         {loading && expenses.length === 0 ? <Card style={s.analyticsLoading}><ActivityIndicator color={colors.deepForest} /><View style={s.analyticsSkeletonCircle} /><View style={s.skeletonLineWide} /></Card> : loadError ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load analytics.</AppText><AppText style={[s.muted, s.center]}>Check your connection and try again.</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : analytics.expenses.length === 0 ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="chart-donut" size={30} /></View><AppText variant="h2">No spending data yet</AppText><AppText style={[s.muted, s.center]}>Add expenses to start seeing your spending patterns.</AppText><PrimaryButton title="Add Expense" onPress={openAddExpense} /></Card> : mode === 'spending' ? <Card style={s.analyticsCard}><DonutChart slices={analytics.categorySlices} refreshKey={month}><AppText variant="title" adjustsFontSizeToFit numberOfLines={1}>{compactCurrency(analytics.totalCents)}</AppText><AppText style={s.muted}>Total Spending</AppText></DonutChart><View style={s.legendList}>{analytics.categorySlices.map((slice) => <View style={s.legend} key={slice.id}><View style={[s.legendDot, { backgroundColor: slice.color }]} /><AppText style={[s.muted, s.legendLabel]} numberOfLines={1}>{slice.label}</AppText><AppText style={[s.muted, s.legendValue]}>{formatPercent(slice.percentage)}</AppText></View>)}</View></Card> : <Card style={s.trendsCard}><View style={s.rowBetween}><View><AppText style={s.muted}>This month</AppText><AppText variant="title">{compactCurrency(analytics.totalCents)}</AppText></View><View style={s.trendChange}><AppIcon name={change !== null && change > 0 ? 'trending-up' : 'trending-down'} size={20} color={change !== null && change > 0 ? colors.danger : colors.success} /><AppText variant="h3" style={{ color: change !== null && change > 0 ? colors.danger : colors.success }}>{change === null ? 'No comparison' : `${change > 0 ? '+' : ''}${change}%`}</AppText></View></View>{previous.totalCents === 0 || analytics.expenses.length < 2 ? <View style={s.trendEmpty}><AppText variant="h2">Not enough history yet</AppText><AppText style={[s.muted, s.center]}>Keep tracking expenses and your trends will appear here.</AppText></View> : <><View style={s.barChart}>{analytics.dailyTotals.map((item) => <View key={item.day} style={s.barColumn}><View style={[s.bar, { height: Math.max(8, Math.round((item.amountCents / maxDay) * 130)) }]} /><AppText variant="small" style={s.muted}>{item.day}</AppText></View>)}</View><View style={s.trendMetrics}><TrendMetric label={`${formatMonth(priorMonth)} total`} value={compactCurrency(previous.totalCents)} /><TrendMetric label="Daily average" value={compactCurrency(analytics.averageDailyCents)} /><TrendMetric label="Highest-spend day" value={analytics.highestDay ? `${monthLabel.split(' ')[0]} ${analytics.highestDay.day} · ${compactCurrency(analytics.highestDay.amountCents)}` : '—'} /></View></>}</Card>}
         {analytics.expenses.length > 0 ? <InsightsLink month={month} /> : null}
       </View>
-      <MonthPickerModal visible={monthPicker} title="Choose Analytics Month" value={monthDraft} onChange={setMonthDraft} onClose={() => setMonthPicker(false)} onConfirm={(value) => setMonth(value.slice(0, 7))} />
     </Screen>
   );
 }
@@ -660,16 +777,13 @@ export function InsightsScreen() {
   );
 }
 
-function MonthPickerModal({ visible, title, value, onChange, onClose, onConfirm }: { visible: boolean; title: string; value: string; onChange: (value: string) => void; onClose: () => void; onConfirm: (value: string) => void }) {
-  return <DraggableBottomSheet visible={visible} onClose={onClose}>{(dismiss) => <><AppText variant="h2">{title}</AppText><Calendar value={value} onSelect={onChange} /><AppText style={s.selectedMonthPreview}>{formatMonth(value.slice(0, 7))}</AppText><PrimaryButton title="Use This Month" onPress={() => { onConfirm(value); dismiss(); }} /></>}</DraggableBottomSheet>;
-}
 
 function TrendMetric({ label, value }: { label: string; value: string }) {
   return <View style={s.trendMetric}><AppText style={s.muted}>{label}</AppText><AppText variant="h3">{value}</AppText></View>;
 }
 
 export function CategoriesScreen() {
-  const { categories, loading: categoriesLoading, error: categoriesError, refresh: refreshCategories, createCategory, updateCategory, archiveCategory } = useCategories();
+  const { categories, hiddenCategories, loading: categoriesLoading, error: categoriesError, refresh: refreshCategories, createCategory, updateCategory, hideCategory, restoreCategory } = useCategories();
   const { categories: dashboardCategories, isFull, isOnDashboard, addCategory, removeCategory } =
     useDashboardCategories();
   const { showToast } = useToast();
@@ -680,9 +794,10 @@ export function CategoriesScreen() {
   const [color, setColor] = useState('#315F43');
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [archiveId, setArchiveId] = useState<string | null>(null);
+  const [hideId, setHideId] = useState<string | null>(null);
   const iconChoices = ['shape-outline', 'coffee-outline', 'home-outline', 'paw-outline', 'music-note-outline', 'briefcase-outline'] as const;
   const colorChoices = ['#315F43', '#C92525', '#E45C0A', '#3477B8', '#7057A3', '#28704B'] as const;
+  const hiding = categories.find((item) => item.id === hideId);
 
   const openCreate = () => { setName(''); setIcon('shape-outline'); setColor('#315F43'); setFormError(null); setEditor({}); };
   const openEdit = (id: string) => { const category = categories.find((item) => item.id === id); if (!category?.custom) return; setName(category.fullLabel); setIcon(category.icon); setColor(category.color ?? '#315F43'); setFormError(null); setEditor({ id }); };
@@ -691,7 +806,7 @@ export function CategoriesScreen() {
     const cleanName = name.trim();
     if (!cleanName) { setFormError('Enter a category name.'); return; }
     if (cleanName.length > 40) { setFormError('Use 40 characters or fewer.'); return; }
-    if (categories.some((item) => item.id !== editor.id && item.fullLabel.toLocaleLowerCase() === cleanName.toLocaleLowerCase())) { setFormError('A category with this name already exists.'); return; }
+    if ([...categories, ...hiddenCategories].some((item) => item.id !== editor.id && item.fullLabel.toLocaleLowerCase() === cleanName.toLocaleLowerCase())) { setFormError('A category with this name already exists.'); return; }
     setSaving(true);
     const input = { name: cleanName, icon: icon as (typeof categories)[number]['icon'], color };
     const result = editor.id ? await updateCategory(editor.id, input) : await createCategory(input);
@@ -699,11 +814,17 @@ export function CategoriesScreen() {
     if (!result.ok) { setFormError(result.message); return; }
     selectionFeedback(); showToast(editor.id ? 'Category updated.' : 'Category added.'); setEditor(null);
   };
-  const archive = async () => {
-    if (!archiveId || saving) return;
-    setSaving(true); const result = await archiveCategory(archiveId); setSaving(false);
+  const hide = async () => {
+    if (!hiding || saving) return;
+    if (categories.length <= 1) { showToast('Keep at least one category visible.', { tone: 'warning' }); setHideId(null); return; }
+    setSaving(true); const result = await hideCategory(hiding.id); setSaving(false);
     if (!result.ok) { showToast(result.message, { tone: 'warning' }); return; }
-    removeCategory(archiveId); showToast('Category archived. Historical transactions are preserved.'); setArchiveId(null); setEditor(null);
+    removeCategory(hiding.id); showToast(`${hiding.fullLabel} hidden. Past transactions keep it.`); setHideId(null); setEditor(null);
+  };
+  const restore = async (id: string, label: string) => {
+    const result = await restoreCategory(id);
+    if (!result.ok) { showToast(result.message, { tone: 'warning' }); return; }
+    selectionFeedback(); showToast(`${label} is visible again.`);
   };
 
   const reportLimit = () => {
@@ -737,13 +858,13 @@ export function CategoriesScreen() {
           {dashboardCategories.length} of {MAX_DASHBOARD_CATEGORIES} shown on your dashboard
         </AppText>
         {categoriesLoading ? <View style={s.categoryLoading}><ActivityIndicator color={colors.deepForest} /><AppText style={s.muted}>Loading your categories…</AppText></View> : null}
-        {categoriesError ? <Card style={s.categoryError}><AppText style={s.muted}>Custom categories couldn&apos;t be loaded.</AppText><SecondaryButton title="Try Again" onPress={() => void refreshCategories()} /></Card> : null}
+        {categoriesError ? <Card style={s.categoryError}><AppText style={s.muted}>Your categories couldn&apos;t be loaded.</AppText><SecondaryButton title="Try Again" onPress={() => void refreshCategories()} /></Card> : null}
 
         {categories.map(category => {
           const onDashboard = isOnDashboard(category.id);
           return (
             /*
-              Plain container with two sibling press targets. Nesting the toggle
+              Plain container with sibling press targets. Nesting a toggle
               inside the row's pressable would render a <button> inside a
               <button> on web.
             */
@@ -786,7 +907,9 @@ export function CategoriesScreen() {
                   color={onDashboard ? colors.surface : isFull ? colors.muted : colors.deepForest}
                 />
               </Pressable>
-              {category.custom ? <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${category.fullLabel}`} hitSlop={6} onPress={() => openEdit(category.id)} style={({ pressed }) => [s.categoryEdit, pressed && { opacity: 0.7 }]}><AppIcon name="pencil-outline" size={18} /></Pressable> : null}
+              {category.custom
+                ? <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${category.fullLabel}`} hitSlop={6} onPress={() => openEdit(category.id)} style={({ pressed }) => [s.categoryEdit, pressed && { opacity: 0.7 }]}><AppIcon name="pencil-outline" size={18} /></Pressable>
+                : <Pressable accessibilityRole="button" accessibilityLabel={`Hide ${category.fullLabel}`} hitSlop={6} onPress={() => setHideId(category.id)} style={({ pressed }) => [s.categoryEdit, pressed && { opacity: 0.7 }]}><AppIcon name="eye-off-outline" size={18} /></Pressable>}
             </Card>
           );
         })}
@@ -796,9 +919,26 @@ export function CategoriesScreen() {
           icon="plus"
           onPress={openCreate}
         />
+
+        {hiddenCategories.length ? <>
+          <AppText variant="h2">Hidden Categories</AppText>
+          <AppText variant="small" style={s.muted}>Hidden categories stay on past transactions but aren&apos;t offered for new ones.</AppText>
+          {hiddenCategories.map((category) => (
+            <Card key={category.id} style={s.categoryRow}>
+              <View style={[s.categoryMain, s.categoryHidden]}>
+                <View style={[s.categoryIcon, { backgroundColor: '#E6E8E2' }]}><AppIcon name={category.icon} color={colors.muted} /></View>
+                <AppText variant="h3" style={{ flex: 1, color: colors.muted }} numberOfLines={1}>{category.fullLabel}</AppText>
+              </View>
+              <Pressable accessibilityRole="button" accessibilityLabel={`Show ${category.fullLabel} again`} hitSlop={6} onPress={() => void restore(category.id, category.fullLabel)} style={({ pressed }) => [s.categoryRestore, pressed && { opacity: 0.7 }]}>
+                <AppIcon name="eye-outline" size={17} />
+                <AppText variant="small" style={s.sectionLinkText}>Show</AppText>
+              </Pressable>
+            </Card>
+          ))}
+        </> : null}
       </View>
-      <DraggableBottomSheet visible={Boolean(editor)} disabled={saving} onClose={() => setEditor(null)}><AppText variant="h2">{editor?.id ? 'Edit Category' : 'Add Category'}</AppText><FormInput label="Category name" placeholder="e.g. Pets" value={name} onChangeText={(value) => { setName(value); setFormError(null); }} maxLength={40} error={formError ?? undefined} /><AppText variant="bodyMedium">Icon</AppText><View style={s.choiceRow}>{iconChoices.map((value) => <PressableScale key={value} accessibilityLabel={`Use ${value} icon`} accessibilityState={{ selected: icon === value }} onPress={() => setIcon(value)} style={[s.choiceCircle, icon === value && s.choiceCircleActive]}><AppIcon name={value} color={icon === value ? colors.surface : colors.deepForest} /></PressableScale>)}</View><AppText variant="bodyMedium">Color</AppText><View style={s.choiceRow}>{colorChoices.map((value) => <PressableScale key={value} accessibilityLabel={`Use color ${value}`} accessibilityState={{ selected: color === value }} onPress={() => setColor(value)} style={[s.colorChoice, { backgroundColor: value }, color === value && s.colorChoiceActive]}>{color === value ? <AppIcon name="check" size={17} color={colors.surface} /> : null}</PressableScale>)}</View><PrimaryButton title={saving ? 'Saving…' : editor?.id ? 'Save Changes' : 'Add Category'} disabled={saving} onPress={() => void saveCategory()} />{editor?.id ? <SecondaryButton title="Archive Category" disabled={saving} onPress={() => setArchiveId(editor.id ?? null)} /> : null}</DraggableBottomSheet>
-      <AuthDialog visible={Boolean(archiveId)} title="Archive category?" message="The category will be hidden from new expenses, but all historical transactions will keep their category." primaryAction={{ label: 'Archive', destructive: true, loading: saving, onPress: () => void archive() }} secondaryAction={{ label: 'Cancel', onPress: () => setArchiveId(null) }} onRequestClose={() => setArchiveId(null)} />
+      <DraggableBottomSheet visible={Boolean(editor)} disabled={saving} onClose={() => setEditor(null)}><AppText variant="h2">{editor?.id ? 'Edit Category' : 'Add Category'}</AppText><FormInput label="Category name" placeholder="e.g. Pets" value={name} onChangeText={(value) => { setName(value); setFormError(null); }} maxLength={40} error={formError ?? undefined} /><AppText variant="bodyMedium">Icon</AppText><View style={s.choiceRow}>{iconChoices.map((value) => <PressableScale key={value} accessibilityLabel={`Use ${value} icon`} accessibilityState={{ selected: icon === value }} onPress={() => setIcon(value)} style={[s.choiceCircle, icon === value && s.choiceCircleActive]}><AppIcon name={value} color={icon === value ? colors.surface : colors.deepForest} /></PressableScale>)}</View><AppText variant="bodyMedium">Color</AppText><View style={s.choiceRow}>{colorChoices.map((value) => <PressableScale key={value} accessibilityLabel={`Use color ${value}`} accessibilityState={{ selected: color === value }} onPress={() => setColor(value)} style={[s.colorChoice, { backgroundColor: value }, color === value && s.colorChoiceActive]}>{color === value ? <AppIcon name="check" size={17} color={colors.surface} /> : null}</PressableScale>)}</View><PrimaryButton title={saving ? 'Saving…' : editor?.id ? 'Save Changes' : 'Add Category'} disabled={saving} onPress={() => void saveCategory()} />{editor?.id ? <SecondaryButton title="Hide Category" disabled={saving} onPress={() => setHideId(editor.id ?? null)} /> : null}</DraggableBottomSheet>
+      <AuthDialog visible={Boolean(hiding)} title={`Hide ${hiding?.fullLabel ?? 'category'}?`} message="It won't be offered for new expenses or budgets. Past transactions keep it, and you can show it again from Hidden Categories." primaryAction={{ label: 'Hide', destructive: true, loading: saving, onPress: () => void hide() }} secondaryAction={{ label: 'Cancel', onPress: () => setHideId(null) }} onRequestClose={() => setHideId(null)} />
     </Screen>
   );
 }
@@ -1017,6 +1157,19 @@ const s = StyleSheet.create({
   transaction: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 8 },
   transactionAmount: { flexShrink: 0, maxWidth: '36%', textAlign: 'right' },
   roundIcon: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#E1EBDD', alignItems: 'center', justifyContent: 'center' },
+  roundIconIncoming: { backgroundColor: '#DDF0E2' },
+  infoValue: { flexShrink: 1, textAlign: 'right' },
+  editField: { minHeight: 54, borderRadius: radii.md, backgroundColor: 'rgba(232,238,227,.9)', borderWidth: 1, borderColor: '#C9D5C5', paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  editFieldError: { borderColor: colors.danger, backgroundColor: colors.dangerSoft },
+  editFieldText: { flex: 1, minWidth: 0, fontFamily: 'JakartaMedium' },
+  stepper: { minHeight: 56, borderRadius: radii.lg, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,253,247,.97)', ...shadow },
+  stepperButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.pale },
+  stepperButtonDisabled: { opacity: 0.45 },
+  stepperLabel: { flex: 1, minWidth: 0, textAlign: 'center' },
+  walletActions: { flexDirection: 'row', gap: 10 },
+  budgetTotals: { gap: 8, paddingVertical: 14 },
+  categoryHidden: { opacity: 0.85 },
+  categoryRestore: { minHeight: 38, paddingHorizontal: 12, borderRadius: 19, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: colors.pale },
   loadingCard: { minHeight: 150, alignItems: 'center', justifyContent: 'center', gap: 12 },
   skeletonList: { gap: 10, marginTop: 8 },
   skeletonCard: { minHeight: 86, borderRadius: radii.lg, backgroundColor: 'rgba(255,253,247,.9)', flexDirection: 'row', alignItems: 'center', padding: 15, gap: 14 },
@@ -1067,7 +1220,7 @@ const s = StyleSheet.create({
   // card-sized instead of stretching into a full-width slab.
   walletCell: { width: '48%' },
   walletSkeleton: { width: '100%', aspectRatio: 1.62, borderRadius: radii.md, backgroundColor: 'rgba(255,253,247,.9)' },
-  addMoneyRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: radii.md, backgroundColor: colors.pale },
+  addMoneyRow: { flex: 1, minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: radii.md, backgroundColor: colors.pale },
   goalsRow: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: radii.md, backgroundColor: 'rgba(255,253,247,.96)', ...shadow },
   goalsIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' },
   segment: { flexDirection: 'row', borderRadius: radii.md, backgroundColor: colors.pale, padding: 4 },

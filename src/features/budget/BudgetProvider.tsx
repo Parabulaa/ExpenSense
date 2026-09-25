@@ -1,15 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 import { useAuth } from '@/features/auth/AuthProvider';
 import * as service from './budget-service';
-import type { BudgetResult, MonthlyBudget } from './types';
+import type { BudgetResult, CategoryBudget, MonthlyBudget } from './types';
 
 type BudgetContextValue = {
   budgets: MonthlyBudget[];
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
-  saveMonthlyBudget: (month: string, amountCents: number) => Promise<BudgetResult<MonthlyBudget>>;
-  saveCategoryBudget: (budgetId: string, categoryId: string, amountCents: number) => Promise<BudgetResult<{ id: string; categoryId: string; amountCents: number }>>;
+  saveCategoryBudget: (month: string, categoryId: string, amountCents: number) => Promise<BudgetResult<{ budget: MonthlyBudget; limit: CategoryBudget }>>;
   removeCategoryBudget: (budgetId: string, id: string) => Promise<BudgetResult<{ id: string }>>;
 };
 
@@ -33,14 +32,16 @@ export function BudgetProvider({ children }: PropsWithChildren) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
   }, [initialized, refresh]);
-  const saveMonthlyBudget = useCallback(async (month: string, amountCents: number) => {
-    const result = await service.saveMonthlyBudget(month, amountCents);
-    if (result.ok) setBudgets((current) => [result.data, ...current.filter((item) => item.id !== result.data.id)]);
-    return result;
-  }, []);
-  const saveCategoryBudget = useCallback(async (budgetId: string, categoryId: string, amountCents: number) => {
-    const result = await service.saveCategoryBudget(budgetId, categoryId, amountCents);
-    if (result.ok) setBudgets((current) => current.map((budget) => budget.id === budgetId ? { ...budget, categoryBudgets: [...budget.categoryBudgets.filter((item) => item.categoryId !== categoryId), result.data] } : budget));
+  const saveCategoryBudget = useCallback(async (month: string, categoryId: string, amountCents: number) => {
+    const result = await service.saveCategoryBudget(month, categoryId, amountCents);
+    if (result.ok) {
+      const { budget, limit } = result.data;
+      setBudgets((current) => {
+        const existing = current.find((item) => item.id === budget.id) ?? budget;
+        const next = { ...existing, categoryBudgets: [...existing.categoryBudgets.filter((item) => item.categoryId !== categoryId), limit] };
+        return [next, ...current.filter((item) => item.id !== budget.id)].sort((a, b) => b.month.localeCompare(a.month));
+      });
+    }
     return result;
   }, []);
   const removeCategoryBudget = useCallback(async (budgetId: string, id: string) => {
@@ -48,7 +49,7 @@ export function BudgetProvider({ children }: PropsWithChildren) {
     if (result.ok) setBudgets((current) => current.map((budget) => budget.id === budgetId ? { ...budget, categoryBudgets: budget.categoryBudgets.filter((item) => item.id !== id) } : budget));
     return result;
   }, []);
-  const value = useMemo(() => ({ budgets, loading, error, refresh, saveMonthlyBudget, saveCategoryBudget, removeCategoryBudget }), [budgets, error, loading, refresh, removeCategoryBudget, saveCategoryBudget, saveMonthlyBudget]);
+  const value = useMemo(() => ({ budgets, loading, error, refresh, saveCategoryBudget, removeCategoryBudget }), [budgets, error, loading, refresh, removeCategoryBudget, saveCategoryBudget]);
   return <BudgetContext.Provider value={value}>{children}</BudgetContext.Provider>;
 }
 
