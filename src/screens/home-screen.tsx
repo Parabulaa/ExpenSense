@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
@@ -748,34 +748,28 @@ export function HomeScreen() {
           ) : null}
         </View>
       </View>
-      <Modal visible={categoryPickerOpen} transparent animationType="fade" onRequestClose={() => setCategoryPickerOpen(false)}>
-        <View style={styles.pickerBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setCategoryPickerOpen(false)} />
-          <View style={styles.categoryPickerSheet}>
-            <View style={styles.pickerHandle} />
-            <View style={styles.pickerHeader}>
-              <View style={{ flex: 1 }}>
-                <AppText variant="h2">Add Existing Category</AppText>
-                <AppText variant="small" style={styles.editHint}>Choose what appears on your dashboard. Existing choices are hidden.</AppText>
-              </View>
-              <PressableScale accessibilityLabel="Close category picker" onPress={() => setCategoryPickerOpen(false)} style={styles.pickerClose}>
-                <AppIcon name="close" size={20} />
-              </PressableScale>
-            </View>
-            <ScrollView style={styles.pickerList} contentContainerStyle={styles.pickerListContent}>
-              {availableCategories.length ? availableCategories.map((category) => (
-                <PressableScale key={category.id} accessibilityRole="button" accessibilityLabel={`Add ${category.fullLabel}`} onPress={() => chooseCategory(category)} style={styles.pickerCategory}>
-                  <View style={[styles.pickerCategoryIcon, { backgroundColor: category.color ? `${category.color}22` : colors.pale }]}>
-                    <AppIcon name={category.icon} color={category.color ?? colors.deepForest} />
-                  </View>
-                  <AppText variant="bodyMedium" style={{ flex: 1 }} numberOfLines={1}>{category.fullLabel}</AppText>
-                  <AppIcon name="plus" color={colors.deepForest} />
-                </PressableScale>
-              )) : <AppText style={styles.editHint}>Every available category is already included.</AppText>}
-            </ScrollView>
+      <DraggableBottomSheet visible={categoryPickerOpen} onClose={() => setCategoryPickerOpen(false)}>{(dismiss) => <>
+        <View style={styles.pickerHeader}>
+          <View style={{ flex: 1 }}>
+            <AppText variant="h2">Add Existing Category</AppText>
+            <AppText variant="small" style={styles.editHint}>Choose what appears on your dashboard. Existing choices are hidden.</AppText>
           </View>
+          <PressableScale accessibilityLabel="Close category picker" onPress={dismiss} style={styles.pickerClose}>
+            <AppIcon name="close" size={20} />
+          </PressableScale>
         </View>
-      </Modal>
+        <View style={styles.pickerListContent}>
+          {availableCategories.length ? availableCategories.map((category) => (
+            <PressableScale key={category.id} accessibilityRole="button" accessibilityLabel={`Add ${category.fullLabel}`} onPress={() => chooseCategory(category)} style={styles.pickerCategory}>
+              <View style={[styles.pickerCategoryIcon, { backgroundColor: category.color ? `${category.color}22` : colors.pale }]}>
+                <AppIcon name={category.icon} color={category.color ?? colors.deepForest} />
+              </View>
+              <AppText variant="bodyMedium" style={{ flex: 1 }} numberOfLines={1}>{category.fullLabel}</AppText>
+              <AppIcon name="plus" color={colors.deepForest} />
+            </PressableScale>
+          )) : <AppText style={styles.editHint}>Every available category is already included.</AppText>}
+        </View>
+      </>}</DraggableBottomSheet>
       <DraggableBottomSheet visible={assistantOpen} onClose={() => setAssistantOpen(false)}>
         <View style={styles.assistantHeader}>
           <View style={{ flex: 1 }}><AppText variant="h2">Ask ExpenSense</AppText><AppText variant="small" style={styles.assistantOffline}>Offline · selected month context</AppText></View>
