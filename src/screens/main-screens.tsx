@@ -354,7 +354,7 @@ function MoneyMovementSheet({ entry, onClose }: { entry: LedgerEntry | null; onC
             <InfoRow label="Details" value={entry.subtitle} />
             {entry.notes ? <InfoRow label="Notes" value={entry.notes} /> : null}
           </View>
-          <AppText variant="small" style={s.muted}>{entry.kind === 'transfer' ? 'Transfers move money between wallets. They are not spending or income.' : 'Money in raises the wallet balance. It never counts as spending or changes a budget.'}</AppText>
+          <AppText variant="small" style={s.muted}>{entry.kind === 'transfer' ? 'Transfers move money between wallets. They are not spending or income.' : 'Income raises the wallet balance. It never counts as spending or changes a budget.'}</AppText>
           <SecondaryButton title="Delete" icon="delete-outline" onPress={() => setConfirming(true)} />
         </> : null}
       </DraggableBottomSheet>
@@ -578,6 +578,23 @@ export function WalletScreen() {
           </View>
         </View>
 
+        {/* Goals come first: they are what the money in these wallets is for. */}
+        <View style={s.sectionHead}>
+          <AppText variant="h2">Savings Goals</AppText>
+          <PressableScale accessibilityRole="button" accessibilityLabel="Manage savings goals" onPress={() => router.push('/goals' as never)} style={s.sectionLink}>
+            <AppText variant="small" style={s.sectionLinkText}>Manage{goals.length ? ` (${goals.length})` : ''}</AppText>
+            <AppIcon name="chevron-right" size={16} color={colors.forest} />
+          </PressableScale>
+        </View>
+        <PressableScale accessibilityRole="button" accessibilityLabel="Open savings goals" onPress={() => router.push('/goals' as never)} style={s.goalsRow}>
+          <View style={s.goalsIcon}><AppIcon name="target" size={22} /></View>
+          <View style={s.budgetInfo}>
+            <AppText variant="h3">{goals.length ? `${goals.length} active goal${goals.length === 1 ? '' : 's'}` : 'No goals yet'}</AppText>
+            <AppText variant="small" style={s.muted}>{goals.length ? `${secret(compact(savedCents))} saved so far` : 'Create your first savings goal'}</AppText>
+          </View>
+          <AppIcon name="chevron-right" size={20} color={colors.muted} />
+        </PressableScale>
+
         <View style={s.sectionHead}>
           <AppText variant="h2">My Wallets</AppText>
           <PressableScale accessibilityRole="button" accessibilityLabel="Manage wallets" onPress={() => openWallets()} style={s.sectionLink}>
@@ -622,22 +639,6 @@ export function WalletScreen() {
         ) : (
           <AppText style={s.muted}>Add a wallet to keep each source of money visible here.</AppText>
         )}
-
-        <View style={s.sectionHead}>
-          <AppText variant="h2">Savings Goals</AppText>
-          <PressableScale accessibilityRole="button" accessibilityLabel="Manage savings goals" onPress={() => router.push('/goals' as never)} style={s.sectionLink}>
-            <AppText variant="small" style={s.sectionLinkText}>Manage{goals.length ? ` (${goals.length})` : ''}</AppText>
-            <AppIcon name="chevron-right" size={16} color={colors.forest} />
-          </PressableScale>
-        </View>
-        <PressableScale accessibilityRole="button" accessibilityLabel="Open savings goals" onPress={() => router.push('/goals' as never)} style={s.goalsRow}>
-          <View style={s.goalsIcon}><AppIcon name="target" size={22} /></View>
-          <View style={s.budgetInfo}>
-            <AppText variant="h3">{goals.length ? `${goals.length} active goal${goals.length === 1 ? '' : 's'}` : 'No goals yet'}</AppText>
-            <AppText variant="small" style={s.muted}>{goals.length ? `${secret(compact(savedCents))} saved so far` : 'Create your first savings goal'}</AppText>
-          </View>
-          <AppIcon name="chevron-right" size={20} color={colors.muted} />
-        </PressableScale>
 
         <AppText variant="h2">Category Budgets</AppText>
         <PeriodStepper subject="budget month" label={monthLabel} onPrevious={() => setMonth(shiftMonth(month, -1))} onNext={() => setMonth(shiftMonth(month, 1))} />

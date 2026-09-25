@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useEffect } from 'react';
-import { Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -63,8 +63,10 @@ export function DraggableBottomSheet({ visible, onClose, disabled = false, child
   }));
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={dismiss} statusBarTranslucent>
-      <View style={styles.backdrop}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={dismiss} statusBarTranslucent navigationBarTranslucent>
+      {/* A Modal is a separate native window on Android, so gestures inside it
+          need their own root or the drag handle never receives touches. */}
+      <GestureHandlerRootView style={styles.backdrop}>
         <Pressable accessibilityRole="button" accessibilityLabel="Close sheet" disabled={disabled} onPress={dismiss} style={StyleSheet.absoluteFill} />
         <Animated.View style={[styles.sheet, { maxHeight: height * 0.9 }, animatedStyle]}>
           <GestureDetector gesture={pan}>
@@ -72,10 +74,14 @@ export function DraggableBottomSheet({ visible, onClose, disabled = false, child
               <View style={styles.handle} />
             </View>
           </GestureDetector>
-          <View style={styles.content}>{typeof children === 'function' ? children(dismiss) : children}</View>
+          {/* Scrolls when the content is taller than the sheet, so the last
+              button is never hidden behind the system navigation bar. */}
+          <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bounces={false}>
+            {typeof children === 'function' ? children(dismiss) : children}
+          </ScrollView>
           {footer}
         </Animated.View>
-      </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
@@ -85,5 +91,6 @@ const styles = StyleSheet.create({
   sheet: { width: '100%', maxWidth: 480, alignSelf: 'center', overflow: 'hidden', backgroundColor: colors.surface, borderTopLeftRadius: 30, borderTopRightRadius: 30, paddingHorizontal: 22, ...shadow },
   handleTarget: { height: 34, alignItems: 'center', justifyContent: 'center' },
   handle: { width: 48, height: 5, borderRadius: 3, backgroundColor: '#B8B6AF' },
+  scroll: { flexGrow: 0, flexShrink: 1 },
   content: { gap: 16 },
 });
