@@ -351,9 +351,9 @@ function CategoryTile({
 
 export function HomeScreen() {
   const { user } = useAuth();
-  const { expenses, loading: expensesLoading, loadError, refresh: refreshExpenses } = useExpenses();
-  const { budgets, loading: budgetsLoading, refresh: refreshBudgets } = useBudgets();
-  const { incomeEntries, loading: financeLoading, refresh: refreshFinance } = useFinance();
+  const { expenses, loading: expensesLoading, loadError, revalidate: revalidateExpenses } = useExpenses();
+  const { budgets, loading: budgetsLoading, revalidate: revalidateBudgets } = useBudgets();
+  const { incomeEntries, loading: financeLoading, revalidate: revalidateFinance } = useFinance();
   const { allCategories } = useCategories();
   const { displayName: profileName } = useProfile();
   const { width } = useWindowDimensions();
@@ -464,10 +464,11 @@ export function HomeScreen() {
 
   useFocusEffect(useCallback(() => {
     if (consumeSkippedPanelRefresh('/home')) return;
-    void refreshExpenses();
-    void refreshBudgets();
-    void refreshFinance();
-  }, [refreshBudgets, refreshExpenses, refreshFinance]));
+    // Reuses data that is still fresh instead of refetching on every visit.
+    void revalidateExpenses();
+    void revalidateBudgets();
+    void revalidateFinance();
+  }, [revalidateBudgets, revalidateExpenses, revalidateFinance]));
 
   const contentWidth = Math.min(width, 480);
   const compact = contentWidth < 360;

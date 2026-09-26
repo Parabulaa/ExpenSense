@@ -28,6 +28,7 @@ import { NotificationsProvider } from '@/features/notifications/NotificationsPro
 import { ProfileProvider } from '@/features/profile/ProfileProvider';
 import { ReceiptProvider } from '@/features/receipts/ReceiptProvider';
 import { SettingsProvider } from '@/features/settings/SettingsProvider';
+import { OfflineSync } from '@/lib/offline/OfflineSync';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -56,6 +57,7 @@ export default function RootLayout() {
                     <DashboardCategoriesProvider>
                       <NotificationsProvider>
                         <ToastProvider>
+                          <OfflineSync />
                           <AddExpenseOverlayProvider>
                             <RootNavigation />
                           </AddExpenseOverlayProvider>

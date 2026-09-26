@@ -14,6 +14,8 @@ export type Expense = {
   source: ExpenseSource;
   createdAt: string;
   updatedAt: string;
+  /** Saved on this device and not yet uploaded. */
+  pending?: boolean;
 };
 
 export type CreateExpenseInput = {
@@ -41,5 +43,7 @@ export type ExpenseFormValues = {
 export type ExpenseFormErrors = Partial<Record<keyof ExpenseFormValues, string>>;
 
 export type ExpenseResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; message: string };
+  /** `queued` means it was saved on the device and will sync when back online. */
+  | { ok: true; data: T; queued?: boolean }
+  /** `offline` means the server could not be reached, so the change is safe to retry. */
+  | { ok: false; message: string; offline?: boolean };

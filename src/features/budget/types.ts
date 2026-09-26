@@ -1,7 +1,7 @@
 export type CategoryBudget = { id: string; categoryId: string; amountCents: number };
 /** A month's budget is exactly its category limits; there is no separate total. */
 export type MonthlyBudget = { id: string; month: string; categoryBudgets: CategoryBudget[] };
-export type BudgetResult<T> = { ok: true; data: T } | { ok: false; message: string };
+export type BudgetResult<T> = { ok: true; data: T } | { ok: false; message: string; offline?: boolean };
 
 type Spend = { categoryId: string; amountCents: number };
 

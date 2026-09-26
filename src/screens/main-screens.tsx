@@ -50,8 +50,8 @@ export { HomeScreen } from './home-screen';
 export function TransactionsScreen() {
   const { openAddExpense } = useAddExpenseOverlay();
   const { categories, findCategory } = useCategories();
-  const { expenses, loading: expensesLoading, loadError, refresh } = useExpenses();
-  const { wallets, incomeEntries, transfers, loading: financeLoading, refresh: refreshFinance } = useFinance();
+  const { expenses, loading: expensesLoading, loadError, refresh, revalidate } = useExpenses();
+  const { wallets, incomeEntries, transfers, loading: financeLoading, refresh: refreshFinance, revalidate: revalidateFinance } = useFinance();
   const loading = expensesLoading || financeLoading;
   const bottomInset = useBottomNavInset();
   // Analytics insights link here with a `q` so the chevron lands on the rows the
@@ -84,9 +84,9 @@ export function TransactionsScreen() {
 
   useFocusEffect(useCallback(() => {
     if (consumeSkippedPanelRefresh('/transactions')) return;
-    void refresh();
-    void refreshFinance();
-  }, [refresh, refreshFinance]));
+    void revalidate();
+    void revalidateFinance();
+  }, [revalidate, revalidateFinance]));
 
   // Every money movement, from the same rows the wallets and budgets use.
   const ledger = useMemo(() => buildLedger({ expenses, incomeEntries, transfers, wallets, findCategory }), [expenses, findCategory, incomeEntries, transfers, wallets]);
@@ -292,6 +292,9 @@ type LedgerEntry = {
   searchText: string;
 };
 
+/** Shown on anything saved on this device that has not reached the server yet. */
+const SYNC_LABEL = 'Waiting to sync';
+
 const LEDGER_KIND_LABELS: Record<LedgerKind, string> = { expense: 'Expense', income: 'Income', cash_in: 'Cash-in', transfer: 'Transfer' };
 
 function buildLedger({ expenses, incomeEntries, transfers, wallets, findCategory }: { expenses: Expense[]; incomeEntries: IncomeEntry[]; transfers: WalletTransfer[]; wallets: Wallet[]; findCategory: (id: string | undefined) => DashboardCategory | null }): LedgerEntry[] {
@@ -301,10 +304,10 @@ function buildLedger({ expenses, incomeEntries, transfers, wallets, findCategory
       const category = findCategory(expense.categoryId);
       const label = category?.fullLabel ?? 'Expense';
       const wallet = walletName(expense.walletId);
-      return { key: `expense-${expense.id}`, id: expense.id, kind: 'expense', date: expense.transactionDate, time: expense.transactionTime, createdAt: expense.createdAt, amountCents: expense.amountCents, feeCents: 0, title: expense.merchant, subtitle: [label, wallet].filter(Boolean).join(' · '), icon: category?.icon ?? 'receipt-text-outline', categoryId: expense.categoryId, notes: expense.notes, searchText: '' };
+      return { key: `expense-${expense.id}`, id: expense.id, kind: 'expense', date: expense.transactionDate, time: expense.transactionTime, createdAt: expense.createdAt, amountCents: expense.amountCents, feeCents: 0, title: expense.merchant, subtitle: [label, wallet, expense.pending ? SYNC_LABEL : null].filter(Boolean).join(' · '), icon: category?.icon ?? 'receipt-text-outline', categoryId: expense.categoryId, notes: expense.notes, searchText: '' };
     }),
-    ...incomeEntries.map((entry): LedgerEntry => ({ key: `income-${entry.id}`, id: entry.id, kind: entry.kind, date: entry.transactionDate, time: entry.transactionTime, createdAt: entry.createdAt, amountCents: entry.amountCents, feeCents: 0, title: entry.source, subtitle: [incomeKindLabels[entry.kind], walletName(entry.walletId)].filter(Boolean).join(' · '), icon: entry.kind === 'cash_in' ? 'cash-plus' : 'cash-multiple', categoryId: null, notes: entry.notes, searchText: '' })),
-    ...transfers.map((transfer): LedgerEntry => ({ key: `transfer-${transfer.id}`, id: transfer.id, kind: 'transfer', date: transfer.transactionDate, time: transfer.transactionTime, createdAt: transfer.createdAt, amountCents: transfer.amountCents, feeCents: transfer.feeCents, title: `${walletName(transfer.fromWalletId) ?? 'Wallet'} → ${walletName(transfer.toWalletId) ?? 'Wallet'}`, subtitle: `Transfer${transfer.feeCents ? ` · ${formatPeso(transfer.feeCents)} fee` : ''}`, icon: 'swap-horizontal', categoryId: null, notes: transfer.notes, searchText: '' })),
+    ...incomeEntries.map((entry): LedgerEntry => ({ key: `income-${entry.id}`, id: entry.id, kind: entry.kind, date: entry.transactionDate, time: entry.transactionTime, createdAt: entry.createdAt, amountCents: entry.amountCents, feeCents: 0, title: entry.source, subtitle: [incomeKindLabels[entry.kind], walletName(entry.walletId), entry.pending ? SYNC_LABEL : null].filter(Boolean).join(' · '), icon: entry.kind === 'cash_in' ? 'cash-plus' : 'cash-multiple', categoryId: null, notes: entry.notes, searchText: '' })),
+    ...transfers.map((transfer): LedgerEntry => ({ key: `transfer-${transfer.id}`, id: transfer.id, kind: 'transfer', date: transfer.transactionDate, time: transfer.transactionTime, createdAt: transfer.createdAt, amountCents: transfer.amountCents, feeCents: transfer.feeCents, title: `${walletName(transfer.fromWalletId) ?? 'Wallet'} → ${walletName(transfer.toWalletId) ?? 'Wallet'}`, subtitle: `Transfer${transfer.feeCents ? ` · ${formatPeso(transfer.feeCents)} fee` : ''}${transfer.pending ? ` · ${SYNC_LABEL}` : ''}`, icon: 'swap-horizontal', categoryId: null, notes: transfer.notes, searchText: '' })),
   ];
   return rows.map((row) => ({ ...row, searchText: `${row.title} ${row.subtitle} ${LEDGER_KIND_LABELS[row.kind]} ${row.notes ?? ''}`.toLocaleLowerCase() }));
 }
@@ -401,7 +404,7 @@ export function TransactionDetailsScreen() {
     // The database returned the amount to its wallet; reload so every screen agrees.
     void refreshFinance();
     warningFeedback();
-    showToast(wallet ? `Transaction deleted. ${wallet.name} was refunded.` : 'Transaction deleted.');
+    showToast(result.queued ? 'Deleted on this device. It will sync when you are back online.' : wallet ? `Transaction deleted. ${wallet.name} was refunded.` : 'Transaction deleted.');
     setConfirmDelete(false);
     router.replace('/transactions');
   };
@@ -472,7 +475,7 @@ export function EditTransactionScreen() {
     submitting.current = false; setSaving(false);
     if (!result.ok) { showToast(result.message, { tone: 'warning' }); return; }
     void refreshFinance();
-    selectionFeedback(); showToast('Transaction updated.'); router.replace(`/transaction/${expense.id}` as never);
+    selectionFeedback(); showToast(result.queued ? 'Updated on this device. It will sync when you are back online.' : 'Transaction updated.'); router.replace(`/transaction/${expense.id}` as never);
   };
   return <Screen variant={8} bottomInset={40}><View style={s.page}><View style={s.editHeader}><BackButton /><View><AppText variant="title">Edit Transaction</AppText><AppText style={s.muted}>Update the saved expense.</AppText></View></View><FormInput label="Amount" icon="currency-php" value={values.amount} onChangeText={(value) => update('amount', normalizeAmountInput(value, values.amount))} keyboardType="decimal-pad" error={errors.amount} /><QuickAmountButtons value={values.amount} onSelect={(amount) => update('amount', String(amount))} /><FormInput label="Merchant / Description" value={values.merchant} onChangeText={(value) => update('merchant', value)} error={errors.merchant} /><AppText variant="bodyMedium">Category</AppText><View style={s.editCategories}>{categories.map((category) => <PressableScale key={category.id} onPress={() => update('categoryId', category.id)} style={[s.editCategory, values.categoryId === category.id && s.editCategoryActive]}><AppIcon name={category.icon} size={18} color={values.categoryId === category.id ? colors.surface : colors.deepForest} /><AppText variant="small" style={values.categoryId === category.id ? s.editCategoryTextActive : undefined}>{category.fullLabel}</AppText></PressableScale>)}</View>{errors.categoryId ? <AppText variant="small" style={s.errorText}>{errors.categoryId}</AppText> : null}<EditField label="Wallet" value={selectedWallet?.name ?? 'No wallet'} icon="wallet-outline" onPress={() => wallets.length ? setPicker('wallet') : router.push('/wallets' as never)} /><EditField label="Date & Time" value={formatDateTime(values.transactionDate, values.transactionTime)} icon="calendar-clock-outline" error={errors.transactionDate} onPress={() => setPicker('date')} /><FormInput label="Notes (optional)" value={values.notes} onChangeText={(value) => update('notes', value)} multiline style={s.editNotes} error={errors.notes} /><PrimaryButton title={saving ? 'Saving Changes…' : 'Save Changes'} disabled={saving} onPress={() => void save()} /></View>
     <WalletPicker visible={picker === 'wallet'} selectedId={values.walletId} onClose={() => setPicker(null)} onSelect={(walletId) => { update('walletId', walletId); setPicker(null); }} />
@@ -518,8 +521,8 @@ export function WalletScreen() {
   const { categories } = useCategories();
   const bottomInset = useBottomNavInset();
   const { expenses } = useExpenses();
-  const { wallets, goals, loading: walletsLoading, refresh: refreshFinance } = useFinance();
-  const { budgets: monthlyBudgets, loading, error, refresh, saveCategoryBudget, removeCategoryBudget } = useBudgets();
+  const { wallets, goals, loading: walletsLoading, refresh: refreshFinance, revalidate: revalidateFinance } = useFinance();
+  const { budgets: monthlyBudgets, loading, error, refresh, revalidate: revalidateBudgets, saveCategoryBudget, removeCategoryBudget } = useBudgets();
   const { showToast } = useToast();
   const currentMonth = todayLocalDate().slice(0, 7);
   const [month, setMonth] = useState(currentMonth);
@@ -542,7 +545,7 @@ export function WalletScreen() {
   const editingLabel = categories.find((item) => item.id === editingCategory)?.fullLabel ?? 'Category';
   const editingLimit = budget?.categoryBudgets.find((item) => item.categoryId === editingCategory);
 
-  useFocusEffect(useCallback(() => { if (!consumeSkippedPanelRefresh('/wallet')) { void refreshFinance(); void refresh(); } }, [refresh, refreshFinance]));
+  useFocusEffect(useCallback(() => { if (!consumeSkippedPanelRefresh('/wallet')) { void revalidateFinance(); void revalidateBudgets(); } }, [revalidateBudgets, revalidateFinance]));
 
   const openCategory = (categoryId: string) => { const limit = budget?.categoryBudgets.find((item) => item.categoryId === categoryId); setAmount(limit ? (limit.amountCents / 100).toFixed(2) : ''); setAmountError(null); setEditingCategory(categoryId); };
   // Every wallet action lands on the same manage screen; the params only decide
@@ -720,14 +723,14 @@ export function WalletScreen() {
 
 export function AnalyticsScreen() {
   const { openAddExpense } = useAddExpenseOverlay();
-  const { expenses, loading, loadError, refresh } = useExpenses();
+  const { expenses, loading, loadError, refresh, revalidate } = useExpenses();
   const { incomeEntries } = useFinance();
   const { allCategories } = useCategories();
   const bottomInset = useBottomNavInset();
   const [month, setMonth] = useState(todayLocalDate().slice(0, 7));
   const monthIncomeCents = incomeEntries.filter((entry) => entry.kind === 'income' && entry.transactionDate.startsWith(month)).reduce((sum, entry) => sum + entry.amountCents, 0);
   const [mode, setMode] = useState<'spending' | 'trends'>('spending');
-  useFocusEffect(useCallback(() => { if (!consumeSkippedPanelRefresh('/analytics')) void refresh(); }, [refresh]));
+  useFocusEffect(useCallback(() => { if (!consumeSkippedPanelRefresh('/analytics')) void revalidate(); }, [revalidate]));
   const analytics = useMemo(() => analyticsForMonth(expenses, allCategories, month), [allCategories, expenses, month]);
   const priorMonth = previousMonth(month);
   const previous = useMemo(() => analyticsForMonth(expenses, allCategories, priorMonth), [allCategories, expenses, priorMonth]);
@@ -779,12 +782,12 @@ function InsightsLink({ month }: { month: string }) {
 export function InsightsScreen() {
   const { openAddExpense } = useAddExpenseOverlay();
   const params = useLocalSearchParams<{ month?: string }>();
-  const { expenses, loading, loadError, refresh } = useExpenses();
+  const { expenses, loading, loadError, refresh, revalidate } = useExpenses();
   const { allCategories } = useCategories();
   const { budgets } = useBudgets();
   const bottomInset = useBottomNavInset();
   const month = typeof params.month === 'string' && /^\d{4}-\d{2}$/.test(params.month) ? params.month : todayLocalDate().slice(0, 7);
-  useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
+  useFocusEffect(useCallback(() => { void revalidate(); }, [revalidate]));
   const current = useMemo(() => analyticsForMonth(expenses, allCategories, month), [allCategories, expenses, month]);
   const previous = useMemo(() => analyticsForMonth(expenses, allCategories, previousMonth(month)), [allCategories, expenses, month]);
   const insights = useMemo(() => buildInsights(current, previous, allCategories, budgets.find((item) => item.month === month)), [allCategories, budgets, current, month, previous]);

@@ -1,6 +1,7 @@
 import type { Session, User } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 
+import { clearUserCache } from '@/lib/offline/cache';
 import { supabase } from '@/lib/supabase';
 import * as authService from './auth-service';
 import type { AuthResult } from './types';
@@ -46,7 +47,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
       // Delegates to the service so callers can surface a failure instead of
       // assuming sign-out always succeeds. The onAuthStateChange listener
       // above clears the session, so no manual state reset is needed here.
-      signOut: () => authService.signOut(),
+      // The saved copy of this user's data is removed on sign-out; changes still
+      // waiting to sync are kept and upload the next time they sign in.
+      signOut: async () => {
+        const userId = session?.user.id;
+        const result = await authService.signOut();
+        if (result.ok && userId) await clearUserCache(userId);
+        return result;
+      },
     }),
     [session, initialized],
   );

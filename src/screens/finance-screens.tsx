@@ -62,7 +62,7 @@ function SheetField({ label, value, icon, placeholder, onPress }: { label: strin
 }
 
 export function WalletsScreen() {
-  const { wallets, incomeEntries, transfers, loading, error, refresh, saveWallet, archiveWallet, addIncome, deleteIncome, addTransfer, deleteTransfer } = useFinance();
+  const { wallets, incomeEntries, transfers, loading, error, refresh, revalidate, saveWallet, archiveWallet, addIncome, deleteIncome, addTransfer, deleteTransfer } = useFinance();
   const { showToast } = useToast();
   const [editing, setEditing] = useState<Wallet | 'new' | null>(null);
   const [name, setName] = useState(''); const [balance, setBalance] = useState(''); const [type, setType] = useState<WalletType>('cash'); const [color, setColor] = useState(walletColors[0]); const [isDefault, setDefault] = useState(false); const [saving, setSaving] = useState(false);
@@ -70,7 +70,7 @@ export function WalletsScreen() {
   const [moneySheet, setMoneySheet] = useState<'in' | 'transfer' | null>(null);
   const [form, setForm] = useState<MoneyForm>(emptyMoneyForm());
   const [picker, setPicker] = useState<'wallet' | 'toWallet' | 'date' | null>(null);
-  useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
+  useFocusEffect(useCallback(() => { void revalidate(); }, [revalidate]));
   const params = useLocalSearchParams<{ wallet?: string; new?: string; transfer?: string; add?: string }>();
   const handledParams = useRef(false);
   const defaultWalletId = (wallets.find(w => w.isDefault) ?? wallets[0])?.id ?? '';
@@ -92,7 +92,7 @@ export function WalletsScreen() {
       const r = await addIncome({ walletId: form.walletId, amountCents: amount, kind: form.kind, source: form.source, transactionDate: form.date, transactionTime: form.time });
       setSaving(false);
       if (!r.ok) return showToast(r.message, { tone: 'warning' });
-      setMoneySheet(null); showToast(`${incomeKindLabels[form.kind]} added to ${walletName(form.walletId) ?? 'wallet'}.`);
+      setMoneySheet(null); showToast(r.queued ? `${incomeKindLabels[form.kind]} saved offline. It will sync when you are back online.` : `${incomeKindLabels[form.kind]} added to ${walletName(form.walletId) ?? 'wallet'}.`);
       return;
     }
     const fee = form.fee.trim() ? parseMoney(form.fee) : 0;
@@ -103,7 +103,7 @@ export function WalletsScreen() {
     const r = await addTransfer({ fromWalletId: form.walletId, toWalletId: form.toWalletId, amountCents: amount, feeCents: fee, transactionDate: form.date, transactionTime: form.time });
     setSaving(false);
     if (!r.ok) return showToast(r.message, { tone: 'warning' });
-    setMoneySheet(null); showToast(`Moved ${money(amount)} to ${walletName(form.toWalletId) ?? 'wallet'}.`);
+    setMoneySheet(null); showToast(r.queued ? 'Transfer saved offline. It will sync when you are back online.' : `Moved ${money(amount)} to ${walletName(form.toWalletId) ?? 'wallet'}.`);
   };
   const { ask, dialog: confirmDialog } = useConfirmDialog();
   const remove = (wallet: Wallet) => ask({ title: 'Archive wallet?', message: `${wallet.name} will be hidden. Existing transactions keep their history.`, label: 'Archive', run: async () => { const r = await archiveWallet(wallet.id); showToast(r.ok ? 'Wallet archived.' : r.message, r.ok ? undefined : { tone: 'warning' }); } });
@@ -178,10 +178,10 @@ export function WalletsScreen() {
 export function WalletDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const walletId = Array.isArray(id) ? id[0] : id;
-  const { wallets, incomeEntries, transfers, loading, refresh } = useFinance();
-  const { expenses, refresh: refreshExpenses } = useExpenses();
+  const { wallets, incomeEntries, transfers, loading, refresh, revalidate } = useFinance();
+  const { expenses, refresh: refreshExpenses, revalidate: revalidateExpenses } = useExpenses();
   const { findCategory } = useCategories();
-  useFocusEffect(useCallback(() => { void refresh(); void refreshExpenses(); }, [refresh, refreshExpenses]));
+  useFocusEffect(useCallback(() => { void revalidate(); void revalidateExpenses(); }, [revalidate, revalidateExpenses]));
   const index = wallets.findIndex(item => item.id === walletId);
   const wallet = wallets[index];
   const walletName = (otherId: string) => wallets.find(w => w.id === otherId)?.name ?? 'Wallet';

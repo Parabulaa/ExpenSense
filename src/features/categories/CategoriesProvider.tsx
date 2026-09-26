@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { categoryLibrary, type DashboardCategory } from '@/features/dashboard/dashboard-data';
+import { readCache, writeCache } from '@/lib/offline/cache';
 import * as service from './category-service';
 import type { CategoryInput, CategoryResult } from './category-service';
 
@@ -31,11 +32,15 @@ export function CategoriesProvider({ children }: PropsWithChildren) {
   const [error, setError] = useState<string | null>(null);
   const refresh = useCallback(async () => {
     if (!user) { setCustom([]); setHiddenIds([]); setLoading(false); setError(null); return; }
+    // The saved copy first, so categories are there offline and on every launch.
+    const cached = await readCache<{ custom: DashboardCategory[]; hiddenIds: string[] }>(user.id, 'categories');
+    if (cached) { setCustom(cached.custom); setHiddenIds(cached.hiddenIds); }
     setLoading(true);
     const [result, hidden] = await Promise.all([service.getCustomCategories(), service.getHiddenCategoryIds()]);
     if (result.ok) setCustom(result.data);
     if (hidden.ok) setHiddenIds(hidden.data);
-    setError(!result.ok ? result.message : !hidden.ok ? hidden.message : null);
+    // Offline with a saved copy is not an error worth showing.
+    setError(cached ? null : !result.ok ? result.message : !hidden.ok ? hidden.message : null);
     setLoading(false);
   }, [user]);
   useEffect(() => {
@@ -69,6 +74,7 @@ export function CategoriesProvider({ children }: PropsWithChildren) {
     if (result.ok) setCustom((current) => current.map((item) => item.id === id ? { ...item, archived: false } : item));
     return result;
   }, [hiddenIds, isDefault]);
+  useEffect(() => { if (user && !loading) writeCache(user.id, 'categories', { custom, hiddenIds }); }, [custom, hiddenIds, loading, user]);
   const allCategories = useMemo(() => [...categoryLibrary.map((item) => hiddenIds.includes(item.id) ? { ...item, archived: true } : item), ...custom], [custom, hiddenIds]);
   const categories = useMemo(() => allCategories.filter((item) => !item.archived), [allCategories]);
   const hiddenCategories = useMemo(() => allCategories.filter((item) => item.archived), [allCategories]);

@@ -135,7 +135,7 @@ export function ManualExpenseScreen() {
     selectionFeedback();
     const category = findCategory(result.data.categoryId);
     const amount = (result.data.amountCents / 100).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    showToast(`Expense added · ₱${amount} to ${category?.fullLabel ?? 'Expenses'}.`, { icon: 'check-circle-outline' });
+    showToast(result.queued ? `Saved offline · ₱${amount} to ${category?.fullLabel ?? 'Expenses'}. It will sync when you are back online.` : `Expense added · ₱${amount} to ${category?.fullLabel ?? 'Expenses'}.`, { icon: result.queued ? 'cloud-off-outline' : 'check-circle-outline' });
     router.replace('/transactions');
   };
 

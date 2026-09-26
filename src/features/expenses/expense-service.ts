@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { isNetworkError } from '@/lib/offline/network';
 import type { CreateExpenseInput, Expense, ExpenseResult, UpdateExpenseInput } from './types';
 import { normalizeTime } from './validation';
 
@@ -23,6 +24,8 @@ const SAFE_SAVE_ERROR = "Couldn't save expense. Check your connection and try ag
 const SAFE_UPDATE_ERROR = "Couldn't update transaction. Check your connection and try again.";
 const SAFE_DELETE_ERROR = "Couldn't delete transaction. Check your connection and try again.";
 
+const failure = (message: string, error: unknown) => ({ ok: false as const, message, offline: isNetworkError(error) });
+
 function fromRow(row: ExpenseRow): Expense {
   const amount = Number(row.amount);
   return {
@@ -41,6 +44,12 @@ function fromRow(row: ExpenseRow): Expense {
   };
 }
 
+/** The signed-in user from the locally stored session — no network round trip. */
+export async function currentUserId() {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user.id ?? null;
+}
+
 export async function getExpenses(): Promise<ExpenseResult<Expense[]>> {
   try {
     const { data, error } = await supabase
@@ -50,25 +59,36 @@ export async function getExpenses(): Promise<ExpenseResult<Expense[]>> {
       .order('transaction_time', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false });
 
-    if (error) return { ok: false, message: SAFE_LOAD_ERROR };
+    if (error) return failure(SAFE_LOAD_ERROR, error);
     return { ok: true, data: (data as ExpenseRow[]).map(fromRow) };
-  } catch {
-    return { ok: false, message: SAFE_LOAD_ERROR };
+  } catch (error) {
+    return failure(SAFE_LOAD_ERROR, error);
   }
 }
 
-export async function createExpense(input: CreateExpenseInput): Promise<ExpenseResult<Expense>> {
-  try {
-    // Ownership comes from the verified auth session, never from a form value.
-    const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) return { ok: false, message: 'Sign in again before saving this expense.' };
+async function getExpense(id: string): Promise<Expense | null> {
+  const { data } = await supabase.from('expenses').select(EXPENSE_FIELDS).eq('id', id).maybeSingle();
+  return data ? fromRow(data as ExpenseRow) : null;
+}
 
-    const amount = (input.amountCents / 100).toFixed(2);
+/**
+ * `id` is made on the device. If a retry finds that id already saved (the
+ * first attempt reached the server but its reply was lost), that saved row is
+ * the answer, so a retry can never create a duplicate.
+ */
+export async function createExpense(input: CreateExpenseInput, id?: string): Promise<ExpenseResult<Expense>> {
+  try {
+    // Ownership comes from the session, never from a form value; row-level
+    // security re-checks it on the server.
+    const userId = await currentUserId();
+    if (!userId) return { ok: false, message: 'Sign in again before saving this expense.' };
+
     const { data, error } = await supabase
       .from('expenses')
       .insert({
-        user_id: authData.user.id,
-        amount,
+        ...(id ? { id } : {}),
+        user_id: userId,
+        amount: (input.amountCents / 100).toFixed(2),
         merchant: input.merchant,
         category_id: input.categoryId,
         wallet_id: input.walletId || null,
@@ -80,10 +100,14 @@ export async function createExpense(input: CreateExpenseInput): Promise<ExpenseR
       .select(EXPENSE_FIELDS)
       .single();
 
-    if (error || !data) return { ok: false, message: SAFE_SAVE_ERROR };
+    if (error?.code === '23505' && id) {
+      const existing = await getExpense(id);
+      if (existing) return { ok: true, data: existing };
+    }
+    if (error || !data) return failure(SAFE_SAVE_ERROR, error);
     return { ok: true, data: fromRow(data as ExpenseRow) };
-  } catch {
-    return { ok: false, message: SAFE_SAVE_ERROR };
+  } catch (error) {
+    return failure(SAFE_SAVE_ERROR, error);
   }
 }
 
@@ -106,19 +130,19 @@ export async function updateExpense(input: UpdateExpenseInput): Promise<ExpenseR
       .select(EXPENSE_FIELDS)
       .single();
 
-    if (error || !data) return { ok: false, message: SAFE_UPDATE_ERROR };
+    if (error || !data) return failure(SAFE_UPDATE_ERROR, error);
     return { ok: true, data: fromRow(data as ExpenseRow) };
-  } catch {
-    return { ok: false, message: SAFE_UPDATE_ERROR };
+  } catch (error) {
+    return failure(SAFE_UPDATE_ERROR, error);
   }
 }
 
 export async function deleteExpense(id: string): Promise<ExpenseResult<{ id: string }>> {
   try {
     const { error } = await supabase.from('expenses').delete().eq('id', id);
-    if (error) return { ok: false, message: SAFE_DELETE_ERROR };
+    if (error) return failure(SAFE_DELETE_ERROR, error);
     return { ok: true, data: { id } };
-  } catch {
-    return { ok: false, message: SAFE_DELETE_ERROR };
+  } catch (error) {
+    return failure(SAFE_DELETE_ERROR, error);
   }
 }
