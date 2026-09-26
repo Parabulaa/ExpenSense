@@ -28,7 +28,8 @@ async function ocrSpaceAttempt(endpoint: string, key: string, imageBase64: strin
   if (payload.IsErroredOnProcessing || !response.ok) {
     const reason = [payload.ErrorMessage, payload.error].flat().filter(Boolean).join(' ') || `OCR.space request failed (${response.status}).`;
     if (/size|exceed/i.test(reason)) throw new FatalOcrError('The image is too large for the free OCR service. Try a closer photo.');
-    if (/api ?key|unauthori|not valid/i.test(reason)) throw new FatalOcrError('The OCR.space API key is invalid.');
+    // Only a real rejection counts as a bad key; OCR.space's overload message also mentions 'api key'.
+    if (response.status === 401 || response.status === 403 || /invalid (ocr )?api ?key|api ?key (is )?(invalid|not valid)|unauthori[sz]ed/i.test(reason)) throw new FatalOcrError(`OCR.space rejected the API key: ${reason.slice(0, 120)}`);
     throw new Error(reason);
   }
   const rawText = (payload.ParsedResults ?? []).map((result: any) => result.ParsedText ?? '').join('\n').replace(/\t+/g, '  ').trim();
