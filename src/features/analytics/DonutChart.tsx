@@ -72,10 +72,15 @@ export function DonutChart({
   slices,
   children,
   refreshKey,
+  minSize = MIN_SIZE,
+  maxSize = MAX_SIZE,
 }: {
   slices: CategorySlice[];
   children: React.ReactNode;
   refreshKey: string;
+  /** Override the size range, e.g. when the chart shares a row with its legend. */
+  minSize?: number;
+  maxSize?: number;
 }) {
   // Measured rather than fixed, so the chart fits whatever width the card gives
   // it instead of overflowing a narrow phone.
@@ -86,7 +91,7 @@ export function DonutChart({
     setAvailable((current) => (current === width ? current : width));
   };
 
-  const size = Math.min(Math.max(available, MIN_SIZE), MAX_SIZE);
+  const size = Math.min(Math.max(available, minSize), maxSize);
   const geometry = geometryFor(size);
   const inset = size * CENTER_INSET_RATIO;
   const segments = slices.map((slice, index) => ({
