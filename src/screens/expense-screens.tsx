@@ -21,6 +21,7 @@ import type { ExpenseFormErrors, ExpenseFormValues } from '@/features/expenses/t
 import { useReceipt } from '@/features/receipts/ReceiptProvider';
 import { formatDateTime, isFutureDateTime, isValidLocalDate, isValidLocalTime, MAX_MERCHANT_LENGTH, MAX_NOTES_LENGTH, normalizeAmountInput, nowLocalTime, todayLocalDate, validateExpenseForm } from '@/features/expenses/validation';
 import { TimeSelector } from '@/components/common/time-selector';
+import { AmountChips } from '@/components/common/amount-chips';
 import { walletTypeMeta } from '@/features/finance/wallet-presentation';
 import type { ReceiptKind } from '@/features/receipts/types';
 import { selectionFeedback } from '@/lib/haptics';
@@ -154,7 +155,7 @@ export function ManualExpenseScreen() {
           <View style={styles.amountBlock}>
             <AppText variant="bodyMedium">Amount</AppText>
             <FormInput icon="currency-php" accessibilityLabel="Expense amount" placeholder="0.00" value={values.amount} onChangeText={(value) => update('amount', normalizeAmountInput(value, values.amount))} keyboardType="decimal-pad" inputMode="decimal" returnKeyType="next" error={errors.amount} style={styles.amountInput} inputStyle={styles.amountInputText} maxLength={10} />
-            <ExpenseQuickAmounts value={values.amount} onSelect={(amount) => { update('amount', String(amount)); selectionFeedback(); }} />
+            <AmountChips value={values.amount} onChange={(amount) => update('amount', amount)} />
           </View>
         </FadeSlideIn>
         <FadeSlideIn index={2} style={styles.formFields}>
@@ -171,13 +172,6 @@ export function ManualExpenseScreen() {
       {dateOpen ? <ExpenseDatePicker value={values.transactionDate} time={values.transactionTime} onClose={() => setDateOpen(false)} onSelect={(date, time) => { setValues((current) => ({ ...current, transactionDate: date, transactionTime: time })); setErrors((current) => ({ ...current, transactionDate: undefined })); setDateOpen(false); }} /> : null}
     </Screen>
   );
-}
-
-function ExpenseQuickAmounts({ value, onSelect }: { value: string; onSelect: (amount: number) => void }) {
-  return <View style={styles.quickAmounts}>{[100, 200, 500, 1000].map((amount) => {
-    const selected = Number(value) === amount;
-    return <PressableScale key={amount} accessibilityRole="button" accessibilityLabel={`Use ${amount} pesos`} accessibilityState={{ selected }} onPress={() => onSelect(amount)} style={[styles.quickAmount, selected && styles.quickAmountSelected]}><AppText variant="small" style={selected ? styles.quickAmountTextSelected : styles.quickAmountText}>₱{amount.toLocaleString('en-PH')}</AppText></PressableScale>;
-  })}</View>;
 }
 
 function FormButton({ label, value, icon, placeholder, error, onPress }: { label: string; value: string; icon: Parameters<typeof AppIcon>[0]['name']; placeholder?: boolean; error?: string; onPress: () => void }) {
@@ -294,9 +288,11 @@ const RECEIPT_KINDS: { id: Exclude<ReceiptKind, 'unknown'>; label: string; icon:
  * Peso field that keeps what the user typed while reporting cents upward, so
  * editing "350.5" never snaps to "350.50" mid-keystroke.
  */
-function MoneyField({ label, cents, onChange, style }: { label?: string; cents: number; onChange: (cents: number) => void; style?: object }) {
+function MoneyField({ label, cents, onChange, style, chips = false }: { label?: string; cents: number; onChange: (cents: number) => void; style?: object; chips?: boolean }) {
   const [text, setText] = useState(cents ? (cents / 100).toFixed(2) : '');
-  return <FormInput label={label} icon={label ? 'currency-php' : undefined} placeholder="0.00" value={text} keyboardType="decimal-pad" inputMode="decimal" onChangeText={(value) => { const next = normalizeAmountInput(value, text); setText(next); onChange(Math.round((Number(next) || 0) * 100)); }} style={style} />;
+  const set = (next: string) => { setText(next); onChange(Math.round((Number(next) || 0) * 100)); };
+  const field = <FormInput label={label} icon={label ? 'currency-php' : undefined} placeholder="0.00" value={text} keyboardType="decimal-pad" inputMode="decimal" onChangeText={(value) => set(normalizeAmountInput(value, text))} style={style} />;
+  return chips ? <View style={styles.amountBlock}>{field}<AmountChips value={text} onChange={set} /></View> : field;
 }
 
 function ChangeRow({ label, before, after }: { label: string; before: number; after: number }) {
@@ -396,7 +392,7 @@ export function ReceiptReviewScreen() {
         <MoneyField label="Subtotal" cents={draft.subtotalCents} onChange={(subtotalCents) => updateDraft({ subtotalCents })} />
         <MoneyField label="Tax" cents={draft.taxCents} onChange={(taxCents) => updateDraft({ taxCents })} />
       </> : null}
-      <MoneyField label={kind === 'expense' ? 'Total' : 'Amount'} cents={draft.totalCents} onChange={(totalCents) => updateDraft({ totalCents })} />
+      <MoneyField chips label={kind === 'expense' ? 'Total' : 'Amount'} cents={draft.totalCents} onChange={(totalCents) => updateDraft({ totalCents })} />
       {kind === 'transfer' ? <MoneyField label="Transfer fee" cents={draft.feeCents} onChange={(feeCents) => updateDraft({ feeCents })} /> : null}
       <FormInput label="Notes (optional)" value={draft.notes} onChangeText={(notes) => updateDraft({ notes })} />
       {changes.length ? <Card style={{ gap: 10 }}>
@@ -446,7 +442,7 @@ const styles = StyleSheet.create({
   categoryPickerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 }, categoryChoice: { width: '31%', minHeight: 96, borderRadius: 17, borderWidth: 1, borderColor: colors.line, backgroundColor: '#F8F7F0', alignItems: 'center', justifyContent: 'center', gap: 7, padding: 8 }, categoryChoiceSelected: { borderColor: colors.deepForest, backgroundColor: '#E3ECDF' }, categoryChoiceIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#E1EBDD', alignItems: 'center', justifyContent: 'center' }, categoryChoiceIconSelected: { backgroundColor: colors.deepForest }, categoryChoiceLabel: { textAlign: 'center', fontFamily: 'JakartaMedium' },
   walletPicker: { gap: 8 }, walletChoice: { minHeight: 64, borderRadius: radii.md, padding: 12, borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surface }, walletChoiceSelected: { borderColor: colors.success, backgroundColor: colors.pale }, walletChoiceCopy: { flexDirection: 'row', gap: 12, alignItems: 'center' }, walletColor: { width: 12, height: 42, borderRadius: 6 },
   nativeDatePicker: { alignItems: 'center', minHeight: Platform.OS === 'ios' ? 310 : 60 }, selectedDate: { textAlign: 'center', color: colors.deepForest, fontFamily: 'JakartaSemiBold' },
-  scannerPage: { flex: 1, padding: 24, justifyContent: 'center' }, camera: { height: '86%', borderRadius: 24, overflow: 'hidden', backgroundColor: '#1D271F', borderWidth: 4, borderColor: '#DCE7D8' }, cameraTop: { height: 70, flexDirection: 'row', justifyContent: 'space-between', padding: 20, zIndex: 3 }, scanReceipt: { position: 'absolute', width: '58%', height: '60%', top: '16%', left: '21%', transform: [{ rotate: '-4deg' }] }, scanFrame: { position: 'absolute', width: '72%', height: '58%', top: '17%', left: '14%', tintColor: '#3CE8B0' }, cameraBottom: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 170, backgroundColor: 'rgba(0,0,0,.64)', alignItems: 'center', justifyContent: 'space-around', padding: 18 }, captureRow: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' }, capture: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.surface, borderWidth: 5, borderColor: colors.white },
+  scannerPage: { flex: 1, paddingHorizontal: 8, paddingTop: 8, paddingBottom: 16 }, camera: { flex: 1, borderRadius: 24, overflow: 'hidden', backgroundColor: '#1D271F', borderWidth: 4, borderColor: '#DCE7D8' }, cameraTop: { height: 70, flexDirection: 'row', justifyContent: 'space-between', padding: 20, zIndex: 3 }, scanReceipt: { position: 'absolute', width: '58%', height: '60%', top: '16%', left: '21%', transform: [{ rotate: '-4deg' }] }, scanFrame: { position: 'absolute', width: '84%', height: '62%', top: '11%', left: '8%', tintColor: '#3CE8B0' }, cameraBottom: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 170, backgroundColor: 'rgba(0,0,0,.64)', alignItems: 'center', justifyContent: 'space-around', padding: 18 }, captureRow: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' }, capture: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.surface, borderWidth: 5, borderColor: colors.white },
   processing: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 24, padding: 30 }, processMascot: { width: 250, height: 220 }, steps: { gap: 16 }, step: { flexDirection: 'row', alignItems: 'center', gap: 16 }, stepCircle: { width: 34, height: 34, borderRadius: 17, borderWidth: 2, borderColor: '#B7C0BD', alignItems: 'center', justifyContent: 'center' }, stepDone: { backgroundColor: colors.success, borderColor: colors.success },
   reviewTop: { flexDirection: 'row', gap: 16 }, receiptPhoto: { width: '42%', height: 210, borderRadius: 14, backgroundColor: '#59442E', padding: 8 }, failed: { flex: 1, justifyContent: 'center', padding: 28, gap: 18 }, failedMascot: { width: 260, height: 240, alignSelf: 'center' },
   kindRow: { flexDirection: 'row', gap: 8 }, kindOption: { flex: 1, minHeight: 64, borderRadius: radii.md, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', gap: 4 }, kindOptionSelected: { backgroundColor: colors.deepForest, borderColor: colors.deepForest }, kindText: { color: colors.deepForest, fontFamily: 'JakartaSemiBold' }, kindTextSelected: { color: colors.surface, fontFamily: 'JakartaSemiBold' },

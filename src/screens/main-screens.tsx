@@ -6,6 +6,7 @@ import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanim
 import { DraggableBottomSheet } from '@/components/common/draggable-bottom-sheet';
 import { FadeSlideIn, PressableScale } from '@/components/common/motion';
 import { Screen } from '@/components/common/screen';
+import { AmountChips } from '@/components/common/amount-chips';
 import { useToast } from '@/components/common/toast';
 import { AppIcon, AppText, BackButton, Card, FormInput, PrimaryButton, ProgressBar, SecondaryButton, StatusChip } from '@/components/common/ui';
 import { BottomNavigation, useBottomNavInset } from '@/components/navigation/bottom-navigation';
@@ -125,7 +126,7 @@ export function TransactionsScreen() {
   }, [calendarMonth, categoryFilter, dateFilter, ledger, query, selectedCalendarDate, sort, typeFilter]);
 
   const groups = useMemo(() => groupByDate(visibleEntries), [visibleEntries]);
-  const activeFilterCount = [typeFilter !== 'all', dateFilter !== 'all', categoryFilter !== 'all', sort !== 'newest'].filter(Boolean).length;
+  const activeFilterCount = [typeFilter !== 'all', dateFilter !== 'all' || Boolean(selectedCalendarDate), categoryFilter !== 'all', sort !== 'newest'].filter(Boolean).length;
   const hasFilters = Boolean(query.trim()) || typeFilter !== 'all' || dateFilter !== 'all' || categoryFilter !== 'all' || sort !== 'newest' || Boolean(selectedCalendarDate);
   const clearFilters = () => { setTypeFilter('all'); setQuery(''); setSearchOpen(false); setDateFilter('all'); setCategoryFilter('all'); setSort('newest'); setSelectedCalendarDate(null); };
   const reload = () => { void refresh(); void refreshFinance(); };
@@ -138,7 +139,6 @@ export function TransactionsScreen() {
           {searchOpen ? <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} style={s.searchExpanded}><AppIcon name="magnify" size={21} color={colors.muted} /><TextInput autoFocus accessibilityLabel="Search transactions" placeholder="Search transactions..." placeholderTextColor={colors.muted} value={query} onChangeText={setQuery} style={s.searchInput} /><PressableScale accessibilityLabel="Close transaction search" onPress={() => { setQuery(''); setSearchOpen(false); }} style={s.searchClose}><AppIcon name="close" size={19} /></PressableScale></Animated.View> : <><PressableScale accessibilityRole="button" accessibilityLabel="Open transaction search" onPress={() => setSearchOpen(true)} style={s.searchWide}><AppIcon name="magnify" size={20} color={colors.muted} /><AppText style={s.muted}>Search transactions</AppText></PressableScale><FilterPill activeCount={activeFilterCount} onPress={() => setFiltersOpen(true)} /></>}
         </Animated.View>
         <Animated.View key={calendarMonth} entering={FadeIn.duration(180)}><SpendingCalendar expenses={expenses} categories={categories} month={calendarMonth} selectedDate={selectedCalendarDate} onMonthChange={(next) => { setCalendarMonth(next); setDateFilter('all'); setSelectedCalendarDate(null); }} onSelectDate={(date) => { setDateFilter('all'); setSelectedCalendarDate(date); }} /></Animated.View>
-        {hasFilters ? <Pressable accessibilityRole="button" accessibilityLabel="Clear transaction filters" onPress={clearFilters} style={s.clearFilters}><AppIcon name="filter-remove-outline" size={17} /><AppText variant="small" style={s.clearFiltersText}>Clear filters</AppText></Pressable> : null}
 
         {loading && ledger.length === 0 ? (
           <View style={s.skeletonList}>{[0, 1, 2].map((item) => <View key={item} style={s.skeletonCard}><View style={s.skeletonIcon} /><View style={s.skeletonCopy}><View style={s.skeletonLineWide} /><View style={s.skeletonLine} /></View></View>)}</View>
@@ -154,7 +154,7 @@ export function TransactionsScreen() {
             <View style={s.emptyIcon}><AppIcon name="receipt-text-outline" size={31} /></View>
             <AppText variant="h2">{hasFilters ? 'No matching transactions' : 'No transactions yet'}</AppText>
             <AppText style={[s.muted, s.center]}>{hasFilters ? 'No transactions match these filters.' : 'Add your first expense to start tracking your spending.'}</AppText>
-            {hasFilters ? <SecondaryButton title="Clear Filters" onPress={clearFilters} /> : <PrimaryButton title="Add Expense" icon="plus" onPress={openAddExpense} />}
+            {hasFilters ? null : <PrimaryButton title="Add Expense" icon="plus" onPress={openAddExpense} />}
           </Card>
         ) : groups.map((group) => (
           <View key={group.date}>
@@ -231,7 +231,6 @@ function SpendingCalendar({ expenses, categories, month, selectedDate, onMonthCh
       const categoryLabel = category?.fullLabel ?? dominantId;
       return <View key={date} style={s.calendarCell}><PressableScale scaleTo={0.92} accessibilityRole="button" accessibilityLabel={`${date}${total ? `, spent ${compactCurrency(total)}${categoryLabel ? `, mostly ${categoryLabel}` : ''}` : ', no spending'}`} accessibilityState={{ selected }} onPress={() => onSelectDate(selected ? null : date)} style={[s.calendarDay, total > 0 && s.calendarDayHasSpending, total > 0 && !selected && { backgroundColor: `${categoryColor}20`, borderColor: `${categoryColor}70` }, selected && s.calendarDaySelected]}><AppText variant="bodyMedium" style={selected ? s.calendarDaySelectedText : undefined}>{day}</AppText>{total > 0 ? <AppText numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[s.calendarAmount, !selected && { color: categoryColor }, selected && s.calendarDaySelectedText]}>{compactCurrency(total)}</AppText> : null}</PressableScale></View>;
     })}</View>
-    {selectedDate ? <Pressable accessibilityRole="button" accessibilityLabel="Show every transaction in this month" onPress={() => onSelectDate(null)} style={s.calendarSelection}><AppText variant="small" style={s.calendarSelectionText}>Showing {formatExpenseDate(selectedDate)} · Tap to clear</AppText></Pressable> : null}
   </Card>;
 }
 
@@ -239,13 +238,6 @@ function SpendingCalendar({ expenses, categories, month, selectedDate, onMonthCh
 function FilterPill({ activeCount, onPress }: { activeCount: number; onPress: () => void }) {
   const active = activeCount > 0;
   return <PressableScale accessibilityRole="button" accessibilityLabel={active ? `Filters, ${activeCount} on` : 'Filters, showing all'} onPress={onPress} style={[s.filterPill, active && s.filterPillActive]}><AppIcon name="filter-variant" size={18} color={active ? colors.surface : colors.deepForest} /><AppText variant="bodyMedium" style={active ? s.filterPillTextActive : s.filterPillText}>{active ? `${activeCount} on` : 'All'}</AppText></PressableScale>;
-}
-
-function QuickAmountButtons({ value, onSelect }: { value: string; onSelect: (amount: number) => void }) {
-  return <View style={s.quickAmounts}>{[100, 200, 500, 1000].map((amount) => {
-    const selected = Number(value) === amount;
-    return <PressableScale key={amount} accessibilityRole="button" accessibilityLabel={`Use ${amount} pesos`} accessibilityState={{ selected }} onPress={() => onSelect(amount)} style={[s.quickAmount, selected && s.quickAmountSelected]}><AppText variant="small" style={selected ? s.quickAmountTextSelected : s.quickAmountText}>₱{amount.toLocaleString('en-PH')}</AppText></PressableScale>;
-  })}</View>;
 }
 
 /** One organized filter sheet: type, date, category and sort together, applied live. */
@@ -377,8 +369,8 @@ function MoneyMovementSheet({ entry, onClose }: { entry: LedgerEntry | null; onC
             <InfoRow label="Details" value={entry.subtitle} />
             {entry.notes ? <InfoRow label="Notes" value={entry.notes} /> : null}
           </View>
-          <AppText variant="small" style={s.muted}>{entry.kind === 'transfer' ? 'Transfers move money between wallets. They are not spending or income.' : 'Income raises the wallet balance. It never counts as spending or changes a budget.'}</AppText>
-          <SecondaryButton title="Delete" icon="delete-outline" onPress={() => setConfirming(true)} />
+          <AppText variant="small" style={s.muted}>{entry.kind === 'transfer' ? 'Transfers move money between wallets. They are not spending or income, and they stay on record so every balance can be traced.' : 'Income raises the wallet balance. It never counts as spending or changes a budget.'}</AppText>
+          {entry.kind === 'transfer' ? null : <SecondaryButton title="Delete" icon="delete-outline" onPress={() => setConfirming(true)} />}
         </> : null}
       </DraggableBottomSheet>
       <AuthDialog visible={Boolean(entry) && confirming} title={entry?.kind === 'transfer' ? 'Delete transfer?' : 'Delete this entry?'} message={entry?.kind === 'transfer' ? 'Both wallet balances will be restored.' : 'The amount will be removed from the wallet balance.'} primaryAction={{ label: 'Delete', destructive: true, loading: deleting, onPress: () => void remove() }} secondaryAction={{ label: 'Cancel', onPress: () => setConfirming(false) }} onRequestClose={() => setConfirming(false)} />
@@ -480,7 +472,7 @@ export function EditTransactionScreen() {
     void refreshFinance();
     selectionFeedback(); showToast(result.queued ? 'Updated on this device. It will sync when you are back online.' : 'Transaction updated.'); router.replace(`/transaction/${expense.id}` as never);
   };
-  return <Screen variant={8} bottomInset={40}><View style={s.page}><View style={s.editHeader}><BackButton /><View><AppText variant="title" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>Edit Transaction</AppText><AppText style={s.muted}>Update the saved expense.</AppText></View></View><FormInput label="Amount" icon="currency-php" value={values.amount} onChangeText={(value) => update('amount', normalizeAmountInput(value, values.amount))} keyboardType="decimal-pad" error={errors.amount} /><QuickAmountButtons value={values.amount} onSelect={(amount) => update('amount', String(amount))} /><FormInput label="Merchant / Description" value={values.merchant} onChangeText={(value) => update('merchant', value)} error={errors.merchant} /><AppText variant="bodyMedium">Category</AppText><View style={s.editCategories}>{categories.map((category) => <PressableScale key={category.id} onPress={() => update('categoryId', category.id)} style={[s.editCategory, values.categoryId === category.id && s.editCategoryActive]}><AppIcon name={category.icon} size={18} color={values.categoryId === category.id ? colors.surface : colors.deepForest} /><AppText variant="small" style={values.categoryId === category.id ? s.editCategoryTextActive : undefined}>{category.fullLabel}</AppText></PressableScale>)}</View>{errors.categoryId ? <AppText variant="small" style={s.errorText}>{errors.categoryId}</AppText> : null}<EditField label="Wallet" value={selectedWallet?.name ?? 'No wallet'} icon="wallet-outline" onPress={() => wallets.length ? setPicker('wallet') : router.push('/wallets' as never)} /><EditField label="Date & Time" value={formatDateTime(values.transactionDate, values.transactionTime)} icon="calendar-clock-outline" error={errors.transactionDate} onPress={() => setPicker('date')} /><FormInput label="Notes (optional)" value={values.notes} onChangeText={(value) => update('notes', value)} multiline style={s.editNotes} error={errors.notes} /><PrimaryButton title={saving ? 'Saving Changes…' : 'Save Changes'} disabled={saving} onPress={() => void save()} /></View>
+  return <Screen variant={8} bottomInset={40}><View style={s.page}><View style={s.editHeader}><BackButton /><View><AppText variant="title" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>Edit Transaction</AppText><AppText style={s.muted}>Update the saved expense.</AppText></View></View><FormInput label="Amount" icon="currency-php" value={values.amount} onChangeText={(value) => update('amount', normalizeAmountInput(value, values.amount))} keyboardType="decimal-pad" error={errors.amount} /><AmountChips value={values.amount} onChange={(amount) => update('amount', amount)} /><FormInput label="Merchant / Description" value={values.merchant} onChangeText={(value) => update('merchant', value)} error={errors.merchant} /><AppText variant="bodyMedium">Category</AppText><View style={s.editCategories}>{categories.map((category) => <PressableScale key={category.id} onPress={() => update('categoryId', category.id)} style={[s.editCategory, values.categoryId === category.id && s.editCategoryActive]}><AppIcon name={category.icon} size={18} color={values.categoryId === category.id ? colors.surface : colors.deepForest} /><AppText variant="small" style={values.categoryId === category.id ? s.editCategoryTextActive : undefined}>{category.fullLabel}</AppText></PressableScale>)}</View>{errors.categoryId ? <AppText variant="small" style={s.errorText}>{errors.categoryId}</AppText> : null}<EditField label="Wallet" value={selectedWallet?.name ?? 'No wallet'} icon="wallet-outline" onPress={() => wallets.length ? setPicker('wallet') : router.push('/wallets' as never)} /><EditField label="Date & Time" value={formatDateTime(values.transactionDate, values.transactionTime)} icon="calendar-clock-outline" error={errors.transactionDate} onPress={() => setPicker('date')} /><FormInput label="Notes (optional)" value={values.notes} onChangeText={(value) => update('notes', value)} multiline style={s.editNotes} error={errors.notes} /><PrimaryButton title={saving ? 'Saving Changes…' : 'Save Changes'} disabled={saving} onPress={() => void save()} /></View>
     <WalletPicker visible={picker === 'wallet'} selectedId={values.walletId} onClose={() => setPicker(null)} onSelect={(walletId) => { update('walletId', walletId); setPicker(null); }} />
     {picker === 'date' ? <ExpenseDatePicker value={values.transactionDate} time={values.transactionTime} onClose={() => setPicker(null)} onSelect={(transactionDate, transactionTime) => { setValues((current) => ({ ...current, transactionDate, transactionTime })); setErrors((current) => ({ ...current, transactionDate: undefined })); setPicker(null); }} /> : null}
   </Screen>;
@@ -716,7 +708,7 @@ export function WalletScreen() {
         <AppText variant="h2">{editingLabel} Budget</AppText>
         <AppText style={s.muted}>{monthLabel}</AppText>
         <FormInput label="Budget amount" icon="currency-php" placeholder="0.00" value={amount} onChangeText={(value) => { setAmount(normalizeAmountInput(value, amount)); setAmountError(null); }} keyboardType="decimal-pad" error={amountError ?? undefined} />
-        <QuickAmountButtons value={amount} onSelect={(value) => { setAmount(String(value)); setAmountError(null); }} />
+        <AmountChips value={amount} onChange={(value) => { setAmount(value); setAmountError(null); }} />
         <PrimaryButton title={saving ? 'Saving…' : 'Save Budget'} disabled={saving} onPress={() => void save()} />
         {editingLimit ? <SecondaryButton title="Remove Budget" disabled={saving} onPress={() => void removeLimit()} /> : null}
       </DraggableBottomSheet>
