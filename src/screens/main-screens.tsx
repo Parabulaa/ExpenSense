@@ -76,7 +76,8 @@ export function TransactionsScreen() {
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [sort, setSort] = useState<SortOption>('newest');
-  const [picker, setPicker] = useState<PickerKind>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [calendarMonth, setCalendarMonth] = useState(todayLocalDate().slice(0, 7));
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
   const [openEntry, setOpenEntry] = useState<LedgerEntry | null>(null);
@@ -100,6 +101,7 @@ export function TransactionsScreen() {
     const filtered = ledger.filter((entry) => {
       const matchesQuery = !needle || entry.searchText.includes(needle);
       // A category only applies to expenses, so choosing one shows only spending.
+      const matchesType = typeFilter === 'all' || (typeFilter === 'income' ? entry.kind === 'income' || entry.kind === 'cash_in' : entry.kind === typeFilter);
       const matchesCategory = categoryFilter === 'all' || (entry.kind === 'expense' && entry.categoryId === categoryFilter);
       // Relative ranges can cross a month boundary, so only the "whole month"
       // views are tied to the calendar's month.
@@ -109,7 +111,7 @@ export function TransactionsScreen() {
       const matchesDate = dateFilter === 'all' || dateFilter === 'month' ||
         (dateFilter === 'today' && entry.date === today) ||
         ((dateFilter === 'week' || dateFilter === 'last7' || dateFilter === 'last30') && entry.date >= cutoffValue && entry.date <= today);
-      return matchesDisplayedMonth && matchesQuery && matchesCategory && matchesDate && matchesCalendarDate;
+      return matchesDisplayedMonth && matchesQuery && matchesType && matchesCategory && matchesDate && matchesCalendarDate;
     });
     return [...filtered].sort((a, b) => {
       if (sort === 'oldest') return compareLedger(b, a);
@@ -117,11 +119,12 @@ export function TransactionsScreen() {
       if (sort === 'lowest') return a.amountCents - b.amountCents;
       return compareLedger(a, b);
     });
-  }, [calendarMonth, categoryFilter, dateFilter, ledger, query, selectedCalendarDate, sort]);
+  }, [calendarMonth, categoryFilter, dateFilter, ledger, query, selectedCalendarDate, sort, typeFilter]);
 
   const groups = useMemo(() => groupByDate(visibleEntries), [visibleEntries]);
-  const hasFilters = Boolean(query.trim()) || dateFilter !== 'all' || categoryFilter !== 'all' || sort !== 'newest' || Boolean(selectedCalendarDate);
-  const clearFilters = () => { setQuery(''); setSearchOpen(false); setDateFilter('all'); setCategoryFilter('all'); setSort('newest'); setSelectedCalendarDate(null); };
+  const activeFilterCount = [typeFilter !== 'all', dateFilter !== 'all', categoryFilter !== 'all', sort !== 'newest'].filter(Boolean).length;
+  const hasFilters = Boolean(query.trim()) || typeFilter !== 'all' || dateFilter !== 'all' || categoryFilter !== 'all' || sort !== 'newest' || Boolean(selectedCalendarDate);
+  const clearFilters = () => { setTypeFilter('all'); setQuery(''); setSearchOpen(false); setDateFilter('all'); setCategoryFilter('all'); setSort('newest'); setSelectedCalendarDate(null); };
   const reload = () => { void refresh(); void refreshFinance(); };
 
   return (
@@ -129,7 +132,7 @@ export function TransactionsScreen() {
       <View style={s.page}>
         <AppText variant="hero">Transactions</AppText>
         <Animated.View layout={LinearTransition.duration(180)} style={s.transactionToolbar}>
-          {searchOpen ? <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} style={s.searchExpanded}><AppIcon name="magnify" size={21} color={colors.muted} /><TextInput autoFocus accessibilityLabel="Search transactions" placeholder="Search transactions..." placeholderTextColor={colors.muted} value={query} onChangeText={setQuery} style={s.searchInput} /><PressableScale accessibilityLabel="Close transaction search" onPress={() => { setQuery(''); setSearchOpen(false); }} style={s.searchClose}><AppIcon name="close" size={19} /></PressableScale></Animated.View> : <><PressableScale accessibilityRole="button" accessibilityLabel="Open transaction search" onPress={() => setSearchOpen(true)} style={s.searchCompact}><AppIcon name="magnify" size={22} color={colors.deepForest} /></PressableScale><FilterButton label={dateFilter === 'all' ? 'Date' : DATE_LABELS[dateFilter]} active={dateFilter !== 'all'} flex={0.9} onPress={() => setPicker('date')} /><FilterButton label="Category" active={categoryFilter !== 'all'} flex={1.25} onPress={() => setPicker('category')} /><FilterButton label="Sort" active={sort !== 'newest'} flex={0.9} onPress={() => setPicker('sort')} /></>}
+          {searchOpen ? <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} style={s.searchExpanded}><AppIcon name="magnify" size={21} color={colors.muted} /><TextInput autoFocus accessibilityLabel="Search transactions" placeholder="Search transactions..." placeholderTextColor={colors.muted} value={query} onChangeText={setQuery} style={s.searchInput} /><PressableScale accessibilityLabel="Close transaction search" onPress={() => { setQuery(''); setSearchOpen(false); }} style={s.searchClose}><AppIcon name="close" size={19} /></PressableScale></Animated.View> : <><PressableScale accessibilityRole="button" accessibilityLabel="Open transaction search" onPress={() => setSearchOpen(true)} style={s.searchWide}><AppIcon name="magnify" size={20} color={colors.muted} /><AppText style={s.muted}>Search transactions</AppText></PressableScale><FilterPill activeCount={activeFilterCount} onPress={() => setFiltersOpen(true)} /></>}
         </Animated.View>
         <Animated.View key={calendarMonth} entering={FadeIn.duration(180)}><SpendingCalendar expenses={expenses} categories={categories} month={calendarMonth} selectedDate={selectedCalendarDate} onMonthChange={(next) => { setCalendarMonth(next); setDateFilter('all'); setSelectedCalendarDate(null); }} onSelectDate={(date) => { setDateFilter('all'); setSelectedCalendarDate(date); }} /></Animated.View>
         {hasFilters ? <Pressable accessibilityRole="button" accessibilityLabel="Clear transaction filters" onPress={clearFilters} style={s.clearFilters}><AppIcon name="filter-remove-outline" size={17} /><AppText variant="small" style={s.clearFiltersText}>Clear filters</AppText></Pressable> : null}
@@ -157,7 +160,7 @@ export function TransactionsScreen() {
           </View>
         ))}
       </View>
-      <TransactionPicker kind={picker} dateFilter={dateFilter} categoryFilter={categoryFilter} sort={sort} onDate={(value) => { setDateFilter(value); setSelectedCalendarDate(null); if (value !== 'all') setCalendarMonth(todayLocalDate().slice(0, 7)); }} onCategory={setCategoryFilter} onSort={setSort} onClose={() => setPicker(null)} />
+      <FilterSheet visible={filtersOpen} typeFilter={typeFilter} dateFilter={dateFilter} categoryFilter={categoryFilter} sort={sort} resultCount={visibleEntries.length} onType={setTypeFilter} onDate={(value) => { setDateFilter(value); setSelectedCalendarDate(null); if (value !== 'all') setCalendarMonth(todayLocalDate().slice(0, 7)); }} onCategory={setCategoryFilter} onSort={setSort} onClear={clearFilters} onClose={() => setFiltersOpen(false)} />
       <MoneyMovementSheet entry={openEntry} onClose={() => setOpenEntry(null)} />
     </Screen>
   );
@@ -165,7 +168,8 @@ export function TransactionsScreen() {
 
 type DateFilter = 'all' | 'today' | 'week' | 'last7' | 'month' | 'last30';
 type SortOption = 'newest' | 'oldest' | 'highest' | 'lowest';
-type PickerKind = 'date' | 'category' | 'sort' | null;
+type TypeFilter = 'all' | 'expense' | 'income' | 'transfer';
+const TYPE_LABELS: Record<TypeFilter, string> = { all: 'All', expense: 'Expenses', income: 'Income', transfer: 'Transfers' };
 const DATE_LABELS: Record<DateFilter, string> = { all: 'All Dates', today: 'Today', week: 'This Week', last7: 'Last 7 Days', month: 'This Month', last30: 'Last 30 Days' };
 const SORT_LABELS: Record<SortOption, string> = { newest: 'Newest', oldest: 'Oldest', highest: 'Highest', lowest: 'Lowest' };
 
@@ -228,11 +232,10 @@ function SpendingCalendar({ expenses, categories, month, selectedDate, onMonthCh
   </Card>;
 }
 
-function FilterButton({ label, active, flex = 1, onPress }: { label: string; active: boolean; flex?: number; onPress: () => void }) {
-  // `flex` is weighted per control: "Category" is the longest label, so it gets
-  // more of the row than "Date"/"Sort" instead of all three being equal and
-  // clipping the middle one.
-  return <PressableScale accessibilityRole="button" accessibilityLabel={`${label} filter`} accessibilityState={{ selected: active }} onPress={onPress} style={[s.filter, { flex }, active && s.filterActive]}><AppText variant="bodyMedium" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={[s.filterLabel, active && s.filterActiveText]}>{label}</AppText><AppIcon name="chevron-down" size={16} color={active ? colors.surface : colors.deepForest} /></PressableScale>;
+/** Single filter pill: funnel icon plus "All" or how many filters are on. */
+function FilterPill({ activeCount, onPress }: { activeCount: number; onPress: () => void }) {
+  const active = activeCount > 0;
+  return <PressableScale accessibilityRole="button" accessibilityLabel={active ? `Filters, ${activeCount} on` : 'Filters, showing all'} onPress={onPress} style={[s.filterPill, active && s.filterPillActive]}><AppIcon name="filter-variant" size={18} color={active ? colors.surface : colors.deepForest} /><AppText variant="bodyMedium" style={active ? s.filterPillTextActive : s.filterPillText}>{active ? `${activeCount} on` : 'All'}</AppText></PressableScale>;
 }
 
 function QuickAmountButtons({ value, onSelect }: { value: string; onSelect: (amount: number) => void }) {
@@ -242,17 +245,31 @@ function QuickAmountButtons({ value, onSelect }: { value: string; onSelect: (amo
   })}</View>;
 }
 
-function TransactionPicker({ kind, dateFilter, categoryFilter, sort, onDate, onCategory, onSort, onClose }: { kind: PickerKind; dateFilter: DateFilter; categoryFilter: string; sort: SortOption; onDate: (value: DateFilter) => void; onCategory: (value: string) => void; onSort: (value: SortOption) => void; onClose: () => void }) {
+/** One organized filter sheet: type, date, category and sort together, applied live. */
+function FilterSheet({ visible, typeFilter, dateFilter, categoryFilter, sort, resultCount, onType, onDate, onCategory, onSort, onClear, onClose }: { visible: boolean; typeFilter: TypeFilter; dateFilter: DateFilter; categoryFilter: string; sort: SortOption; resultCount: number; onType: (value: TypeFilter) => void; onDate: (value: DateFilter) => void; onCategory: (value: string) => void; onSort: (value: SortOption) => void; onClear: () => void; onClose: () => void }) {
   const { categories } = useCategories();
-  if (!kind) return null;
-  const options: { id: string; label: string; icon?: Parameters<typeof AppIcon>[0]['name'] }[] = kind === 'date'
-    ? (Object.entries(DATE_LABELS) as [DateFilter, string][]).map(([id, label]) => ({ id, label }))
-    : kind === 'sort'
-      ? (Object.entries(SORT_LABELS) as [SortOption, string][]).map(([id, label]) => ({ id, label }))
-      : [{ id: 'all', label: 'All Categories', icon: 'shape-outline' as const }, ...categories.map((item) => ({ id: item.id, label: item.fullLabel, icon: item.icon }))];
-  const selected = kind === 'date' ? dateFilter : kind === 'sort' ? sort : categoryFilter;
-  const choose = (id: string) => { selectionFeedback(); if (kind === 'date') onDate(id as DateFilter); else if (kind === 'sort') onSort(id as SortOption); else onCategory(id); onClose(); };
-  return <DraggableBottomSheet visible onClose={onClose}><AppText variant="h2">{kind === 'date' ? 'Filter by Date' : kind === 'sort' ? 'Sort Transactions' : 'Filter by Category'}</AppText><View style={s.pickerOptions}>{options.map((option) => <PressableScale key={option.id} onPress={() => choose(option.id)} accessibilityRole="button" accessibilityState={{ selected: selected === option.id }} style={[s.pickerOption, selected === option.id && s.pickerOptionSelected]}>{option.icon ? <View style={s.pickerOptionIcon}><AppIcon name={option.icon} size={21} /></View> : null}<AppText variant="bodyMedium" style={s.pickerOptionCopy}>{option.label}</AppText>{selected === option.id ? <AppIcon name="check-circle" color={colors.deepForest} /> : null}</PressableScale>)}</View></DraggableBottomSheet>;
+  const pick = (apply: () => void) => { selectionFeedback(); apply(); };
+  return (
+    <DraggableBottomSheet visible={visible} onClose={onClose}>{(dismiss) => <>
+      <View style={s.rowBetween}>
+        <AppText variant="h2">Filters</AppText>
+        <PressableScale accessibilityRole="button" accessibilityLabel="Clear all filters" onPress={() => pick(onClear)} style={s.filterClear}><AppText variant="small" style={s.sectionLinkText}>Clear all</AppText></PressableScale>
+      </View>
+      <FilterSection title="Type">{(Object.entries(TYPE_LABELS) as [TypeFilter, string][]).map(([id, label]) => <FilterChip key={id} label={label} selected={typeFilter === id} onPress={() => pick(() => onType(id))} />)}</FilterSection>
+      <FilterSection title="Date">{(Object.entries(DATE_LABELS) as [DateFilter, string][]).map(([id, label]) => <FilterChip key={id} label={label} selected={dateFilter === id} onPress={() => pick(() => onDate(id))} />)}</FilterSection>
+      <FilterSection title="Category"><FilterChip label="All Categories" selected={categoryFilter === 'all'} onPress={() => pick(() => onCategory('all'))} />{categories.map((item) => <FilterChip key={item.id} label={item.fullLabel} icon={item.icon} selected={categoryFilter === item.id} onPress={() => pick(() => onCategory(item.id))} />)}</FilterSection>
+      <FilterSection title="Sort">{(Object.entries(SORT_LABELS) as [SortOption, string][]).map(([id, label]) => <FilterChip key={id} label={label} selected={sort === id} onPress={() => pick(() => onSort(id))} />)}</FilterSection>
+      <PrimaryButton title={`Show ${resultCount} transaction${resultCount === 1 ? '' : 's'}`} onPress={dismiss} />
+    </>}</DraggableBottomSheet>
+  );
+}
+
+function FilterSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return <View style={s.filterSection}><AppText variant="bodyMedium" style={s.muted}>{title}</AppText><View style={s.filterChips}>{children}</View></View>;
+}
+
+function FilterChip({ label, icon, selected, onPress }: { label: string; icon?: Parameters<typeof AppIcon>[0]['name']; selected: boolean; onPress: () => void }) {
+  return <PressableScale accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} style={[s.filterChip, selected && s.filterChipSelected]}>{icon ? <AppIcon name={icon} size={16} color={selected ? colors.surface : colors.deepForest} /> : null}<AppText variant="small" numberOfLines={1} style={selected ? s.filterChipTextSelected : s.filterChipText}>{label}</AppText></PressableScale>;
 }
 
 type LedgerKind = 'expense' | 'income' | 'cash_in' | 'transfer';
@@ -1174,6 +1191,18 @@ const s = StyleSheet.create({
   structureLegend: { flex: 1, minWidth: 0 },
   structureTitle: { alignSelf: 'flex-start', marginTop: 6 },
   structureEmpty: { gap: 12, alignSelf: 'stretch', paddingVertical: 8 },
+  searchWide: { flex: 1, minHeight: 46, borderRadius: radii.pill, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,253,247,.96)', borderWidth: 1, borderColor: colors.line },
+  filterPill: { minHeight: 46, paddingHorizontal: 16, borderRadius: radii.pill, flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: 'rgba(255,253,247,.96)', borderWidth: 1.5, borderColor: colors.lightGreen },
+  filterPillActive: { backgroundColor: colors.deepForest, borderColor: colors.deepForest },
+  filterPillText: { color: colors.deepForest, fontFamily: 'JakartaSemiBold' },
+  filterPillTextActive: { color: colors.surface, fontFamily: 'JakartaSemiBold' },
+  filterClear: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: radii.pill, backgroundColor: colors.pale },
+  filterSection: { gap: 8 },
+  filterChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  filterChip: { minHeight: 36, paddingHorizontal: 13, borderRadius: radii.pill, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.pale, borderWidth: 1, borderColor: colors.pale },
+  filterChipSelected: { backgroundColor: colors.deepForest, borderColor: colors.deepForest },
+  filterChipText: { color: colors.deepForest, fontFamily: 'JakartaMedium' },
+  filterChipTextSelected: { color: colors.surface, fontFamily: 'JakartaSemiBold' },
   roundIconIncoming: { backgroundColor: '#DDF0E2' },
   infoValue: { flexShrink: 1, textAlign: 'right' },
   editField: { minHeight: 54, borderRadius: radii.md, backgroundColor: 'rgba(232,238,227,.9)', borderWidth: 1, borderColor: '#C9D5C5', paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
