@@ -20,7 +20,7 @@ async function execute(op: OutboxOp) {
   switch (op.kind) {
     case 'expense.create': {
       const { expense } = op;
-      return outcomeOf(await expenseService.createExpense({ amountCents: expense.amountCents, merchant: expense.merchant, categoryId: expense.categoryId, walletId: expense.walletId, transactionDate: expense.transactionDate, transactionTime: expense.transactionTime ?? '12:00', notes: expense.notes ?? undefined }, expense.id));
+      return outcomeOf(await expenseService.createExpense({ amountCents: expense.amountCents, merchant: expense.merchant, categoryId: expense.categoryId, walletId: expense.walletId, transactionDate: expense.transactionDate, transactionTime: expense.transactionTime ?? '12:00', notes: expense.notes ?? undefined, receiptPath: expense.receiptPath ?? null }, expense.id));
     }
     case 'expense.update': {
       const { expense } = op;

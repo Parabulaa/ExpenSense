@@ -7,6 +7,7 @@ import { DraggableBottomSheet } from '@/components/common/draggable-bottom-sheet
 import { FadeSlideIn, PressableScale } from '@/components/common/motion';
 import { Screen } from '@/components/common/screen';
 import { AmountChips } from '@/components/common/amount-chips';
+import { StoredAttachment } from '@/components/common/attachment';
 import { useToast } from '@/components/common/toast';
 import { AppIcon, AppText, BackButton, Card, FormInput, PrimaryButton, ProgressBar, SecondaryButton, StatusChip } from '@/components/common/ui';
 import { BottomNavigation, useBottomNavInset } from '@/components/navigation/bottom-navigation';
@@ -354,7 +355,7 @@ function MoneyMovementSheet({ entry, onClose }: { entry: LedgerEntry | null; onC
     setDeleting(false);
     if (!result.ok) { showToast(result.message, { tone: 'warning' }); return; }
     warningFeedback();
-    showToast(entry.kind === 'transfer' ? 'Transfer deleted. Both wallets were restored.' : `${LEDGER_KIND_LABELS[entry.kind]} deleted. The wallet was adjusted.`);
+    showToast(entry.kind === 'transfer' ? 'Transfer reverted. Both wallets are back to where they were.' : `${LEDGER_KIND_LABELS[entry.kind]} deleted. The wallet was adjusted.`);
     close();
   };
   return (
@@ -369,11 +370,11 @@ function MoneyMovementSheet({ entry, onClose }: { entry: LedgerEntry | null; onC
             <InfoRow label="Details" value={entry.subtitle} />
             {entry.notes ? <InfoRow label="Notes" value={entry.notes} /> : null}
           </View>
-          <AppText variant="small" style={s.muted}>{entry.kind === 'transfer' ? 'Transfers move money between wallets. They are not spending or income, and they stay on record so every balance can be traced.' : 'Income raises the wallet balance. It never counts as spending or changes a budget.'}</AppText>
-          {entry.kind === 'transfer' ? null : <SecondaryButton title="Delete" icon="delete-outline" onPress={() => setConfirming(true)} />}
+          <AppText variant="small" style={s.muted}>{entry.kind === 'transfer' ? 'Transfers move money between wallets. They are not spending or income. Revert it if it was entered by mistake.' : 'Income raises the wallet balance. It never counts as spending or changes a budget.'}</AppText>
+          <SecondaryButton title={entry.kind === 'transfer' ? 'Revert Transfer' : 'Delete'} icon={entry.kind === 'transfer' ? 'undo-variant' : 'delete-outline'} onPress={() => setConfirming(true)} />
         </> : null}
       </DraggableBottomSheet>
-      <AuthDialog visible={Boolean(entry) && confirming} title={entry?.kind === 'transfer' ? 'Delete transfer?' : 'Delete this entry?'} message={entry?.kind === 'transfer' ? 'Both wallet balances will be restored.' : 'The amount will be removed from the wallet balance.'} primaryAction={{ label: 'Delete', destructive: true, loading: deleting, onPress: () => void remove() }} secondaryAction={{ label: 'Cancel', onPress: () => setConfirming(false) }} onRequestClose={() => setConfirming(false)} />
+      <AuthDialog visible={Boolean(entry) && confirming} title={entry?.kind === 'transfer' ? 'Revert this transfer?' : 'Delete this entry?'} message={entry?.kind === 'transfer' ? 'Both wallets go back to how they were before this transfer, including the fee.' : 'The amount will be removed from the wallet balance.'} primaryAction={{ label: entry?.kind === 'transfer' ? 'Revert' : 'Delete', destructive: true, loading: deleting, onPress: () => void remove() }} secondaryAction={{ label: 'Cancel', onPress: () => setConfirming(false) }} onRequestClose={() => setConfirming(false)} />
     </>
   );
 }
@@ -432,6 +433,7 @@ export function TransactionDetailsScreen() {
           <View style={s.divider} />
           <InfoRow label="Total" value={formatPeso(expense.amountCents, { alwaysShowDecimals: true })} bold />
           {expense.notes ? <><View style={s.divider} /><AppText style={s.muted}>Notes</AppText><AppText>{expense.notes}</AppText></> : null}
+          {expense.receiptPath ? <><View style={s.divider} /><StoredAttachment path={expense.receiptPath} label={expense.source === 'receipt' ? 'Receipt photo' : 'Attached photo'} /></> : null}
         </Card></FadeSlideIn>
         <FadeSlideIn delay={150} style={s.actions}>
           <PressableScale accessibilityRole="button" accessibilityLabel="Edit transaction" onPress={() => router.push(`/transaction/${expense.id}/edit` as never)} style={s.edit}><AppIcon name="pencil-outline" color={colors.deepForest} /><AppText variant="h3" style={{ color: colors.deepForest }}>Edit</AppText></PressableScale>

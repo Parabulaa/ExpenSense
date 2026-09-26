@@ -14,11 +14,12 @@ type ExpenseRow = {
   transaction_time: string | null;
   notes: string | null;
   source: 'manual' | 'receipt';
+  receipt_path: string | null;
   created_at: string;
   updated_at: string;
 };
 
-const EXPENSE_FIELDS = 'id,user_id,amount,merchant,category_id,wallet_id,transaction_date,transaction_time,notes,source,created_at,updated_at';
+const EXPENSE_FIELDS = 'id,user_id,amount,merchant,category_id,wallet_id,transaction_date,transaction_time,notes,source,receipt_path,created_at,updated_at';
 const SAFE_LOAD_ERROR = "Couldn't load expenses. Check your connection and try again.";
 const SAFE_SAVE_ERROR = "Couldn't save expense. Check your connection and try again.";
 const SAFE_UPDATE_ERROR = "Couldn't update transaction. Check your connection and try again.";
@@ -39,6 +40,7 @@ function fromRow(row: ExpenseRow): Expense {
     transactionTime: normalizeTime(row.transaction_time),
     notes: row.notes,
     source: row.source,
+    receiptPath: row.receipt_path,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -95,6 +97,7 @@ export async function createExpense(input: CreateExpenseInput, id?: string): Pro
         transaction_date: input.transactionDate,
         transaction_time: input.transactionTime,
         notes: input.notes || null,
+        receipt_path: input.receiptPath || null,
         source: 'manual',
       })
       .select(EXPENSE_FIELDS)

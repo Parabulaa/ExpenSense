@@ -12,6 +12,8 @@ export type Expense = {
   transactionTime: string | null;
   notes: string | null;
   source: ExpenseSource;
+  /** Private storage path of the scanned receipt or attached photo. */
+  receiptPath: string | null;
   createdAt: string;
   updatedAt: string;
   /** Saved on this device and not yet uploaded. */
@@ -26,6 +28,8 @@ export type CreateExpenseInput = {
   transactionTime: string;
   notes?: string;
   walletId?: string | null;
+  /** Already-uploaded photo to keep with a manual expense. */
+  receiptPath?: string | null;
 };
 
 export type UpdateExpenseInput = CreateExpenseInput & { id: string };

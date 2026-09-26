@@ -13,6 +13,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { readCache, STALE_AFTER_MS, writeCache } from '@/lib/offline/cache';
 import { uuid } from '@/lib/offline/network';
 import { applyOps, enqueue, useOutbox } from '@/lib/offline/outbox';
+import { removeAttachment } from './attachment-service';
 import * as expenseService from './expense-service';
 import type { CreateExpenseInput, Expense, ExpenseResult, UpdateExpenseInput } from './types';
 
@@ -128,7 +129,7 @@ export function ExpensesProvider({ children }: PropsWithChildren) {
     }
     if (!result.offline || !user) return result;
     const now = new Date().toISOString();
-    const expense: Expense = { id, userId: user.id, amountCents: input.amountCents, merchant: input.merchant, categoryId: input.categoryId, walletId: input.walletId || null, transactionDate: input.transactionDate, transactionTime: input.transactionTime, notes: input.notes || null, source: 'manual', createdAt: now, updatedAt: now };
+    const expense: Expense = { id, userId: user.id, amountCents: input.amountCents, merchant: input.merchant, categoryId: input.categoryId, walletId: input.walletId || null, transactionDate: input.transactionDate, transactionTime: input.transactionTime, notes: input.notes || null, source: 'manual', receiptPath: input.receiptPath ?? null, createdAt: now, updatedAt: now };
     enqueue({ kind: 'expense.create', expense }, walletEffect(expense, -1));
     return { ok: true, data: { ...expense, pending: true }, queued: true };
   }, [store, user]);
@@ -154,6 +155,8 @@ export function ExpensesProvider({ children }: PropsWithChildren) {
     if (result.ok) {
       store((current) => current.filter((item) => item.id !== id));
       setLoadError(null);
+      // The photo belongs to the expense; remove it too so nothing is orphaned.
+      if (previous?.receiptPath) void removeAttachment(previous.receiptPath);
       return result;
     }
     if (!result.offline) return result;

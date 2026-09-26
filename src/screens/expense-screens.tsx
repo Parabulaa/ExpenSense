@@ -22,6 +22,8 @@ import { useReceipt } from '@/features/receipts/ReceiptProvider';
 import { formatDateTime, isFutureDateTime, isValidLocalDate, isValidLocalTime, MAX_MERCHANT_LENGTH, MAX_NOTES_LENGTH, normalizeAmountInput, nowLocalTime, todayLocalDate, validateExpenseForm } from '@/features/expenses/validation';
 import { TimeSelector } from '@/components/common/time-selector';
 import { AmountChips } from '@/components/common/amount-chips';
+import { AttachmentField, PhotoViewer, type PickedPhoto } from '@/components/common/attachment';
+import { uploadAttachment } from '@/features/expenses/attachment-service';
 import { walletTypeMeta } from '@/features/finance/wallet-presentation';
 import type { ReceiptKind } from '@/features/receipts/types';
 import { selectionFeedback } from '@/lib/haptics';
@@ -99,6 +101,7 @@ export function ManualExpenseScreen() {
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
   const [walletOpen, setWalletOpen] = useState(false);
+  const [photo, setPhoto] = useState<PickedPhoto | null>(null);
   const selectedCategory = useMemo(() => findCategory(values.categoryId), [findCategory, values.categoryId]);
   const selectedWallet = wallets.find((wallet) => wallet.id === values.walletId);
 
@@ -123,9 +126,20 @@ export function ManualExpenseScreen() {
     if (!validation.input) return;
     submitting.current = true;
     setSaving(true);
-    const result = await createExpense(validation.input);
+    // The photo is only a reference: if it can't upload (offline), the expense
+    // still saves and the user is told the photo was left off.
+    let receiptPath: string | null = null;
+    let photoSkipped = false;
+    if (photo) {
+      const upload = await uploadAttachment(photo);
+      if (upload.ok) receiptPath = upload.path;
+      else if (upload.offline) photoSkipped = true;
+      else { setSaving(false); submitting.current = false; showToast(upload.message, { tone: 'warning' }); return; }
+    }
+    const result = await createExpense({ ...validation.input, receiptPath });
     setSaving(false);
     submitting.current = false;
+    if (photoSkipped && result.ok) showToast("You're offline, so the photo wasn't attached. The expense is saved.", { tone: 'warning' });
     if (!result.ok) {
       showToast(result.message, { tone: 'warning', icon: 'alert-circle-outline' });
       return;
@@ -163,6 +177,7 @@ export function ManualExpenseScreen() {
           <FormButton label="Category" value={selectedCategory?.fullLabel ?? 'Select category'} icon={selectedCategory?.icon ?? 'shape-outline'} placeholder={!selectedCategory} error={errors.categoryId} onPress={() => { Keyboard.dismiss(); setCategoryOpen(true); }} />
           <FormButton label="Wallet (optional)" value={selectedWallet?.name ?? (wallets.length ? 'Select wallet' : 'Add a wallet first')} icon="wallet-outline" placeholder={!selectedWallet} onPress={() => { Keyboard.dismiss(); if (wallets.length) setWalletOpen(true); else router.push('/wallets' as never); }} />
           <FormButton label="Date & Time" value={formatDateTime(values.transactionDate, values.transactionTime)} icon="calendar-clock-outline" error={errors.transactionDate} onPress={() => { Keyboard.dismiss(); setDateOpen(true); }} />
+          <AttachmentField photo={photo} onChange={setPhoto} />
           <FormInput label="Notes (optional)" accessibilityLabel="Optional expense notes" placeholder="Add context for this expense" value={values.notes} onChangeText={(value) => update('notes', value)} multiline textAlignVertical="top" maxLength={MAX_NOTES_LENGTH} error={errors.notes} hint={`${values.notes.length}/${MAX_NOTES_LENGTH}`} style={styles.notesInput} inputStyle={styles.notesInputText} />
         </FadeSlideIn>
         <PrimaryButton title="Save Expense" loadingTitle="Saving..." loading={saving} disabled={saving} icon="check" onPress={submit} />
@@ -317,6 +332,7 @@ export function ReceiptReviewScreen() {
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [walletOpen, setWalletOpen] = useState<'source' | 'destination' | null>(null);
   const [dateOpen, setDateOpen] = useState(false);
+  const [viewingPhoto, setViewingPhoto] = useState(false);
   useEffect(() => { if (draft && !draft.walletId && wallets.length) updateDraft({ walletId: (wallets.find(wallet => wallet.isDefault) ?? wallets[0]).id }); }, [draft, updateDraft, wallets]);
   if (!draft) return <Screen variant={4}><View style={styles.failed}><AppText variant="h2">No receipt is ready to review.</AppText><PrimaryButton title="Scan a Receipt" onPress={() => router.replace('/scanner')} /></View></Screen>;
 
@@ -360,24 +376,27 @@ export function ReceiptReviewScreen() {
     router.replace('/transactions');
   };
   const detectedLabel = RECEIPT_KINDS.find((item) => item.id === draft.detected.kind)?.label;
+  // Started from "Fill In Details Myself": nothing was read, so no reading stats apply.
+  const manual = draft.fingerprint.startsWith('manual|');
 
   return <Screen variant={4}><View style={styles.formPage}>
     <BackButton />
     <Card style={{ gap: 16 }}>
       <View style={styles.reviewTop}>
-        <View style={styles.receiptPhoto}><Image source={{ uri: draft.image.uri }} contentFit="cover" style={styles.fill} /></View>
+        <PressableScale accessibilityRole="button" accessibilityLabel="View receipt photo" onPress={() => setViewingPhoto(true)} style={styles.receiptPhoto}><Image source={{ uri: draft.image.uri }} contentFit="cover" style={styles.fill} /></PressableScale>
         <View style={styles.optionCopy}>
-          <AppText variant="h2">Review receipt</AppText>
-          <StatusChip warning={draft.issues.length > 0}>{draft.issues.length ? 'Needs Review' : 'Ready'}</StatusChip>
-          <AppText style={styles.muted}>{draft.confidence}% recognition confidence</AppText>
+          <AppText variant="h2">{manual ? 'Receipt details' : 'Review receipt'}</AppText>
+          {manual ? <StatusChip>Manual entry</StatusChip> : <StatusChip warning={draft.issues.length > 0}>{draft.issues.length ? 'Needs Review' : 'Ready'}</StatusChip>}
+          <AppText style={styles.muted}>{manual ? 'Your photo is attached. Fill in the details below.' : `${draft.confidence}% recognition confidence`}</AppText>
+          <AppText variant="small" style={styles.muted}>Tap the photo to view it.</AppText>
         </View>
       </View>
-      {draft.issues.map((issue) => <AppText key={issue} variant="small" style={styles.warningText}>• {issue}</AppText>)}
+      {manual ? null : draft.issues.map((issue) => <AppText key={issue} variant="small" style={styles.warningText}>• {issue}</AppText>)}
     </Card>
 
     <View style={styles.fieldGroup}>
       <AppText variant="bodyMedium" style={styles.fieldLabel}>Transaction type</AppText>
-      <AppText variant="small" style={styles.muted}>{detectedLabel ? `Detected as ${detectedLabel} (${draft.detected.confidence}% sure) · ${draft.detected.signals.join(', ')}` : "We couldn't tell what kind of receipt this is. Choose one."}</AppText>
+      <AppText variant="small" style={styles.muted}>{manual ? 'Choose what this receipt is for.' : detectedLabel ? `Detected as ${detectedLabel} (${draft.detected.confidence}% sure) · ${draft.detected.signals.join(', ')}` : "We couldn't tell what kind of receipt this is. Choose one."}</AppText>
       <View style={styles.kindRow}>{RECEIPT_KINDS.map((option) => { const selected = kind === option.id; return <PressableScale key={option.id} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => { selectionFeedback(); updateDraft({ kind: option.id }); }} style={[styles.kindOption, selected && styles.kindOptionSelected]}><AppIcon name={option.icon} size={20} color={selected ? colors.surface : colors.deepForest} /><AppText variant="small" style={selected ? styles.kindTextSelected : styles.kindText}>{option.label}</AppText></PressableScale>; })}</View>
     </View>
 
@@ -406,6 +425,7 @@ export function ReceiptReviewScreen() {
   <CategoryPicker visible={categoryOpen} selectedId={draft.categoryId} onClose={() => setCategoryOpen(false)} onSelect={(categoryId) => { updateDraft({ categoryId }); setCategoryOpen(false); }} />
   <WalletPicker visible={walletOpen !== null} title={walletOpen === 'destination' ? 'Transfer To' : kind === 'transfer' ? 'Transfer From' : 'Choose Wallet'} selectedId={walletOpen === 'destination' ? draft.destinationWalletId : draft.walletId} excludeId={kind === 'transfer' ? (walletOpen === 'destination' ? draft.walletId : draft.destinationWalletId) : undefined} onClose={() => setWalletOpen(null)} onSelect={(id) => { updateDraft(walletOpen === 'destination' ? { destinationWalletId: id } : { walletId: id }); setWalletOpen(null); }} />
   {dateOpen ? <ExpenseDatePicker value={draft.transactionDate} time={draft.transactionTime} onClose={() => setDateOpen(false)} onSelect={(transactionDate, transactionTime) => { updateDraft({ transactionDate, transactionTime }); setDateOpen(false); }} /> : null}
+  <PhotoViewer uri={viewingPhoto ? draft.image.uri : null} onClose={() => setViewingPhoto(false)} />
   </Screen>;
 }
 
