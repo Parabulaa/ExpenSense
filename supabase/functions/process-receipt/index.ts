@@ -8,28 +8,55 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
-/** OCR.space free tier: no card, ~1 MB per image. Engine 2 handles receipts' numbers and layout best. */
-async function readWithOcrSpace(key: string, imageBase64: string) {
+/** Errors that retrying cannot fix, so the next attempt is skipped. */
+class FatalOcrError extends Error {}
+
+async function ocrSpaceAttempt(endpoint: string, key: string, imageBase64: string, engine: '1' | '2') {
   const form = new FormData();
   form.append('base64Image', `data:image/jpeg;base64,${imageBase64}`);
+  // Stated explicitly: OCR.space sometimes fails with E502 guessing the type.
+  form.append('filetype', 'JPG');
   form.append('language', 'eng');
-  form.append('OCREngine', '2');
+  form.append('OCREngine', engine);
   // Keeps each printed line on its own line, which is what the receipt parser reads.
   form.append('isTable', 'true');
   form.append('scale', 'true');
   form.append('detectOrientation', 'true');
-  const response = await fetch('https://api.ocr.space/parse/image', { method: 'POST', headers: { apikey: key }, body: form });
+  const response = await fetch(endpoint, { method: 'POST', headers: { apikey: key }, body: form, signal: AbortSignal.timeout(25_000) });
   const payload = await response.json().catch(() => null);
-  if (!response.ok || !payload) throw new Error(`OCR.space request failed (${response.status}).`);
-  if (payload.IsErroredOnProcessing) {
-    const reason = [payload.ErrorMessage].flat().filter(Boolean).join(' ');
-    if (/size|exceed/i.test(reason)) throw new Error('The image is too large for the free OCR service. Try a closer photo.');
-    if (/api ?key|invalid/i.test(reason)) throw new Error('The OCR.space API key is invalid.');
-    throw new Error(reason || 'OCR.space could not read this image.');
+  if (!payload) throw new Error(`OCR.space request failed (${response.status}).`);
+  if (payload.IsErroredOnProcessing || !response.ok) {
+    const reason = [payload.ErrorMessage].flat().filter(Boolean).join(' ') || `OCR.space request failed (${response.status}).`;
+    if (/size|exceed/i.test(reason)) throw new FatalOcrError('The image is too large for the free OCR service. Try a closer photo.');
+    if (/api ?key|unauthori|not valid/i.test(reason)) throw new FatalOcrError('The OCR.space API key is invalid.');
+    throw new Error(reason);
   }
   const rawText = (payload.ParsedResults ?? []).map((result: any) => result.ParsedText ?? '').join('\n').replace(/\t+/g, '  ').trim();
+  if (!rawText) throw new Error('No readable text was found');
   // OCR.space does not report a confidence; a clean read with real text is treated as high.
   return { rawText, confidence: rawText.length > 20 ? 0.85 : 0.4 };
+}
+
+/**
+ * OCR.space free tier: no card, ~1 MB per image. Engine 2 reads receipts best
+ * but its free servers fail intermittently (E502), so Engine 1 is tried before
+ * giving up.
+ */
+async function readWithOcrSpace(key: string, imageBase64: string) {
+  const attempts: [string, '1' | '2'][] = [
+    ['https://api.ocr.space/parse/image', '2'],
+    ['https://api.ocr.space/parse/image', '1'],
+  ];
+  let lastError: Error = new Error('OCR.space could not read this image.');
+  for (const [endpoint, engine] of attempts) {
+    try {
+      return await ocrSpaceAttempt(endpoint, key, imageBase64, engine);
+    } catch (error) {
+      if (error instanceof FatalOcrError) throw error;
+      lastError = error instanceof Error ? error : lastError;
+    }
+  }
+  throw new Error(`The free receipt reader is busy right now (${lastError.message.slice(0, 80)}). Try again in a moment.`);
 }
 
 async function readWithGoogle(key: string, imageBase64: string) {

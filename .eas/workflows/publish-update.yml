@@ -8,4 +8,4 @@ jobs:
     params:
       channel: preview
       platform: all
-      message: Wallet transfers, receipt classification, period navigation
+      message: Free OCR.space receipt reading
