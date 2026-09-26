@@ -22,7 +22,7 @@ async function ocrSpaceAttempt(endpoint: string, key: string, imageBase64: strin
   // Keeps each printed line on its own line, which is what the receipt parser reads.
   form.append('isTable', 'true');
   form.append('scale', 'true');
-  const response = await fetch(endpoint, { method: 'POST', headers: { apikey: key }, body: form, signal: AbortSignal.timeout(25_000) });
+  const response = await fetch(endpoint, { method: 'POST', headers: { apikey: key }, body: form, signal: AbortSignal.timeout(15_000) });
   const payload = await response.json().catch(() => null);
   if (!payload) throw new Error(`OCR.space request failed (${response.status}).`);
   if (payload.IsErroredOnProcessing || !response.ok) {
@@ -40,23 +40,29 @@ async function ocrSpaceAttempt(endpoint: string, key: string, imageBase64: strin
 
 /**
  * OCR.space free tier: no card, ~1 MB per image. Engine 2 reads receipts best
- * but its free servers fail intermittently (E502), so Engine 1 is tried before
- * giving up.
+ * but its free servers are sometimes overloaded, so it is retried with short
+ * waits before Engine 1 is tried as a last resort.
  */
 async function readWithOcrSpace(key: string, imageBase64: string) {
-  const attempts: [string, '1' | '2'][] = [
-    ['https://api.ocr.space/parse/image', '2'],
-    ['https://api.ocr.space/parse/image', '1'],
+  // Engine 2 reads receipts best, so it gets the retries; Engine 1 is the last resort.
+  // The waits give an overloaded free server (E551/E571) a moment to recover.
+  const attempts: { engine: '1' | '2'; waitMs: number }[] = [
+    { engine: '2', waitMs: 0 },
+    { engine: '2', waitMs: 2500 },
+    { engine: '2', waitMs: 5000 },
+    { engine: '1', waitMs: 1500 },
   ];
   let lastError: Error = new Error('OCR.space could not read this image.');
-  for (const [endpoint, engine] of attempts) {
+  for (const { engine, waitMs } of attempts) {
+    if (waitMs) await new Promise((resolve) => setTimeout(resolve, waitMs));
     try {
-      return await ocrSpaceAttempt(endpoint, key, imageBase64, engine);
+      return await ocrSpaceAttempt('https://api.ocr.space/parse/image', key, imageBase64, engine);
     } catch (error) {
       if (error instanceof FatalOcrError) throw error;
       lastError = error instanceof Error ? error : lastError;
     }
   }
+  if (/no readable text/i.test(lastError.message)) throw new Error("We couldn't find any text in this photo. Try a clearer, closer photo.");
   throw new Error(`The free receipt reader is busy right now (${lastError.message.slice(0, 80)}). Try again in a moment.`);
 }
 
