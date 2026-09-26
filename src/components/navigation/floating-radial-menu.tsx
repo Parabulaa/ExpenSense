@@ -37,7 +37,7 @@ type MenuAction = {
 
 const ACTIONS: MenuAction[] = [
   { label: 'Settings', icon: 'cog-outline', route: '/profile', right: 79, top: 4, originX: 70, originY: 3 },
-  { label: 'Notifications', icon: 'bell-outline', route: '/notifications', right: 58, top: 58, originX: 49, originY: -51 },
+  { label: 'Notifications', icon: 'bell-outline', route: '/notifications', right: 60, top: 50, originX: 51, originY: -43 },
   // `right` offsets the 60-wide column so the button stays centred under the trigger.
   { label: 'FAQ', icon: 'help-circle-outline', route: '/settings/help', right: 1, top: 74, originX: 0, originY: -67, labelBelow: true },
 ];
@@ -228,6 +228,7 @@ const styles = StyleSheet.create({
   connectors: { ...StyleSheet.absoluteFill },
   connector: { position: 'absolute', height: 1.5, borderRadius: 1, backgroundColor: 'rgba(77,112,82,.52)' },
   connectorSettings: { left: 145, top: 25, width: 21 },
-  connectorNotifications: { left: 160, top: 62, width: 20, transform: [{ rotate: '-45deg' }] },
+  // Spans from the bell's edge to the trigger's edge along the line between their centres.
+  connectorNotifications: { left: 153, top: 51, width: 25, transform: [{ rotate: '-40deg' }] },
   connectorFaq: { left: 192, top: 56, width: 1.5, height: 18 },
 });
