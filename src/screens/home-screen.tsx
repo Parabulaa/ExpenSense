@@ -182,7 +182,7 @@ function MetricTile({
         style={[styles.metric, hovered && styles.metricHovered]}
       >
         <View style={styles.metricBadge}>
-          <AppIcon name={icon} size={23} color={colors.deepForest} />
+          <AppIcon name={icon} size={19} color={colors.deepForest} />
         </View>
         <AppText variant="h2" numberOfLines={1} adjustsFontSizeToFit>
           {value}
@@ -479,7 +479,7 @@ export function HomeScreen() {
 
   // The hero reserves real height for the insight row rather than letting the
   // mascot float free, so the summary card can never land on top of it.
-  const mascotSize = Math.round(Math.min(Math.max(contentWidth * 0.4, 128), 178));
+  const mascotSize = Math.round(Math.min(Math.max(contentWidth * 0.34, 112), 150));
   const mascotClearance = Math.round(mascotSize * MASCOT_ART_BOTTOM_INSET);
   // Small, deliberate overlap. Capped at the mascot's transparent bottom strip
   // so the card tucks under the frame without covering a single drawn pixel.
@@ -623,8 +623,8 @@ export function HomeScreen() {
             {hasBudget ? (
               <View style={styles.progressRow}>
                 <ProgressBar value={Math.min(100, usage)} height={14} />
-                <AppText variant="h3" style={styles.usageText}>
-                  {usage}% used
+                <AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit style={[styles.usageText, usage > 100 && { color: colors.danger }]}>
+                  {usage > 100 ? `Over by ${formatCents(Math.abs(remainingCents))}` : `${usage}% used`}
                 </AppText>
               </View>
             ) : null}
@@ -814,14 +814,14 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   greeting: {
-    fontSize: 20,
-    lineHeight: 26,
+    fontSize: 17,
+    lineHeight: 22,
     color: colors.text,
     fontFamily: 'JakartaMedium',
   },
   heroName: {
-    fontSize: 44,
-    lineHeight: 49,
+    fontSize: 36,
+    lineHeight: 41,
     color: '#07140F',
   },
   heroSubtitle: {
@@ -891,7 +891,7 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     boxSizing: 'border-box',
-    minHeight: 238,
+    minHeight: 200,
     borderRadius: 24,
     paddingHorizontal: 18,
     paddingVertical: 17,
@@ -952,8 +952,8 @@ const styles = StyleSheet.create({
   },
   totalCopy: { flex: 1, minWidth: 0 },
   totalAmount: {
-    fontSize: 43,
-    lineHeight: 49,
+    fontSize: 34,
+    lineHeight: 40,
     color: '#06120D',
   },
   summaryMuted: { color: colors.muted, fontSize: 15 },
@@ -981,7 +981,7 @@ const styles = StyleSheet.create({
   metric: {
     boxSizing: 'border-box',
     width: '100%',
-    minHeight: 132,
+    minHeight: 108,
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 13,
@@ -994,9 +994,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F2F6EE',
   },
   metricBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#E1EBDD',
     alignItems: 'center',
     justifyContent: 'center',

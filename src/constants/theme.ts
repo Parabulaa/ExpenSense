@@ -7,15 +7,15 @@ export const colors = {
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 48 } as const;
 export const radii = { sm: 10, md: 16, lg: 22, xl: 30, pill: 999 } as const;
 export const type = {
-  hero: { fontSize: 38, lineHeight: 42, fontFamily: 'JakartaExtraBold' },
-  title: { fontSize: 30, lineHeight: 35, fontFamily: 'JakartaExtraBold' },
-  h2: { fontSize: 22, lineHeight: 28, fontFamily: 'JakartaBold' },
-  h3: { fontSize: 17, lineHeight: 22, fontFamily: 'JakartaBold' },
-  body: { fontSize: 15, lineHeight: 22, fontFamily: 'JakartaRegular' },
-  subtitle: { fontSize: 16, lineHeight: 24, fontFamily: 'JakartaRegular' },
-  bodyMedium: { fontSize: 15, lineHeight: 22, fontFamily: 'JakartaMedium' },
-  small: { fontSize: 12, lineHeight: 17, fontFamily: 'JakartaRegular' },
-  button: { fontSize: 17, lineHeight: 22, fontFamily: 'JakartaBold' },
+  hero: { fontSize: 32, lineHeight: 37, fontFamily: 'JakartaExtraBold' },
+  title: { fontSize: 26, lineHeight: 31, fontFamily: 'JakartaExtraBold' },
+  h2: { fontSize: 19, lineHeight: 25, fontFamily: 'JakartaBold' },
+  h3: { fontSize: 15, lineHeight: 20, fontFamily: 'JakartaBold' },
+  body: { fontSize: 14, lineHeight: 20, fontFamily: 'JakartaRegular' },
+  subtitle: { fontSize: 14, lineHeight: 21, fontFamily: 'JakartaRegular' },
+  bodyMedium: { fontSize: 14, lineHeight: 20, fontFamily: 'JakartaMedium' },
+  small: { fontSize: 12, lineHeight: 16, fontFamily: 'JakartaRegular' },
+  button: { fontSize: 15, lineHeight: 20, fontFamily: 'JakartaBold' },
 } as const;
 export const shadow = { shadowColor: '#173D2B', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 } as const;
 export const assets = {
