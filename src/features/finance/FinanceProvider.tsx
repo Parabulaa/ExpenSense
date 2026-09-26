@@ -38,6 +38,7 @@ export function FinanceProvider({ children }: PropsWithChildren) {
   const [error, setError] = useState<string | null>(null);
   const loadedUserId = useRef<string | null>(null);
   const lastFetched = useRef(0);
+  const hasData = useRef(false);
   const ops = useOutbox();
 
   const store = useCallback((update: (current: Snapshot) => Snapshot) => {
@@ -49,16 +50,17 @@ export function FinanceProvider({ children }: PropsWithChildren) {
   }, []);
 
   const refresh = useCallback(async () => {
-    if (!user) { loadedUserId.current = null; setServer(EMPTY); setLoading(false); return; }
+    if (!user) { loadedUserId.current = null; hasData.current = false; setServer(EMPTY); setLoading(false); return; }
     if (loadedUserId.current !== user.id) {
       loadedUserId.current = user.id;
+      hasData.current = false;
       const cached = await readCache<Snapshot>(user.id, CACHE_NAME);
       setServer(cached ?? EMPTY);
-      if (cached) setLoading(false);
+      if (cached) { hasData.current = true; setLoading(false); }
     }
-    setLoading(true);
+    if (!hasData.current) setLoading(true);
     const r = await service.loadFinance();
-    if (r.ok) { store(() => r.data); lastFetched.current = Date.now(); setError(null); }
+    if (r.ok) { store(() => r.data); hasData.current = true; lastFetched.current = Date.now(); setError(null); }
     else if (!r.offline) setError(r.message);
     setLoading(false);
   }, [store, user]);

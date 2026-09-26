@@ -19,6 +19,7 @@ import { FadeSlideIn, PressableScale, useDrift } from '@/components/common/motio
 import { DraggableBottomSheet } from '@/components/common/draggable-bottom-sheet';
 import { Screen } from '@/components/common/screen';
 import { AppIcon, AppText, Card, ProgressBar } from '@/components/common/ui';
+import { Skeleton } from '@/components/common/skeleton';
 import { useBottomNavInset } from '@/components/navigation/bottom-navigation';
 import { assets, colors, radii, shadow, spacing } from '@/constants/theme';
 import { analyticsForMonth, mascotInsight, previousMonth } from '@/features/analytics/analytics';
@@ -160,6 +161,7 @@ function MetricTile({
   label,
   index,
   width,
+  loading = false,
   onPress,
 }: {
   icon: Parameters<typeof AppIcon>[0]['name'];
@@ -167,6 +169,7 @@ function MetricTile({
   label: string;
   index: number;
   width: number;
+  loading?: boolean;
   onPress: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
@@ -184,9 +187,11 @@ function MetricTile({
         <View style={styles.metricBadge}>
           <AppIcon name={icon} size={19} color={colors.deepForest} />
         </View>
-        <AppText variant="h2" numberOfLines={1} adjustsFontSizeToFit>
-          {value}
-        </AppText>
+        {loading ? <Skeleton width="70%" height={22} /> : (
+          <AppText variant="h2" numberOfLines={1} adjustsFontSizeToFit>
+            {value}
+          </AppText>
+        )}
         <AppText style={styles.metricLabel} numberOfLines={2}>
           {label}
         </AppText>
@@ -417,9 +422,7 @@ export function HomeScreen() {
   const hasBudget = Boolean(budget && budget.limitCents > 0);
   const usage = budget && hasBudget ? percentOf(budget.spentCents, budget.limitCents) ?? 0 : 0;
   const remainingCents = budget ? budget.limitCents - budget.spentCents : 0;
-  const budgetCaption = budgetsLoading
-    ? 'Checking budget…'
-    : period === 'Week'
+  const budgetCaption = period === 'Week'
       ? 'Category budgets are tracked monthly'
       : hasBudget && budget
         ? `${formatCents(budget.spentCents)} of ${formatCents(budget.limitCents)} budgeted`
@@ -427,7 +430,7 @@ export function HomeScreen() {
   // Shares the Phase 7 analytics pipeline with the Insights screen, so the
   // mascot can never contradict what Analytics reports.
   const insights = useMemo(() => {
-    if (expensesLoading || budgetsLoading) return ['Checking your latest spending...'];
+    if (expensesLoading || budgetsLoading) return [''];
     // The full library, not the dashboard's eight — an expense in a category
     // that isn't pinned to the grid still has a real name.
     const current = analyticsForMonth(expenses, allCategories, selectedMonthId);
@@ -550,7 +553,7 @@ export function HomeScreen() {
                 onPress={() => setAssistantOpen(true)}
                 style={({ pressed }) => [styles.insightBubble, pressed && { opacity: 0.82 }]}
               >
-                <AppText style={styles.insightText}>{insight}</AppText>
+                {insight ? <AppText style={styles.insightText}>{insight}</AppText> : <View style={styles.insightLoading}><Skeleton height={12} /><Skeleton width="70%" height={12} /></View>}
                 <View style={styles.bubbleTail} />
               </Pressable>
 
@@ -613,15 +616,17 @@ export function HomeScreen() {
 
             <View style={styles.totalRow}>
               <View style={styles.totalCopy}>
-                <AppText variant="hero" numberOfLines={1} adjustsFontSizeToFit style={styles.totalAmount}>
-                  {expensesLoading ? '—' : formatCents(spentCents)}
-                </AppText>
-                <AppText variant="subtitle" style={styles.summaryMuted}>{budgetCaption}</AppText>
+                {expensesLoading ? <Skeleton width={150} height={34} style={styles.totalSkeleton} /> : (
+                  <AppText variant="hero" numberOfLines={1} adjustsFontSizeToFit style={styles.totalAmount}>
+                    {formatCents(spentCents)}
+                  </AppText>
+                )}
+                {budgetsLoading ? <Skeleton width="80%" height={14} style={styles.captionSkeleton} /> : <AppText variant="subtitle" style={styles.summaryMuted}>{budgetCaption}</AppText>}
               </View>
               <SparkBars key={`${period}-${offset}`} bars={bars} />
             </View>
 
-            {hasBudget ? (
+            {hasBudget && !budgetsLoading && !expensesLoading ? (
               <View style={styles.progressRow}>
                 <ProgressBar value={Math.min(100, usage)} height={14} />
                 <AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit style={[styles.usageText, usage > 100 && { color: colors.danger }]}>
@@ -636,7 +641,8 @@ export function HomeScreen() {
         <View style={styles.metricRow}>
           <MetricTile
             icon="cash-plus"
-            value={financeLoading && !incomeEntries.length ? '—' : formatCents(periodIncomeCents)}
+            loading={financeLoading && !incomeEntries.length}
+            value={formatCents(periodIncomeCents)}
             label="Income"
             index={2}
             width={metricWidth}
@@ -644,7 +650,8 @@ export function HomeScreen() {
           />
           <MetricTile
             icon="wallet"
-            value={expensesLoading || budgetsLoading ? '—' : hasBudget ? formatCents(Math.abs(remainingCents)) : 'Not set'}
+            loading={expensesLoading || budgetsLoading}
+            value={hasBudget ? formatCents(Math.abs(remainingCents)) : 'Not set'}
             label={hasBudget && remainingCents < 0 ? 'Over budget' : 'Budget left'}
             index={3}
             width={metricWidth}
@@ -652,7 +659,8 @@ export function HomeScreen() {
           />
           <MetricTile
             icon="chart-bar"
-            value={expensesLoading ? '—' : String(periodExpenses.length)}
+            loading={expensesLoading}
+            value={String(periodExpenses.length)}
             label="Expenses"
             index={4}
             width={metricWidth}
@@ -974,6 +982,9 @@ const styles = StyleSheet.create({
     gap: 12,
     marginTop: 7,
   },
+  insightLoading: { gap: 7, paddingVertical: 3 },
+  totalSkeleton: { marginVertical: 6 },
+  captionSkeleton: { marginTop: 4 },
   usageText: { color: colors.deepForest, minWidth: 80, textAlign: 'right' },
   dataError: { color: colors.danger },
 

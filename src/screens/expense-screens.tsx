@@ -1,4 +1,3 @@
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -20,7 +19,7 @@ import { useExpenses } from '@/features/expenses/ExpensesProvider';
 import { useFinance } from '@/features/finance/FinanceProvider';
 import type { ExpenseFormErrors, ExpenseFormValues } from '@/features/expenses/types';
 import { useReceipt } from '@/features/receipts/ReceiptProvider';
-import { dateToLocalDate, formatDateTime, isFutureDateTime, isValidLocalDate, isValidLocalTime, localDateToDate, MAX_MERCHANT_LENGTH, MAX_NOTES_LENGTH, normalizeAmountInput, nowLocalTime, todayLocalDate, validateExpenseForm } from '@/features/expenses/validation';
+import { formatDateTime, isFutureDateTime, isValidLocalDate, isValidLocalTime, MAX_MERCHANT_LENGTH, MAX_NOTES_LENGTH, normalizeAmountInput, nowLocalTime, todayLocalDate, validateExpenseForm } from '@/features/expenses/validation';
 import { TimeSelector } from '@/components/common/time-selector';
 import { walletTypeMeta } from '@/features/finance/wallet-presentation';
 import type { ReceiptKind } from '@/features/receipts/types';
@@ -55,7 +54,7 @@ export function AddExpenseSheet({ visible, onClose, onNavigate }: { visible: boo
         <Animated.Image source={assets.shape6} resizeMode="contain" style={[styles.sheetLeaf, leafDrift]} />
         <View style={[styles.rowBetween, styles.sheetContent]}>
           <View>
-            <AppText variant="title">Add Expense</AppText>
+            <AppText variant="title" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>Add Expense</AppText>
             <AppText style={styles.muted}>Choose how you want to record it.</AppText>
           </View>
           <PressableScale accessibilityRole="button" accessibilityLabel="Close" onPress={dismiss} style={styles.close}>
@@ -146,7 +145,7 @@ export function ManualExpenseScreen() {
           <View style={styles.formHeader}>
             <BackButton />
             <View style={styles.headerCopy}>
-              <AppText variant="title">Add Expense</AppText>
+              <AppText variant="title" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>Add Expense</AppText>
               <AppText style={styles.muted}>Record a transaction manually.</AppText>
             </View>
           </View>
@@ -259,15 +258,9 @@ export function ExpenseDatePicker({ value, time, title = 'Date & Time', onClose,
   const future = validDate && isFutureDateTime(draft, timeDraft);
   return (
     <SheetModal visible title={title} onClose={onClose}>
-      {Platform.OS === 'web' ? (
-        // The community picker is native-only, so web gets the in-app calendar
-        // rather than making the user type a date by hand.
-        <Calendar value={draft} maxDate={todayLocalDate()} onSelect={setDraft} />
-      ) : (
-        <View style={styles.nativeDatePicker}>
-          <DateTimePicker value={localDateToDate(draft)} mode="date" display={Platform.OS === 'ios' ? 'inline' : 'default'} maximumDate={localDateToDate(todayLocalDate())} accentColor={colors.deepForest} onChange={(event, date) => { if (event.type === 'set' && date) setDraft(dateToLocalDate(date)); if (Platform.OS === 'android' && event.type === 'dismissed') onClose(); }} />
-        </View>
-      )}
+      {/* The in-app calendar on every platform: the native Android dialog opens
+          behind this sheet, and one design everywhere keeps it consistent. */}
+      <Calendar value={draft} maxDate={todayLocalDate()} onSelect={setDraft} />
       <TimeSelector value={timeDraft} onChange={setTimeDraft} />
       <AppText style={[styles.selectedDate, future && styles.errorText]}>{!validDate ? 'Choose a valid date' : future ? 'That time is still in the future' : formatDateTime(draft, timeDraft)}</AppText>
       <PrimaryButton title="Use This Date & Time" disabled={!validDate || future} onPress={() => onSelect(draft, timeDraft)} />
@@ -288,7 +281,7 @@ export function ProcessingScreen() {
   const { process, progress, completed, source } = useReceipt(); const started = useRef(false);
   useEffect(() => { if (started.current) return; started.current = true; if (!source) { router.replace('/add-expense'); return; } void process().then((result) => router.replace(result === 'review' ? '/receipt-review' : '/recognition-failed')); }, [process, source]);
   const steps = ['Preparing image', 'Checking image quality', 'Reading receipt', 'Checking receipt structure', 'Extracting details', 'Checking totals'];
-  return <Screen scroll={false} variant={4}><View style={styles.processing}><Animated.Image entering={FadeIn.duration(350)} source={assets.mascotSuccess} resizeMode="contain" style={styles.processMascot} /><AppText variant="title">Reading receipt…</AppText><AppText style={styles.muted}>Keep ExpenSense open while we securely read this image.</AppText><View style={styles.steps}>{steps.map((step, index) => { const done = completed.includes(step as never); const active = progress === step; return <Animated.View entering={FadeInDown.delay(index * 60)} key={step} style={styles.step}><View style={[styles.stepCircle, done && styles.stepDone]}>{done ? <AppIcon name="check" size={18} color={colors.surface} /> : active ? <ActivityIndicator size="small" color={colors.forest} /> : null}</View><AppText variant="h3" style={!done && !active ? styles.muted : undefined}>{step}</AppText></Animated.View>; })}</View></View></Screen>;
+  return <Screen scroll={false} variant={4}><View style={styles.processing}><Animated.Image entering={FadeIn.duration(350)} source={assets.mascotSuccess} resizeMode="contain" style={styles.processMascot} /><AppText variant="title" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>Reading receipt…</AppText><AppText style={styles.muted}>Keep ExpenSense open while we securely read this image.</AppText><View style={styles.steps}>{steps.map((step, index) => { const done = completed.includes(step as never); const active = progress === step; return <Animated.View entering={FadeInDown.delay(index * 60)} key={step} style={styles.step}><View style={[styles.stepCircle, done && styles.stepDone]}>{done ? <AppIcon name="check" size={18} color={colors.surface} /> : active ? <ActivityIndicator size="small" color={colors.forest} /> : null}</View><AppText variant="h3" style={!done && !active ? styles.muted : undefined}>{step}</AppText></Animated.View>; })}</View></View></Screen>;
 }
 
 const RECEIPT_KINDS: { id: Exclude<ReceiptKind, 'unknown'>; label: string; icon: Parameters<typeof AppIcon>[0]['name'] }[] = [

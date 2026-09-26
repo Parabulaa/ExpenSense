@@ -50,6 +50,7 @@ export function ExpensesProvider({ children }: PropsWithChildren) {
   const inFlight = useRef(false);
   const loadedUserId = useRef<string | null>(null);
   const lastFetched = useRef(0);
+  const hasData = useRef(false);
   const ops = useOutbox();
 
   const store = useCallback((next: Expense[] | ((current: Expense[]) => Expense[])) => {
@@ -63,6 +64,7 @@ export function ExpensesProvider({ children }: PropsWithChildren) {
   const refresh = useCallback(async () => {
     if (!user) {
       loadedUserId.current = null;
+      hasData.current = false;
       setServerExpenses([]);
       setLoadError(null);
       setLoading(false);
@@ -72,22 +74,24 @@ export function ExpensesProvider({ children }: PropsWithChildren) {
     if (inFlight.current && loadedUserId.current === user.id) return;
     if (loadedUserId.current !== user.id) {
       loadedUserId.current = user.id;
+      hasData.current = false;
       // Show the last saved copy immediately — this is what makes the app
       // usable offline and makes every launch instant.
       const cached = await readCache<Expense[]>(user.id, CACHE_NAME);
       setServerExpenses(cached ?? []);
-      if (cached) setLoading(false);
+      if (cached) { hasData.current = true; setLoading(false); }
     }
 
     const currentRequest = ++requestId.current;
     inFlight.current = true;
-    setLoading(true);
+    if (!hasData.current) setLoading(true);
     const result = await expenseService.getExpenses();
     inFlight.current = false;
     if (currentRequest !== requestId.current) return;
 
     if (result.ok) {
       store(result.data);
+      hasData.current = true;
       lastFetched.current = Date.now();
       setLoadError(null);
     } else if (!result.offline) {

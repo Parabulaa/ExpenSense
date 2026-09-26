@@ -34,8 +34,7 @@ export function CategoriesProvider({ children }: PropsWithChildren) {
     if (!user) { setCustom([]); setHiddenIds([]); setLoading(false); setError(null); return; }
     // The saved copy first, so categories are there offline and on every launch.
     const cached = await readCache<{ custom: DashboardCategory[]; hiddenIds: string[] }>(user.id, 'categories');
-    if (cached) { setCustom(cached.custom); setHiddenIds(cached.hiddenIds); }
-    setLoading(true);
+    if (cached) { setCustom(cached.custom); setHiddenIds(cached.hiddenIds); setLoading(false); } else setLoading(true);
     const [result, hidden] = await Promise.all([service.getCustomCategories(), service.getHiddenCategoryIds()]);
     if (result.ok) setCustom(result.data);
     if (hidden.ok) setHiddenIds(hidden.data);

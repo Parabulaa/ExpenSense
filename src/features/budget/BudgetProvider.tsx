@@ -24,17 +24,19 @@ export function BudgetProvider({ children }: PropsWithChildren) {
   const [error, setError] = useState<string | null>(null);
   const loadedUserId = useRef<string | null>(null);
   const lastFetched = useRef(0);
+  const hasData = useRef(false);
   const refresh = useCallback(async () => {
-    if (!user) { loadedUserId.current = null; setBudgets([]); setError(null); setLoading(false); return; }
+    if (!user) { loadedUserId.current = null; hasData.current = false; setBudgets([]); setError(null); setLoading(false); return; }
     if (loadedUserId.current !== user.id) {
       loadedUserId.current = user.id;
+      hasData.current = false;
       const cached = await readCache<MonthlyBudget[]>(user.id, 'budgets');
       setBudgets(cached ?? []);
-      if (cached) setLoading(false);
+      if (cached) { hasData.current = true; setLoading(false); }
     }
-    setLoading(true);
+    if (!hasData.current) setLoading(true);
     const result = await service.getBudgets();
-    if (result.ok) { setBudgets(result.data); writeCache(user.id, 'budgets', result.data); lastFetched.current = Date.now(); setError(null); }
+    if (result.ok) { setBudgets(result.data); writeCache(user.id, 'budgets', result.data); hasData.current = true; lastFetched.current = Date.now(); setError(null); }
     else if (!result.offline) setError(result.message);
     setLoading(false);
   }, [user]);

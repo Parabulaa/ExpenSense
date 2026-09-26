@@ -12,6 +12,14 @@ import * as authService from '@/features/auth/auth-service';
 import { validatePasswordsMatch, validateSignUpPassword } from '@/features/auth/auth-validation';
 import { errorCopyForKind } from '@/features/auth/copy';
 import { useNotifications } from '@/features/notifications/NotificationsProvider';
+import type { AppAlert } from '@/features/notifications/alerts';
+import { analyticsForMonth, previousMonth } from '@/features/analytics/analytics';
+import { detailForAlert, type InsightDetail } from '@/features/analytics/insight-details';
+import { InsightDetailSheet } from '@/features/analytics/InsightDetailSheet';
+import { useBudgets } from '@/features/budget/BudgetProvider';
+import { useCategories } from '@/features/categories/CategoriesProvider';
+import { useExpenses } from '@/features/expenses/ExpensesProvider';
+import { todayLocalDate } from '@/features/expenses/validation';
 import { useProfile } from '@/features/profile/ProfileProvider';
 import { MAX_FULL_NAME_LENGTH, validateProfileName } from '@/features/profile/validation';
 import { useSettings, type BudgetAlertThreshold } from '@/features/settings/SettingsProvider';
@@ -36,7 +44,7 @@ function SettingsPage({
           <View style={s.header}>
             <BackButton />
             <View style={s.headerCopy}>
-              <AppText variant="title">{title}</AppText>
+              <AppText variant="title" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{title}</AppText>
               <AppText style={s.muted}>{subtitle}</AppText>
             </View>
           </View>
@@ -705,6 +713,16 @@ const s = StyleSheet.create({
 export function NotificationsFeedScreen() {
   const { alerts, unreadCount, isRead, markAllRead } = useNotifications();
   const cleared = useRef(false);
+  const { expenses } = useExpenses();
+  const { allCategories } = useCategories();
+  const { budgets } = useBudgets();
+  const [detail, setDetail] = useState<InsightDetail | null>(null);
+  // Alerts describe the current month, so their explanation uses the same month.
+  const openAlert = (alert: AppAlert) => {
+    const today = todayLocalDate();
+    const month = today.slice(0, 7);
+    setDetail(detailForAlert(alert, { expenses, current: analyticsForMonth(expenses, allCategories, month), previous: analyticsForMonth(expenses, allCategories, previousMonth(month)), categories: allCategories, budget: budgets.find((item) => item.month === month), month, today }));
+  };
 
   // Seen on open — the badge reflects "you haven't looked", not "unresolved".
   useFocusEffect(
@@ -738,8 +756,8 @@ export function NotificationsFeedScreen() {
             <PressableScale
               accessibilityRole="button"
               accessibilityLabel={`${alert.title}. ${alert.detail}`}
-              disabled={!alert.route}
-              onPress={() => alert.route && router.push(alert.route)}
+              accessibilityHint="Shows what this means and what you can do"
+              onPress={() => openAlert(alert)}
               scaleTo={0.985}
               style={s.alertCard}
             >
@@ -755,7 +773,7 @@ export function NotificationsFeedScreen() {
                 <AppText variant="small" style={s.muted}>{alert.detail}</AppText>
               </View>
               {!isRead(alert.id) && unreadCount > 0 ? <View style={s.unreadDot} /> : null}
-              {alert.route ? <AppIcon name="chevron-right" size={22} color={colors.muted} /> : null}
+              <AppIcon name="chevron-right" size={22} color={colors.muted} />
             </PressableScale>
           </FadeSlideIn>
         ))
@@ -772,6 +790,7 @@ export function NotificationsFeedScreen() {
           <AppText variant="h3" style={s.linkText}>Notification preferences</AppText>
         </PressableScale>
       </FadeSlideIn>
+      <InsightDetailSheet detail={detail} onClose={() => setDetail(null)} />
     </SettingsPage>
   );
 }

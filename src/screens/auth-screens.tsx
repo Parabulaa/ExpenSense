@@ -100,7 +100,7 @@ function AuthShell({
 
         <FadeSlideIn delay={70} distance={8}>
           <View style={s.authIntro}>
-            <AppText variant="hero">{title}</AppText>
+            <AppText variant="hero" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{title}</AppText>
             {subtitle ? <AppText variant="subtitle" style={s.muted}>{subtitle}</AppText> : null}
           </View>
         </FadeSlideIn>
