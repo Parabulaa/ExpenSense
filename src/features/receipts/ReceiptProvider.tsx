@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type PropsWithChildren } from 'react';
 import { assessReceiptStructure, parseReceipt } from './receipt-parser';
+import { nowLocalTime, todayLocalDate } from '@/features/expenses/validation';
+import { uuid } from '@/lib/offline/network';
 import { optimizeReceipt, recognizeReceipt, saveReceiptTransaction } from './receipt-service';
 import type { ReceiptDraft, ReceiptFailureKind, ReceiptImage, ReceiptProgress } from './types';
 
@@ -8,6 +10,8 @@ type ContextValue = {
   failure: ReceiptFailureKind | null; failureMessage: string | null; saving: boolean;
   setSource: (image: ReceiptImage) => void; process: () => Promise<'review' | 'failed'>; updateDraft: (patch: Partial<ReceiptDraft>) => void;
   save: () => ReturnType<typeof saveReceiptTransaction>; reset: () => void;
+  /** Keeps the photo but lets the user type the details when it could not be read. */
+  startManualDraft: () => boolean;
 };
 const ReceiptContext = createContext<ContextValue | null>(null);
 const steps: ReceiptProgress[] = ['Preparing image', 'Checking image quality', 'Reading receipt', 'Checking receipt structure', 'Extracting details', 'Checking totals'];
@@ -19,6 +23,14 @@ export function ReceiptProvider({ children }: PropsWithChildren) {
   const processing = useRef(false);
   const reset = useCallback(() => { setSourceState(null); setDraft(null); setProgress(null); setCompleted([]); setFailure(null); setFailureMessage(null); processing.current = false; }, []);
   const setSource = useCallback((image: ReceiptImage) => { reset(); setSourceState(image); }, [reset]);
+  const startManualDraft = useCallback(() => {
+    if (!source) return false;
+    // Nothing was read, so there is nothing printed to identify the receipt by;
+    // a one-off id keeps the duplicate check from matching unrelated receipts.
+    setDraft({ image: source, kind: 'unknown', detected: { kind: 'unknown', confidence: 0, signals: [] }, merchant: '', transactionDate: todayLocalDate(), transactionTime: nowLocalTime(), items: [], subtotalCents: 0, taxCents: 0, totalCents: 0, feeCents: 0, categoryId: '', walletId: '', destinationWalletId: '', notes: '', rawText: '', reference: null, fingerprint: 'manual|' + uuid(), confidence: 0, structureScore: 0, issues: ['Enter the details from your receipt'] });
+    setFailure(null); setFailureMessage(null);
+    return true;
+  }, [source]);
   const process = useCallback(async () => {
     if (!source || processing.current) return draft ? 'review' : 'failed';
     processing.current = true; setCompleted([]); setFailure(null);
@@ -45,7 +57,7 @@ export function ReceiptProvider({ children }: PropsWithChildren) {
     saveInFlight.current = false; setSaving(false);
     return result;
   }, [draft]);
-  const value = useMemo(() => ({ source, draft, progress, completed, failure, failureMessage, saving, setSource, process, updateDraft, save, reset }), [source, draft, progress, completed, failure, failureMessage, saving, setSource, process, updateDraft, save, reset]);
+  const value = useMemo(() => ({ source, draft, progress, completed, failure, failureMessage, saving, setSource, process, updateDraft, save, reset , startManualDraft }), [source, draft, progress, completed, failure, failureMessage, saving, setSource, process, updateDraft, save, reset, startManualDraft]);
   return <ReceiptContext.Provider value={value}>{children}</ReceiptContext.Provider>;
 }
 export function useReceipt() { const value = useContext(ReceiptContext); if (!value) throw new Error('useReceipt must be used within ReceiptProvider'); return value; }

@@ -410,8 +410,34 @@ export function ReceiptReviewScreen() {
 }
 
 export function RecognitionFailedScreen() {
-  const { failureMessage } = useReceipt();
-  return <Screen scroll={false} variant={6}><View style={styles.failed}><Image source={assets.mascotConfused} contentFit="contain" style={styles.failedMascot} /><AppText variant="title" style={styles.center}>We couldn&apos;t recognize{`\n`}this as a receipt.</AppText><AppText style={[styles.muted, styles.center]}>{failureMessage ?? 'Try a clearer photo with the full receipt visible.'}</AppText><PrimaryButton title="Retake Photo" icon="camera-outline" onPress={() => router.replace('/scanner')} /><SecondaryButton title="Upload Another Image" icon="image-outline" onPress={() => router.replace('/add-expense')} /><SecondaryButton title="Enter Manually" icon="pencil-outline" onPress={() => router.replace('/manual-expense')} /></View></Screen>;
+  const { failure, failureMessage, setSource, startManualDraft } = useReceipt();
+  const [picking, setPicking] = useState(false);
+  // A photo that isn't a receipt is the user's to fix; a reader that is down isn't.
+  const serviceProblem = failure === 'network' || failure === 'provider';
+  // Stays on this screen: pick another image here and go straight to reading it.
+  const uploadAnother = async () => {
+    if (picking) return;
+    setPicking(true);
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) return;
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
+      const asset = result.assets?.[0];
+      if (!result.canceled && asset) { setSource({ uri: asset.uri, width: asset.width, height: asset.height, size: asset.fileSize }); router.replace('/processing'); }
+    } finally {
+      setPicking(false);
+    }
+  };
+  // Keeps the photo and opens the review with empty fields to fill in by hand.
+  const fillManually = () => { if (startManualDraft()) router.replace('/receipt-review'); else router.replace('/manual-expense'); };
+  return <Screen scroll={false} variant={6}><View style={styles.failed}>
+    <Image source={assets.mascotConfused} contentFit="contain" style={styles.failedMascot} />
+    <AppText variant="title" style={styles.center}>{serviceProblem ? "We couldn't read\nthis receipt right now." : "We couldn't recognize\nthis as a receipt."}</AppText>
+    <AppText style={[styles.muted, styles.center]}>{failureMessage ?? 'Try a clearer photo with the full receipt visible.'}</AppText>
+    <PrimaryButton title="Retake Photo" icon="camera-outline" onPress={() => router.replace('/scanner')} />
+    <SecondaryButton title={picking ? 'Opening Gallery…' : 'Upload Another Image'} icon="image-outline" disabled={picking} onPress={() => void uploadAnother()} />
+    <SecondaryButton title="Fill In Details Myself" icon="pencil-outline" onPress={fillManually} />
+  </View></Screen>;
 }
 
 const styles = StyleSheet.create({
