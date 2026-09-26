@@ -10,11 +10,12 @@ import { useToast } from '@/components/common/toast';
 import { AppIcon, AppText, BackButton, Card, FormInput, PrimaryButton, ProgressBar, SecondaryButton, StatusChip } from '@/components/common/ui';
 import { BottomNavigation, useBottomNavInset } from '@/components/navigation/bottom-navigation';
 import { FloatingRadialMenu } from '@/components/navigation/floating-radial-menu';
-import { assets, colors, radii, shadow, spacing } from '@/constants/theme';
+import { colors, radii, shadow, spacing } from '@/constants/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { analyticsForMonth, buildInsights, previousMonth, type AnalyticsInsight } from '@/features/analytics/analytics';
 import { detailForInsight, type InsightDetail } from '@/features/analytics/insight-details';
 import { InsightDetailSheet } from '@/features/analytics/InsightDetailSheet';
+import { mascotImage, mascotMood } from '@/features/analytics/mascot-mood';
 import { DonutChart } from '@/features/analytics/DonutChart';
 import { AuthDialog } from '@/features/auth/components/AuthDialog';
 import { authCopy } from '@/features/auth/copy';
@@ -800,9 +801,9 @@ export function InsightsScreen() {
       <View style={s.page}>
         <View style={s.insightHero}>
           <View style={{ flex: 1 }}>
-            <AppText variant="title" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>Spending Insights</AppText>
+            <AppText variant="hero" numberOfLines={2} style={s.insightTitle}>Spending Insights</AppText>
           </View>
-          <Image source={assets.mascotScanning} contentFit="contain" style={s.insightMascot} />
+          <Image source={mascotImage[mascotMood({ loading: loading && expenses.length === 0, current, previous, budget: monthBudget })]} contentFit="contain" transition={180} style={s.insightMascot} />
         </View>
         {loading && expenses.length === 0 ? <Card style={s.analyticsLoading}><ActivityIndicator color={colors.deepForest} /><View style={s.skeletonLineWide} /><View style={s.skeletonLine} /></Card> : loadError ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load insights.</AppText><AppText style={[s.muted, s.center]}>Check your connection and try again.</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : insights.length === 0 ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="lightbulb-outline" size={30} /></View><AppText variant="h2">No insights yet</AppText><AppText style={[s.muted, s.center]}>Add expenses for {formatMonth(month)} to reveal useful spending patterns.</AppText><PrimaryButton title="Add Expense" onPress={openAddExpense} /></Card> : insights.map((insight) => <PressableScale key={insight.id} accessibilityRole="button" accessibilityHint="Shows what this means and what you can do" onPress={() => openInsight(insight)}><Card style={s.insightCard}><View style={s.insightIcon}><AppIcon name={insight.icon} size={32} color={colors.deepForest} /></View><View style={{ flex: 1 }}><AppText style={s.muted}>{insight.label}</AppText><AppText variant="h2">{insight.title}</AppText><AppText style={s.muted}>{insight.detail}</AppText></View><AppIcon name="chevron-right" size={24} color={colors.deepForest} /></Card></PressableScale>)}
       </View>
@@ -1315,8 +1316,9 @@ const s = StyleSheet.create({
   bar: { width: '72%', maxWidth: 24, borderTopLeftRadius: 8, borderTopRightRadius: 8, backgroundColor: colors.forest },
   trendMetrics: { gap: 0 },
   trendMetric: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.line },
-  insightHero: { minHeight: 172, flexDirection: 'row', alignItems: 'center', gap: 8, overflow: 'visible' },
-  insightMascot: { width: 145, height: 145, marginRight: -8, alignSelf: 'flex-end' },
+  insightHero: { minHeight: 132, flexDirection: 'row', alignItems: 'center', gap: 8, overflow: 'visible' },
+  insightTitle: { fontSize: 38, lineHeight: 42 },
+  insightMascot: { width: 128, height: 128, marginRight: -8 },
   insightCard: { minHeight: 132, flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 20 },
   insightIcon: { width: 68, height: 68, borderRadius: 34, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' },
   iconSoft: { width: 52, height: 52, borderRadius: 16, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' },

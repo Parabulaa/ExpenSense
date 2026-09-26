@@ -12,6 +12,8 @@ import Animated, {
   useReducedMotion,
   useSharedValue,
   withDelay,
+  withSequence,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 
@@ -21,8 +23,9 @@ import { Screen } from '@/components/common/screen';
 import { AppIcon, AppText, Card, ProgressBar } from '@/components/common/ui';
 import { Skeleton } from '@/components/common/skeleton';
 import { useBottomNavInset } from '@/components/navigation/bottom-navigation';
-import { assets, colors, radii, shadow, spacing } from '@/constants/theme';
+import { colors, radii, shadow, spacing } from '@/constants/theme';
 import { analyticsForMonth, mascotInsight, previousMonth } from '@/features/analytics/analytics';
+import { mascotImage, mascotMood } from '@/features/analytics/mascot-mood';
 import {
   dashboardPeriods,
   MAX_DASHBOARD_CATEGORIES,
@@ -464,6 +467,22 @@ export function HomeScreen() {
     setAssistantInput('');
   };
   const mascotDrift = useDrift({ x: 8, y: 10, rotate: 1.5, scale: 0.018, duration: 7200 });
+  const mood = useMemo(() => mascotMood({
+    loading: expensesLoading || budgetsLoading,
+    current: analyticsForMonth(expenses, allCategories, selectedMonthId),
+    previous: analyticsForMonth(expenses, allCategories, previousMonth(selectedMonthId)),
+    budget: savedBudget,
+  }), [allCategories, budgetsLoading, expenses, expensesLoading, savedBudget, selectedMonthId]);
+  const bounce = useSharedValue(1);
+  const bounceStyle = useAnimatedStyle(() => ({ transform: [{ scale: bounce.value }] }));
+  const pokeMascot = () => {
+    selectionFeedback();
+    // A quick hop, then the next thing it has to say.
+    // Reanimated shared values are mutable animation state by design.
+    // eslint-disable-next-line react-hooks/immutability
+    bounce.value = withSequence(withTiming(1.12, { duration: 110 }), withSpring(1, { damping: 7, stiffness: 220 }));
+    setInsightIndex((current) => current + 1);
+  };
 
   useFocusEffect(useCallback(() => {
     if (consumeSkippedPanelRefresh('/home')) return;
@@ -557,11 +576,12 @@ export function HomeScreen() {
                 <View style={styles.bubbleTail} />
               </Pressable>
 
-              <Animated.View
-                style={[styles.mascotWrap, { width: mascotSize, height: mascotSize }, mascotDrift]}
-                pointerEvents="none"
-              >
-                <Image source={assets.mascotTip} contentFit="contain" style={styles.heroMascot} />
+              <Animated.View style={[styles.mascotWrap, { width: mascotSize, height: mascotSize }, mascotDrift]}>
+                <Pressable accessibilityRole="button" accessibilityLabel="Mascot. Tap for another insight." onPress={pokeMascot} style={styles.heroMascot}>
+                  <Animated.View style={[styles.heroMascot, bounceStyle]}>
+                    <Image source={mascotImage[mood]} contentFit="contain" transition={180} style={styles.heroMascot} />
+                  </Animated.View>
+                </Pressable>
               </Animated.View>
             </View>
           </View>

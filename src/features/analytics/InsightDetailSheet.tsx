@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
@@ -5,6 +6,7 @@ import { DraggableBottomSheet } from '@/components/common/draggable-bottom-sheet
 import { AppIcon, AppText, PrimaryButton, SecondaryButton } from '@/components/common/ui';
 import { colors, radii } from '@/constants/theme';
 import type { InsightDetail } from './insight-details';
+import { mascotImage } from './mascot-mood';
 
 /**
  * Opening an insight or alert explains it: the numbers behind it, what they
@@ -21,6 +23,8 @@ export function InsightDetailSheet({ detail, onClose }: { detail: InsightDetail 
           <AppText variant="h2" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{detail.title}</AppText>
           <AppText style={styles.muted}>{detail.headline}</AppText>
         </View>
+        {/* Worried for a problem, a tip for everything else. */}
+        <Image source={mascotImage[detail.tone === 'info' ? 'tip' : 'warning']} contentFit="contain" style={styles.mascot} />
       </View>
 
       {detail.stats.length ? (
@@ -60,6 +64,7 @@ const styles = StyleSheet.create({
   muted: { color: colors.muted },
   header: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   headerCopy: { flex: 1, minWidth: 0, gap: 3 },
+  mascot: { width: 64, height: 64, marginTop: -6 },
   icon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   stat: { flexBasis: '48%', flexGrow: 1, minWidth: 0, gap: 2, padding: 12, borderRadius: radii.md, backgroundColor: colors.pale },
