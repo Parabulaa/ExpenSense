@@ -13,20 +13,20 @@ class FatalOcrError extends Error {}
 
 async function ocrSpaceAttempt(endpoint: string, key: string, imageBase64: string, engine: '1' | '2') {
   const form = new FormData();
-  form.append('base64Image', `data:image/jpeg;base64,${imageBase64}`);
-  // Stated explicitly: OCR.space sometimes fails with E502 guessing the type.
-  form.append('filetype', 'JPG');
+  // This exact prefix is the one verified to return text.
+  form.append('base64Image', `data:image/jpg;base64,${imageBase64}`);
+  // No 'filetype' or 'detectOrientation': tested against OCR.space, either one
+  // makes it return empty text for base64 receipts.
   form.append('language', 'eng');
   form.append('OCREngine', engine);
   // Keeps each printed line on its own line, which is what the receipt parser reads.
   form.append('isTable', 'true');
   form.append('scale', 'true');
-  form.append('detectOrientation', 'true');
   const response = await fetch(endpoint, { method: 'POST', headers: { apikey: key }, body: form, signal: AbortSignal.timeout(25_000) });
   const payload = await response.json().catch(() => null);
   if (!payload) throw new Error(`OCR.space request failed (${response.status}).`);
   if (payload.IsErroredOnProcessing || !response.ok) {
-    const reason = [payload.ErrorMessage].flat().filter(Boolean).join(' ') || `OCR.space request failed (${response.status}).`;
+    const reason = [payload.ErrorMessage, payload.error].flat().filter(Boolean).join(' ') || `OCR.space request failed (${response.status}).`;
     if (/size|exceed/i.test(reason)) throw new FatalOcrError('The image is too large for the free OCR service. Try a closer photo.');
     if (/api ?key|unauthori|not valid/i.test(reason)) throw new FatalOcrError('The OCR.space API key is invalid.');
     throw new Error(reason);
