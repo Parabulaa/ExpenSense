@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Alert, Keyboard, StyleSheet, View } from 'react-native';
 import { DraggableBottomSheet } from '@/components/common/draggable-bottom-sheet';
 import { PressableScale } from '@/components/common/motion';
@@ -14,6 +14,8 @@ import { walletColors, walletTypes } from '@/features/finance/wallet-presentatio
 import { formatPeso } from '@/lib/format';
 import { formatDateTime, nowLocalTime, todayLocalDate } from '@/features/expenses/validation';
 import { ExpenseDatePicker, WalletPicker } from '@/screens/expense-screens';
+import { useExpenses } from '@/features/expenses/ExpensesProvider';
+import { useCategories } from '@/features/categories/CategoriesProvider';
 
 const money = (c: number) => formatPeso(c, { alwaysShowDecimals: true });
 const parseMoney = (v: string) => { const n = Number(v.replace(/,/g, '')); return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : null; };
@@ -87,7 +89,13 @@ export function WalletsScreen() {
     // the ref guard keeps it to a single extra render.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (params.new === '1') { handledParams.current = true; open(); return; }
-    if ((params.add === '1' || params.transfer === '1') && wallets.length) { handledParams.current = true; if (params.add === '1') openMoneyIn(); else openTransfer(); return; }
+    if ((params.add === '1' || params.transfer === '1') && wallets.length) {
+      // A wallet page passes its own wallet so the sheet starts from it.
+      const from = wallets.find(item => item.id === params.wallet);
+      handledParams.current = true;
+      if (params.add === '1') openMoneyIn(from); else openTransfer(from);
+      return;
+    }
     if (!params.wallet) return;
     const target = wallets.find(item => item.id === params.wallet);
     if (target) { handledParams.current = true; open(target); }
@@ -105,9 +113,9 @@ export function WalletsScreen() {
 
   return <Screen bottomInset={40} variant={7} refreshing={loading} onRefresh={refresh}>
     <View style={s.page}>
-      <View style={s.header}><BackButton /><View style={s.headerCopy}><AppText variant="title">Wallets</AppText><AppText style={s.muted}>Tap a card to edit it, or use ••• to add income.</AppText></View></View>
+      <View style={s.header}><BackButton /><View style={s.headerCopy}><AppText variant="title">Wallets</AppText><AppText style={s.muted}>Tap a card to open it, or use ••• to add income.</AppText></View></View>
       <Card style={s.totalCard}><AppText style={s.muted}>Available across wallets</AppText><AppText variant="hero" adjustsFontSizeToFit numberOfLines={1}>{money(wallets.reduce((n, w) => n + w.balanceCents, 0))}</AppText><AppText variant="small" style={s.muted}>Expenses deduct automatically. Income and cash-ins add to the chosen wallet. Transfers move money between wallets without counting as spending.</AppText></Card>
-      {error && !wallets.length ? <Card><AppText variant="h3">Couldn&apos;t load wallets</AppText><SecondaryButton title="Try Again" onPress={refresh} /></Card> : <View style={s.walletGrid}>{wallets.map((wallet, index) => <View key={wallet.id} style={s.walletCell}><WalletCardFace wallet={wallet} index={index} moreLabel={`Add income to ${wallet.name}`} onPress={() => open(wallet)} onMore={() => openMoneyIn(wallet)} /></View>)}<View style={s.walletCell}><AddWalletCard onPress={() => open()} /></View></View>}
+      {error && !wallets.length ? <Card><AppText variant="h3">Couldn&apos;t load wallets</AppText><SecondaryButton title="Try Again" onPress={refresh} /></Card> : <View style={s.walletGrid}>{wallets.map((wallet, index) => <View key={wallet.id} style={s.walletCell}><WalletCardFace wallet={wallet} index={index} moreLabel={`Add income to ${wallet.name}`} onPress={() => router.push({ pathname: '/wallet-detail/[id]', params: { id: wallet.id } } as never)} onMore={() => openMoneyIn(wallet)} /></View>)}<View style={s.walletCell}><AddWalletCard onPress={() => open()} /></View></View>}
       {wallets.length ? <View style={s.actionRow}><View style={s.grow}><SecondaryButton title="Add Income" icon="cash-plus" onPress={() => openMoneyIn()} /></View><View style={s.grow}><SecondaryButton title="Transfer" icon="swap-horizontal" disabled={wallets.length < 2} onPress={() => openTransfer()} /></View></View> : null}
       {wallets.length === 1 ? <AppText variant="small" style={s.muted}>Add a second wallet to move money between them.</AppText> : null}
       {history.length ? <View style={s.history}><AppText variant="h2">Recent income and transfers</AppText>{history.map(item => <View key={item.id} style={s.historyRow}><View style={[s.historyDot, { backgroundColor: item.color }]} /><View style={s.grow}><AppText variant="bodyMedium" numberOfLines={1}>{item.title}</AppText><AppText variant="small" style={s.muted} numberOfLines={1}>{item.detail} · {formatDateTime(item.date, item.time)}</AppText></View><AppText variant="h3" style={{ color: item.positive ? colors.success : colors.deepForest }}>{item.amount}</AppText><PressableScale accessibilityLabel={`Delete ${item.title}`} onPress={item.onDelete} style={s.historyDelete}><AppIcon name="delete-outline" size={18} color={colors.muted} /></PressableScale></View>)}</View> : null}
@@ -139,6 +147,58 @@ export function WalletsScreen() {
   </Screen>;
 }
 
+/** One wallet's own page: its balance, what moved in and out of it, and the actions for it. */
+export function WalletDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const walletId = Array.isArray(id) ? id[0] : id;
+  const { wallets, incomeEntries, transfers, loading, refresh } = useFinance();
+  const { expenses, refresh: refreshExpenses } = useExpenses();
+  const { findCategory } = useCategories();
+  useFocusEffect(useCallback(() => { void refresh(); void refreshExpenses(); }, [refresh, refreshExpenses]));
+  const index = wallets.findIndex(item => item.id === walletId);
+  const wallet = wallets[index];
+  const walletName = (otherId: string) => wallets.find(w => w.id === otherId)?.name ?? 'Wallet';
+  const manage = (params: Record<string, string>) => router.push({ pathname: '/wallets', params: { wallet: walletId, ...params } } as never);
+
+  if (!wallet) {
+    return <Screen bottomInset={40} variant={7}><View style={s.page}><BackButton /><Card><AppText variant="h3">{loading ? 'Loading wallet…' : 'Wallet not found'}</AppText>{loading ? null : <AppText style={s.muted}>It may have been archived.</AppText>}</Card></View></Screen>;
+  }
+
+  // Signed amounts from this wallet's point of view, newest first.
+  const rows = [
+    ...expenses.filter(item => item.walletId === walletId).map(item => ({ key: `e-${item.id}`, date: item.transactionDate, time: item.transactionTime, created: item.createdAt, title: item.merchant, detail: findCategory(item.categoryId)?.fullLabel ?? 'Expense', cents: -item.amountCents, onPress: () => router.push(`/transaction/${item.id}` as never) })),
+    ...incomeEntries.filter(item => item.walletId === walletId).map(item => ({ key: `i-${item.id}`, date: item.transactionDate, time: item.transactionTime, created: item.createdAt, title: item.source, detail: incomeKindLabels[item.kind], cents: item.amountCents, onPress: undefined })),
+    ...transfers.filter(item => item.fromWalletId === walletId).map(item => ({ key: `to-${item.id}`, date: item.transactionDate, time: item.transactionTime, created: item.createdAt, title: `To ${walletName(item.toWalletId)}`, detail: item.feeCents ? `Transfer · ${money(item.feeCents)} fee` : 'Transfer', cents: -(item.amountCents + item.feeCents), onPress: undefined })),
+    ...transfers.filter(item => item.toWalletId === walletId).map(item => ({ key: `from-${item.id}`, date: item.transactionDate, time: item.transactionTime, created: item.createdAt, title: `From ${walletName(item.fromWalletId)}`, detail: 'Transfer', cents: item.amountCents, onPress: undefined })),
+  ].sort((a, b) => b.date.localeCompare(a.date) || (b.time ?? '').localeCompare(a.time ?? '') || b.created.localeCompare(a.created));
+  const moneyIn = rows.filter(row => row.cents > 0).reduce((sum, row) => sum + row.cents, 0);
+  const moneyOut = rows.filter(row => row.cents < 0).reduce((sum, row) => sum - row.cents, 0);
+
+  return <Screen bottomInset={40} variant={7} refreshing={loading} onRefresh={() => { void refresh(); void refreshExpenses(); }}>
+    <View style={s.page}>
+      <View style={s.header}><BackButton /><View style={s.headerCopy}><AppText variant="title" numberOfLines={1} adjustsFontSizeToFit>{wallet.name}</AppText><AppText style={s.muted}>{wallet.isDefault ? 'Default wallet' : 'Wallet'}</AppText></View></View>
+      <WalletCardFace wallet={wallet} index={index} />
+      <View style={s.actionRow}>
+        <View style={s.grow}><SecondaryButton title="Add Income" icon="cash-plus" onPress={() => manage({ add: '1' })} /></View>
+        <View style={s.grow}><SecondaryButton title="Transfer" icon="swap-horizontal" disabled={wallets.length < 2} onPress={() => manage({ transfer: '1' })} /></View>
+      </View>
+      <SecondaryButton title="Edit Wallet" icon="pencil-outline" onPress={() => manage({})} />
+      <Card style={s.detailTotals}>
+        <View style={s.grow}><AppText variant="small" style={s.muted}>Money in</AppText><AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit style={{ color: colors.success }}>+{money(moneyIn)}</AppText></View>
+        <View style={s.grow}><AppText variant="small" style={s.muted}>Money out</AppText><AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit>−{money(moneyOut)}</AppText></View>
+      </Card>
+      <AppText variant="h2">History</AppText>
+      {rows.length === 0 ? <AppText style={s.muted}>Nothing has moved in or out of this wallet yet.</AppText> : rows.map(row => (
+        <PressableScale key={row.key} disabled={!row.onPress} onPress={row.onPress} style={s.historyRow}>
+          <View style={[s.historyDot, { backgroundColor: row.cents > 0 ? colors.success : wallet.color ?? colors.forest }]} />
+          <View style={s.grow}><AppText variant="bodyMedium" numberOfLines={1}>{row.title}</AppText><AppText variant="small" style={s.muted} numberOfLines={1}>{row.detail} · {formatDateTime(row.date, row.time)}</AppText></View>
+          <AppText variant="h3" numberOfLines={1} style={{ color: row.cents > 0 ? colors.success : colors.deepForest }}>{row.cents > 0 ? '+' : '−'}{money(Math.abs(row.cents))}</AppText>
+        </PressableScale>
+      ))}
+    </View>
+  </Screen>;
+}
+
 export function GoalsScreen() {
   const { goals, loading, error, refresh, saveGoal, addToGoal, archiveGoal } = useFinance(); const { showToast } = useToast();
   const [mode, setMode] = useState<'new' | 'edit' | 'add' | null>(null); const [selected, setSelected] = useState<SavingsGoal | null>(null); const [name, setName] = useState(''); const [target, setTarget] = useState(''); const [current, setCurrent] = useState(''); const [date, setDate] = useState(''); const [saving, setSaving] = useState(false);
@@ -151,4 +211,4 @@ export function GoalsScreen() {
   return <Screen bottomInset={40} variant={9} refreshing={loading} onRefresh={refresh}><View style={s.page}><View style={s.header}><BackButton /><View style={s.headerCopy}><AppText variant="title">Savings Goals</AppText><AppText style={s.muted}>Turn plans into visible progress.</AppText></View></View><Card style={s.totalCard}><AppText style={s.muted}>Saved across goals</AppText><AppText variant="hero">{money(saved)}</AppText></Card>{error && !goals.length ? <Card><AppText variant="h3">Couldn&apos;t load goals</AppText><SecondaryButton title="Try Again" onPress={refresh} /></Card> : goals.map(g => { const pct = Math.round((g.currentCents / g.targetCents) * 100); return <Card key={g.id} style={s.goal}><View style={s.titleRow}><View style={s.grow}><AppText variant="h3">{g.name}</AppText><AppText style={s.muted}>{money(g.currentCents)} of {money(g.targetCents)}</AppText></View>{pct >= 100 ? <StatusChip>Goal reached</StatusChip> : <AppText variant="h3">{pct}%</AppText>}</View><ProgressBar value={pct} />{g.targetDate ? <AppText variant="small" style={s.muted}>Target date: {g.targetDate}</AppText> : null}<View style={s.actions}><PressableScale onPress={() => openAdd(g)} style={s.smallButton}><AppIcon name="plus" size={18} /><AppText variant="small">Add money</AppText></PressableScale><PressableScale onPress={() => openEdit(g)} style={s.smallButton}><AppIcon name="pencil-outline" size={18} /><AppText variant="small">Edit</AppText></PressableScale><PressableScale accessibilityLabel={`Archive ${g.name}`} onPress={() => remove(g)} style={s.iconButton}><AppIcon name="archive-outline" size={20} color={colors.muted} /></PressableScale></View></Card>; })}<PrimaryButton title="Add Goal" icon="plus" onPress={openNew} /></View><DraggableBottomSheet visible={mode !== null} disabled={saving} onClose={() => setMode(null)}><AppText variant="h2">{mode === 'add' ? `Add to ${selected?.name}` : mode === 'edit' ? 'Edit Goal' : 'Add Goal'}</AppText>{mode === 'add' ? <><View style={s.summary}><AppText style={s.muted}>Currently saved</AppText><AppText variant="h3">{money(selected?.currentCents ?? 0)}</AppText></View><FormInput label="Amount to add" icon="currency-php" value={current} onChangeText={setCurrent} keyboardType="decimal-pad" /></> : <><FormInput label="Goal name" value={name} onChangeText={setName} maxLength={80} /><FormInput label="Target amount" icon="currency-php" value={target} onChangeText={setTarget} keyboardType="decimal-pad" />{mode === 'new' ? <FormInput label="Starting amount" icon="currency-php" value={current} onChangeText={setCurrent} keyboardType="decimal-pad" /> : null}<FormInput label="Target date (optional)" placeholder="YYYY-MM-DD" value={date} onChangeText={setDate} /></>}<PrimaryButton title={mode === 'add' ? 'Add to Goal' : 'Save Goal'} loading={saving} loadingTitle="Saving..." onPress={save} /></DraggableBottomSheet></Screen>;
 }
 
-const s = StyleSheet.create({ actionRow: { flexDirection: 'row', gap: 10 }, fieldGroup: { gap: 7 }, fieldButton: { minHeight: 54, borderRadius: radii.md, backgroundColor: 'rgba(232,238,227,.9)', borderWidth: 1, borderColor: '#C9D5C5', paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }, fieldButtonText: { flex: 1, minWidth: 0, fontFamily: 'JakartaMedium' }, walletGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 }, walletCell: { width: '48%' }, page: { paddingTop: spacing.md, gap: spacing.lg }, header: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 }, headerCopy: { flex: 1, gap: 3 }, muted: { color: colors.muted }, totalCard: { gap: 8, padding: spacing.xl }, grow: { flex: 1, minWidth: 0, gap: 3 }, titleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, minHeight: 40, borderRadius: radii.pill, backgroundColor: colors.pale }, chipActive: { backgroundColor: colors.deepForest }, white: { color: colors.surface }, colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 }, colorChoice: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' }, colorChoiceSelected: { borderWidth: 3, borderColor: colors.surface }, defaultRow: { flexDirection: 'row', gap: 12, alignItems: 'center', padding: 12, borderRadius: radii.md, backgroundColor: colors.pale }, goal: { gap: 14 }, actions: { gap: 8 }, smallButton: { flex: 1, minHeight: 42, borderRadius: radii.pill, backgroundColor: colors.pale, flexDirection: 'row', gap: 5, alignItems: 'center', justifyContent: 'center' }, iconButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.pale }, summary: { flexDirection: 'row', justifyContent: 'space-between' }, history: { gap: 8 }, historyRow: { minHeight: 62, padding: 11, borderRadius: radii.md, backgroundColor: 'rgba(255,253,247,.96)', flexDirection: 'row', alignItems: 'center', gap: 10 }, historyDot: { width: 10, height: 38, borderRadius: 5 }, historyDelete: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' } });
+const s = StyleSheet.create({ detailTotals: { flexDirection: 'row', gap: 12 }, actionRow: { flexDirection: 'row', gap: 10 }, fieldGroup: { gap: 7 }, fieldButton: { minHeight: 54, borderRadius: radii.md, backgroundColor: 'rgba(232,238,227,.9)', borderWidth: 1, borderColor: '#C9D5C5', paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }, fieldButtonText: { flex: 1, minWidth: 0, fontFamily: 'JakartaMedium' }, walletGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 }, walletCell: { width: '48%' }, page: { paddingTop: spacing.md, gap: spacing.lg }, header: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 }, headerCopy: { flex: 1, gap: 3 }, muted: { color: colors.muted }, totalCard: { gap: 8, padding: spacing.xl }, grow: { flex: 1, minWidth: 0, gap: 3 }, titleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, minHeight: 40, borderRadius: radii.pill, backgroundColor: colors.pale }, chipActive: { backgroundColor: colors.deepForest }, white: { color: colors.surface }, colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 }, colorChoice: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' }, colorChoiceSelected: { borderWidth: 3, borderColor: colors.surface }, defaultRow: { flexDirection: 'row', gap: 12, alignItems: 'center', padding: 12, borderRadius: radii.md, backgroundColor: colors.pale }, goal: { gap: 14 }, actions: { gap: 8 }, smallButton: { flex: 1, minHeight: 42, borderRadius: radii.pill, backgroundColor: colors.pale, flexDirection: 'row', gap: 5, alignItems: 'center', justifyContent: 'center' }, iconButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.pale }, summary: { flexDirection: 'row', justifyContent: 'space-between' }, history: { gap: 8 }, historyRow: { minHeight: 62, padding: 11, borderRadius: radii.md, backgroundColor: 'rgba(255,253,247,.96)', flexDirection: 'row', alignItems: 'center', gap: 10 }, historyDot: { width: 10, height: 38, borderRadius: 5 }, historyDelete: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' } });

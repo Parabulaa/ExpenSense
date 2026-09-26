@@ -217,7 +217,7 @@ function CategoryPicker({ visible, selectedId, onClose, onSelect }: { visible: b
           return (
             <PressableScale key={category.id} accessibilityRole="button" accessibilityLabel={category.fullLabel} accessibilityState={{ selected }} onPress={() => onSelect(category.id)} style={[styles.categoryChoice, selected && styles.categoryChoiceSelected]}>
               <View style={[styles.categoryChoiceIcon, selected && styles.categoryChoiceIconSelected]}><AppIcon name={category.icon} size={24} color={selected ? colors.surface : colors.deepForest} /></View>
-              <AppText variant="small" style={styles.categoryChoiceLabel} numberOfLines={2}>{category.fullLabel}</AppText>
+              <AppText variant="small" style={styles.categoryChoiceLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{category.fullLabel}</AppText>
             </PressableScale>
           );
         })}

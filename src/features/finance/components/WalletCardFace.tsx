@@ -52,7 +52,7 @@ export function WalletCardFace({ wallet, index = 0, hidden = false, moreLabel, o
       <View style={styles.top}>
         <View style={styles.identity}>
           <AppIcon name={meta.icon} size={17} color={colors.white} />
-          <AppText numberOfLines={1} style={styles.name}>{wallet.name}</AppText>
+          <AppText numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={styles.name}>{wallet.name}</AppText>
         </View>
         {onMore ? (
           <PressableScale

@@ -615,8 +615,9 @@ export function WalletScreen() {
                   wallet={wallet}
                   index={index}
                   hidden={balancesHidden}
-                  onPress={() => openWallets({ wallet: wallet.id })}
-                  onMore={() => openWallets({ wallet: wallet.id })}
+                  onPress={() => router.push({ pathname: '/wallet-detail/[id]', params: { id: wallet.id } } as never)}
+                  onMore={() => openWallets({ wallet: wallet.id, add: '1' })}
+                  moreLabel={`Add income to ${wallet.name}`}
                 />
               </View>
             ))}
@@ -640,7 +641,13 @@ export function WalletScreen() {
           <AppText style={s.muted}>Add a wallet to keep each source of money visible here.</AppText>
         )}
 
-        <AppText variant="h2">Category Budgets</AppText>
+        <View style={s.sectionHead}>
+          <AppText variant="h2">Category Budgets</AppText>
+          <PressableScale accessibilityRole="button" accessibilityLabel="Manage categories" onPress={() => router.push('/categories')} style={s.sectionLink}>
+            <AppText variant="small" style={s.sectionLinkText}>Manage categories</AppText>
+            <AppIcon name="chevron-right" size={16} color={colors.forest} />
+          </PressableScale>
+        </View>
         <PeriodStepper subject="budget month" label={monthLabel} onPrevious={() => setMonth(shiftMonth(month, -1))} onNext={() => setMonth(shiftMonth(month, 1))} />
         {loading && monthlyBudgets.length === 0 ? <View style={s.skeletonCard} /> : error && monthlyBudgets.length === 0 ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load budgets</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : usage.hasBudget ? (
           <Card style={s.budgetTotals}>
@@ -670,7 +677,7 @@ export function WalletScreen() {
               <AppIcon name={category.icon} size={22} color={category.color ?? CATEGORY_TONES[category.id]?.foreground ?? colors.deepForest} />
             </View>
             <View style={s.budgetInfo}>
-              <AppText variant="h3" numberOfLines={2}>{category.fullLabel}</AppText>
+              <AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{category.fullLabel}</AppText>
               <ProgressBar value={Math.min(100, categoryPercent)} height={9} />
             </View>
             <View style={s.budgetValues}>
@@ -697,9 +704,11 @@ export function WalletScreen() {
 export function AnalyticsScreen() {
   const { openAddExpense } = useAddExpenseOverlay();
   const { expenses, loading, loadError, refresh } = useExpenses();
+  const { incomeEntries } = useFinance();
   const { allCategories } = useCategories();
   const bottomInset = useBottomNavInset();
   const [month, setMonth] = useState(todayLocalDate().slice(0, 7));
+  const monthIncomeCents = incomeEntries.filter((entry) => entry.kind === 'income' && entry.transactionDate.startsWith(month)).reduce((sum, entry) => sum + entry.amountCents, 0);
   const [mode, setMode] = useState<'spending' | 'trends'>('spending');
   useFocusEffect(useCallback(() => { if (!consumeSkippedPanelRefresh('/analytics')) void refresh(); }, [refresh]));
   const analytics = useMemo(() => analyticsForMonth(expenses, allCategories, month), [allCategories, expenses, month]);
@@ -718,7 +727,7 @@ export function AnalyticsScreen() {
           <PressableScale onPress={() => setMode('spending')} style={[s.segmentHalf, mode === 'spending' && s.segmentActive]}><AppText variant="h3" style={mode === 'spending' ? s.segmentActiveText : s.muted}>Spending</AppText></PressableScale>
           <PressableScale onPress={() => setMode('trends')} style={[s.segmentHalf, mode === 'trends' && s.segmentActive]}><AppText variant="h3" style={mode === 'trends' ? s.segmentActiveText : s.muted}>Trends</AppText></PressableScale>
         </View>
-        {loading && expenses.length === 0 ? <Card style={s.analyticsLoading}><ActivityIndicator color={colors.deepForest} /><View style={s.analyticsSkeletonCircle} /><View style={s.skeletonLineWide} /></Card> : loadError ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load analytics.</AppText><AppText style={[s.muted, s.center]}>Check your connection and try again.</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : analytics.expenses.length === 0 ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="chart-donut" size={30} /></View><AppText variant="h2">No spending data yet</AppText><AppText style={[s.muted, s.center]}>Add expenses to start seeing your spending patterns.</AppText><PrimaryButton title="Add Expense" onPress={openAddExpense} /></Card> : mode === 'spending' ? <Card style={s.analyticsCard}><DonutChart slices={analytics.categorySlices} refreshKey={month}><AppText variant="title" adjustsFontSizeToFit numberOfLines={1}>{compactCurrency(analytics.totalCents)}</AppText><AppText style={s.muted}>Total Spending</AppText></DonutChart><View style={s.legendList}>{analytics.categorySlices.map((slice) => <View style={s.legend} key={slice.id}><View style={[s.legendDot, { backgroundColor: slice.color }]} /><AppText style={[s.muted, s.legendLabel]} numberOfLines={1}>{slice.label}</AppText><AppText style={[s.muted, s.legendValue]}>{formatPercent(slice.percentage)}</AppText></View>)}</View></Card> : <Card style={s.trendsCard}><View style={s.rowBetween}><View><AppText style={s.muted}>This month</AppText><AppText variant="title">{compactCurrency(analytics.totalCents)}</AppText></View><View style={s.trendChange}><AppIcon name={change !== null && change > 0 ? 'trending-up' : 'trending-down'} size={20} color={change !== null && change > 0 ? colors.danger : colors.success} /><AppText variant="h3" style={{ color: change !== null && change > 0 ? colors.danger : colors.success }}>{change === null ? 'No comparison' : `${change > 0 ? '+' : ''}${change}%`}</AppText></View></View>{previous.totalCents === 0 || analytics.expenses.length < 2 ? <View style={s.trendEmpty}><AppText variant="h2">Not enough history yet</AppText><AppText style={[s.muted, s.center]}>Keep tracking expenses and your trends will appear here.</AppText></View> : <><View style={s.barChart}>{analytics.dailyTotals.map((item) => <View key={item.day} style={s.barColumn}><View style={[s.bar, { height: Math.max(8, Math.round((item.amountCents / maxDay) * 130)) }]} /><AppText variant="small" style={s.muted}>{item.day}</AppText></View>)}</View><View style={s.trendMetrics}><TrendMetric label={`${formatMonth(priorMonth)} total`} value={compactCurrency(previous.totalCents)} /><TrendMetric label="Daily average" value={compactCurrency(analytics.averageDailyCents)} /><TrendMetric label="Highest-spend day" value={analytics.highestDay ? `${monthLabel.split(' ')[0]} ${analytics.highestDay.day} · ${compactCurrency(analytics.highestDay.amountCents)}` : '—'} /></View></>}</Card>}
+        {loading && expenses.length === 0 ? <Card style={s.analyticsLoading}><ActivityIndicator color={colors.deepForest} /><View style={s.analyticsSkeletonCircle} /><View style={s.skeletonLineWide} /></Card> : loadError ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load analytics.</AppText><AppText style={[s.muted, s.center]}>Check your connection and try again.</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : mode === 'spending' ? <Card style={s.analyticsCard}>{/* Overview and expense structure share one card: what came in, what went out, and where it went. */}<View style={s.overview}><AppText variant="h2">Overview</AppText><View style={s.rowBetween}><AppText>Income</AppText><AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit style={[s.overviewValue, { color: colors.success }]}>{formatPeso(monthIncomeCents)}</AppText></View><View style={s.rowBetween}><AppText>Expense</AppText><AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit style={[s.overviewValue, { color: colors.danger }]}>{formatPeso(analytics.totalCents)}</AppText></View><View style={s.divider} /><View style={s.rowBetween}><AppText variant="h3">Total</AppText><AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit style={s.overviewValue}>{monthIncomeCents - analytics.totalCents < 0 ? '−' : ''}{formatPeso(Math.abs(monthIncomeCents - analytics.totalCents))}</AppText></View></View><View style={s.divider} /><AppText variant="h2" style={s.structureTitle}>Expense Structure</AppText>{analytics.expenses.length === 0 ? <View style={s.structureEmpty}><AppText style={[s.muted, s.center]}>No spending in {monthLabel} yet.</AppText><PrimaryButton title="Add Expense" onPress={openAddExpense} /></View> : <><DonutChart slices={analytics.categorySlices} refreshKey={month}><AppText variant="title" adjustsFontSizeToFit numberOfLines={1}>{compactCurrency(analytics.totalCents)}</AppText><AppText style={s.muted}>Total Spending</AppText></DonutChart><View style={s.legendList}>{analytics.categorySlices.map((slice) => <View style={s.legend} key={slice.id}><View style={[s.legendDot, { backgroundColor: slice.color }]} /><AppText style={[s.muted, s.legendLabel]} numberOfLines={1}>{slice.label}</AppText><AppText style={[s.muted, s.legendValue]}>{formatPercent(slice.percentage)}</AppText></View>)}</View></>}</Card> : analytics.expenses.length === 0 ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="chart-donut" size={30} /></View><AppText variant="h2">No spending data yet</AppText><AppText style={[s.muted, s.center]}>Add expenses to start seeing your spending patterns.</AppText><PrimaryButton title="Add Expense" onPress={openAddExpense} /></Card> : <Card style={s.trendsCard}><View style={s.rowBetween}><View><AppText style={s.muted}>This month</AppText><AppText variant="title">{compactCurrency(analytics.totalCents)}</AppText></View><View style={s.trendChange}><AppIcon name={change !== null && change > 0 ? 'trending-up' : 'trending-down'} size={20} color={change !== null && change > 0 ? colors.danger : colors.success} /><AppText variant="h3" style={{ color: change !== null && change > 0 ? colors.danger : colors.success }}>{change === null ? 'No comparison' : `${change > 0 ? '+' : ''}${change}%`}</AppText></View></View>{previous.totalCents === 0 || analytics.expenses.length < 2 ? <View style={s.trendEmpty}><AppText variant="h2">Not enough history yet</AppText><AppText style={[s.muted, s.center]}>Keep tracking expenses and your trends will appear here.</AppText></View> : <><View style={s.barChart}>{analytics.dailyTotals.map((item) => <View key={item.day} style={s.barColumn}><View style={[s.bar, { height: Math.max(8, Math.round((item.amountCents / maxDay) * 130)) }]} /><AppText variant="small" style={s.muted}>{item.day}</AppText></View>)}</View><View style={s.trendMetrics}><TrendMetric label={`${formatMonth(priorMonth)} total`} value={compactCurrency(previous.totalCents)} /><TrendMetric label="Daily average" value={compactCurrency(analytics.averageDailyCents)} /><TrendMetric label="Highest-spend day" value={analytics.highestDay ? `${monthLabel.split(' ')[0]} ${analytics.highestDay.day} · ${compactCurrency(analytics.highestDay.amountCents)}` : '—'} /></View></>}</Card>}
         {analytics.expenses.length > 0 ? <InsightsLink month={month} /> : null}
       </View>
     </Screen>
@@ -1158,6 +1167,10 @@ const s = StyleSheet.create({
   transaction: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 8 },
   transactionAmount: { flexShrink: 0, maxWidth: '36%', textAlign: 'right' },
   roundIcon: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#E1EBDD', alignItems: 'center', justifyContent: 'center' },
+  overview: { gap: 10, alignSelf: 'stretch' },
+  overviewValue: { flexShrink: 1, textAlign: 'right' },
+  structureTitle: { alignSelf: 'flex-start' },
+  structureEmpty: { gap: 12, alignSelf: 'stretch', paddingVertical: 8 },
   roundIconIncoming: { backgroundColor: '#DDF0E2' },
   infoValue: { flexShrink: 1, textAlign: 'right' },
   editField: { minHeight: 54, borderRadius: radii.md, backgroundColor: 'rgba(232,238,227,.9)', borderWidth: 1, borderColor: '#C9D5C5', paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },

@@ -61,7 +61,7 @@ export function CategoryDetailScreen() {
               <AppIcon name={category.icon} size={32} color={colors.deepForest} />
             </View>
             <View style={styles.headerCopy}>
-              <AppText variant="title" numberOfLines={2}>{category.fullLabel}</AppText>
+              <AppText variant="title" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{category.fullLabel}</AppText>
               <AppText style={styles.muted}>{limit > 0 ? `${usage}% of this month’s budget used` : 'No category budget set'}</AppText>
             </View>
           </View>
