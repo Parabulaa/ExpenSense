@@ -8,4 +8,4 @@ jobs:
     params:
       channel: preview
       platform: all
-      message: Free OCR.space receipt reading
+      message: Dark mode with system/light/dark choice in Appearance
