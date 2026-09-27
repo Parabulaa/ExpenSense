@@ -1,8 +1,9 @@
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
 import { PressableScale } from '@/components/common/motion';
 import { AppIcon, AppText } from '@/components/common/ui';
-import { colors, radii } from '@/constants/theme';
+import { radii } from '@/constants/theme';
+import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 import { selectionFeedback } from '@/lib/haptics';
 
 function pad(value: number) {
@@ -14,6 +15,7 @@ function pad(value: number) {
  * it behaves the same on iOS, Android and web, and always yields `HH:MM`.
  */
 export function TimeSelector({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const styles = useStyles();
   const [hours24, minutes] = value.split(':').map(Number);
   const safeHours = Number.isFinite(hours24) ? hours24 : 12;
   const safeMinutes = Number.isFinite(minutes) ? minutes : 0;
@@ -48,6 +50,8 @@ export function TimeSelector({ value, onChange }: { value: string; onChange: (va
 }
 
 function Stepper({ label, display, onDown, onUp }: { label: string; display: string; onDown: () => void; onUp: () => void }) {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <View style={styles.stepper}>
       <PressableScale accessibilityRole="button" accessibilityLabel={`${label} up`} hitSlop={6} onPress={onUp} style={styles.stepButton}>
@@ -61,7 +65,7 @@ function Stepper({ label, display, onDown, onUp }: { label: string; display: str
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   colon: { marginTop: -2 },
   stepper: { alignItems: 'center', gap: 2 },
@@ -72,4 +76,4 @@ const styles = StyleSheet.create({
   meridiemActive: { backgroundColor: colors.deepForest, borderColor: colors.deepForest },
   meridiemText: { color: colors.deepForest, fontFamily: 'JakartaSemiBold' },
   meridiemActiveText: { color: colors.surface, fontFamily: 'JakartaSemiBold' },
-});
+}));

@@ -8,7 +8,7 @@ import {
   useState,
   type PropsWithChildren,
 } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   Easing,
@@ -19,7 +19,8 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { AppIcon, AppText } from '@/components/common/ui';
-import { colors, radii, shadow, spacing } from '@/constants/theme';
+import { radii, shadow, spacing } from '@/constants/theme';
+import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 
 const VISIBLE_MS = 2800;
 const ANIMATION_MS = 220;
@@ -78,6 +79,8 @@ export function ToastProvider({ children }: PropsWithChildren) {
 }
 
 function ToastBanner({ toast, onDismiss }: { toast: ToastState; onDismiss: (key: number) => void }) {
+  const colors = useColors();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
   const progress = useSharedValue(reduced ? 1 : 0);
@@ -140,7 +143,7 @@ export function useToast() {
   return ctx;
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   host: {
     position: 'absolute',
     top: 0,
@@ -177,4 +180,4 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     lineHeight: 19,
   },
-});
+}));

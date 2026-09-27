@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { AppIcon, AppText } from '@/components/common/ui';
-import { colors, radii } from '@/constants/theme';
+import { radii } from '@/constants/theme';
+import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -35,6 +36,8 @@ export function Calendar({
   maxDate?: string;
   onSelect: (date: string) => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const [year, month] = useMemo(() => {
     const [y, m] = value.split('-').map(Number);
     return Number.isFinite(y) && Number.isFinite(m) ? [y, m - 1] : [new Date().getFullYear(), new Date().getMonth()];
@@ -155,7 +158,7 @@ export function Calendar({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { gap: 6 },
   header: {
     flexDirection: 'row',
@@ -199,4 +202,4 @@ const styles = StyleSheet.create({
   dayTextSelected: { color: colors.surface, fontFamily: 'JakartaBold' },
   dayTextDisabled: { color: '#B6C2BA' },
   pressed: { opacity: 0.7 },
-});
+}));

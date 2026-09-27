@@ -1,8 +1,9 @@
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
 import { PressableScale } from '@/components/common/motion';
 import { AppText } from '@/components/common/ui';
-import { colors, radii } from '@/constants/theme';
+import { radii } from '@/constants/theme';
+import { makeStyles } from '@/features/settings/ThemeProvider';
 import { selectionFeedback } from '@/lib/haptics';
 
 const STEPS = [100, 200, 500, 1000];
@@ -22,6 +23,7 @@ export function addToAmount(value: string, pesos: number) {
  * 5000 — no retyping.
  */
 export function AmountChips({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  const styles = useStyles();
   return (
     <View style={styles.row}>
       {STEPS.map((step) => (
@@ -39,8 +41,8 @@ export function AmountChips({ value, onChange }: { value: string; onChange: (nex
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   row: { flexDirection: 'row', gap: 8 },
   chip: { flex: 1, minHeight: 40, paddingHorizontal: 6, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.lightGreen, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   text: { color: colors.deepForest, fontFamily: 'JakartaSemiBold' },
-});
+}));

@@ -2,13 +2,17 @@ import { Image } from 'expo-image';
 import { useEffect } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
-import { assets } from '@/constants/theme';
+import { assets, DARK_DECOR_OPACITY } from '@/constants/theme';
+import { useAppTheme } from '@/features/settings/ThemeProvider';
 
 type Scene = 'splash' | 'onboarding';
 
 export function LiquidScene({ scene }: { scene: Scene }) {
   const { width, height } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
+  const { scheme } = useAppTheme();
+  // Shapes only; the mascot keeps full strength.
+  const decor = [StyleSheet.absoluteFill, scheme === 'dark' && { opacity: DARK_DECOR_OPACITY }];
 
   // Independent drivers for organic shapes — different durations for desynchronized motion
   const shape1Motion = useSharedValue(0);
@@ -89,18 +93,21 @@ export function LiquidScene({ scene }: { scene: Scene }) {
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      {scene === 'splash' && <Animated.Image source={assets.shape3} resizeMode="contain" style={[styles.topSplash, { width: width * 0.8, height: height * 0.25 }, topAccent]} />}
-      {scene === 'onboarding' && <Image source={assets.shape1} contentFit="contain" style={styles.topOnboarding} />}
-
-      <Animated.Image source={assets.shape4} resizeMode="stretch" style={[styles.liquid, { top: heroTop, width: width * 1.7, height: heroHeight }, liquidRight]} />
-      <Animated.Image source={assets.shape4} resizeMode="stretch" style={[styles.liquid, { top: heroTop + 28, width: width * 1.7, height: heroHeight }, liquidLeft]} />
+      <View pointerEvents="none" style={decor}>
+        {scene === 'splash' && <Animated.Image source={assets.shape3} resizeMode="contain" style={[styles.topSplash, { width: width * 0.8, height: height * 0.25 }, topAccent]} />}
+        {scene === 'onboarding' && <Image source={assets.shape1} contentFit="contain" style={styles.topOnboarding} />}
+        <Animated.Image source={assets.shape4} resizeMode="stretch" style={[styles.liquid, { top: heroTop, width: width * 1.7, height: heroHeight }, liquidRight]} />
+        <Animated.Image source={assets.shape4} resizeMode="stretch" style={[styles.liquid, { top: heroTop + 28, width: width * 1.7, height: heroHeight }, liquidLeft]} />
+      </View>
 
       {/* Mascot: STATIC — no bobbing, no rotation */}
       <Animated.View style={[styles.mascot, { top: mascotTop, width: mascotSize * scale, height: mascotSize * scale, marginLeft: -(mascotSize * scale) / 2 }, mascotStyle]}>
         <Image source={assets.mascotNeutral} contentFit="contain" style={styles.fill} />
       </Animated.View>
 
-      {scene === 'splash' && <Animated.Image source={assets.shape1} resizeMode="contain" style={[styles.bottomSplash, bottomAccent]} />}
+      <View pointerEvents="none" style={decor}>
+        {scene === 'splash' && <Animated.Image source={assets.shape1} resizeMode="contain" style={[styles.bottomSplash, bottomAccent]} />}
+      </View>
     </View>
   );
 }

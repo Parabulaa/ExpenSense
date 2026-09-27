@@ -8,7 +8,8 @@ import { Modal, PanResponder, Pressable, ScrollView, StyleSheet, View, useWindow
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, shadow } from '@/constants/theme';
+import { shadow } from '@/constants/theme';
+import { makeStyles } from '@/features/settings/ThemeProvider';
 
 type Props = {
   visible: boolean;
@@ -31,6 +32,7 @@ const MAX_HEIGHT_RATIO = 0.9;
  * Android and library gestures inside it never receive touches.
  */
 export function DraggableBottomSheet({ visible, onClose, disabled = false, children, footer }: Props) {
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const maxHeight = height * MAX_HEIGHT_RATIO;
@@ -118,7 +120,7 @@ export function DraggableBottomSheet({ visible, onClose, disabled = false, child
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: colors.overlay },
   sheet: { width: '100%', maxWidth: 480, alignSelf: 'center', overflow: 'hidden', backgroundColor: colors.surface, borderTopLeftRadius: 30, borderTopRightRadius: 30, paddingHorizontal: 22, ...shadow },
   // Tall, full-width touch target so the handle is easy to grab.
@@ -126,4 +128,4 @@ const styles = StyleSheet.create({
   handle: { width: 48, height: 5, borderRadius: 3, backgroundColor: '#B8B6AF' },
   scroll: { flexGrow: 0, flexShrink: 1 },
   content: { gap: 16 },
-});
+}));

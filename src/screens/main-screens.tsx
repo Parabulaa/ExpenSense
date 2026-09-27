@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Pressable, TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { DraggableBottomSheet } from '@/components/common/draggable-bottom-sheet';
 import { FadeSlideIn, PressableScale } from '@/components/common/motion';
@@ -12,7 +12,8 @@ import { useToast } from '@/components/common/toast';
 import { AppIcon, AppText, BackButton, Card, FormInput, PrimaryButton, ProgressBar, SecondaryButton, StatusChip } from '@/components/common/ui';
 import { BottomNavigation, useBottomNavInset } from '@/components/navigation/bottom-navigation';
 import { FloatingRadialMenu } from '@/components/navigation/floating-radial-menu';
-import { colors, radii, shadow, spacing } from '@/constants/theme';
+import { radii, shadow, spacing } from '@/constants/theme';
+import { makeStyles, useAdaptiveColor, useColors } from '@/features/settings/ThemeProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { analyticsForMonth, buildInsights, previousMonth, type AnalyticsInsight } from '@/features/analytics/analytics';
 import { detailForInsight, type InsightDetail } from '@/features/analytics/insight-details';
@@ -53,6 +54,8 @@ const CATEGORY_TONES: Record<string, { background: string; foreground: string }>
 export { HomeScreen } from './home-screen';
 
 export function TransactionsScreen() {
+  const colors = useColors();
+  const s = useStyles();
   const { openAddExpense } = useAddExpenseOverlay();
   const { categories, findCategory } = useCategories();
   const { expenses, loading: expensesLoading, loadError, refresh, revalidate } = useExpenses();
@@ -196,6 +199,8 @@ function shiftMonth(month: string, delta: number) {
 }
 
 function SpendingCalendar({ expenses, categories, month, selectedDate, onMonthChange, onSelectDate }: { expenses: Expense[]; categories: DashboardCategory[]; month: string; selectedDate: string | null; onMonthChange: (month: string) => void; onSelectDate: (date: string | null) => void }) {
+  const colors = useColors();
+  const s = useStyles();
   const [year, monthNumber] = month.split('-').map(Number);
   const days = new Date(year, monthNumber, 0).getDate();
   const leading = new Date(year, monthNumber - 1, 1).getDay();
@@ -237,12 +242,15 @@ function SpendingCalendar({ expenses, categories, month, selectedDate, onMonthCh
 
 /** Single filter pill: funnel icon plus "All" or how many filters are on. */
 function FilterPill({ activeCount, onPress }: { activeCount: number; onPress: () => void }) {
+  const colors = useColors();
+  const s = useStyles();
   const active = activeCount > 0;
   return <PressableScale accessibilityRole="button" accessibilityLabel={active ? `Filters, ${activeCount} on` : 'Filters, showing all'} onPress={onPress} style={[s.filterPill, active && s.filterPillActive]}><AppIcon name="filter-variant" size={18} color={active ? colors.surface : colors.deepForest} /><AppText variant="bodyMedium" style={active ? s.filterPillTextActive : s.filterPillText}>{active ? `${activeCount} on` : 'All'}</AppText></PressableScale>;
 }
 
 /** One organized filter sheet: type, date, category and sort together, applied live. */
 function FilterSheet({ visible, typeFilter, dateFilter, categoryFilter, sort, resultCount, onType, onDate, onCategory, onSort, onClear, onClose }: { visible: boolean; typeFilter: TypeFilter; dateFilter: DateFilter; categoryFilter: string; sort: SortOption; resultCount: number; onType: (value: TypeFilter) => void; onDate: (value: DateFilter) => void; onCategory: (value: string) => void; onSort: (value: SortOption) => void; onClear: () => void; onClose: () => void }) {
+  const s = useStyles();
   const { categories } = useCategories();
   const pick = (apply: () => void) => { selectionFeedback(); apply(); };
   return (
@@ -261,10 +269,13 @@ function FilterSheet({ visible, typeFilter, dateFilter, categoryFilter, sort, re
 }
 
 function FilterSection({ title, children }: { title: string; children: React.ReactNode }) {
+  const s = useStyles();
   return <View style={s.filterSection}><AppText variant="bodyMedium" style={s.muted}>{title}</AppText><View style={s.filterChips}>{children}</View></View>;
 }
 
 function FilterChip({ label, icon, selected, onPress }: { label: string; icon?: Parameters<typeof AppIcon>[0]['name']; selected: boolean; onPress: () => void }) {
+  const colors = useColors();
+  const s = useStyles();
   return <PressableScale accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} style={[s.filterChip, selected && s.filterChipSelected]}>{icon ? <AppIcon name={icon} size={16} color={selected ? colors.surface : colors.deepForest} /> : null}<AppText variant="small" numberOfLines={1} style={selected ? s.filterChipTextSelected : s.filterChipText}>{label}</AppText></PressableScale>;
 }
 
@@ -314,6 +325,8 @@ function compareLedger(a: LedgerEntry, b: LedgerEntry) {
 }
 
 function LedgerRow({ entry, onOpen }: { entry: LedgerEntry; onOpen: () => void }) {
+  const colors = useColors();
+  const s = useStyles();
   const incoming = entry.kind === 'income' || entry.kind === 'cash_in';
   const sign = entry.kind === 'expense' ? '−' : incoming ? '+' : '';
   const clock = formatTime(entry.time);
@@ -343,6 +356,7 @@ function groupByDate(entries: LedgerEntry[]) {
 
 /** Details for money that moved between or into wallets; expenses have their own screen. */
 function MoneyMovementSheet({ entry, onClose }: { entry: LedgerEntry | null; onClose: () => void }) {
+  const s = useStyles();
   const { deleteIncome, deleteTransfer } = useFinance();
   const { showToast } = useToast();
   const [confirming, setConfirming] = useState(false);
@@ -380,6 +394,8 @@ function MoneyMovementSheet({ entry, onClose }: { entry: LedgerEntry | null; onC
 }
 
 export function TransactionDetailsScreen() {
+  const colors = useColors();
+  const s = useStyles();
   const { findCategory } = useCategories();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { expenses, loading, deleteExpense } = useExpenses();
@@ -446,6 +462,8 @@ export function TransactionDetailsScreen() {
 }
 
 export function EditTransactionScreen() {
+  const colors = useColors();
+  const s = useStyles();
   const { categories } = useCategories();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { expenses, updateExpense } = useExpenses();
@@ -481,6 +499,8 @@ export function EditTransactionScreen() {
 }
 
 function EditField({ label, value, icon, error, onPress }: { label: string; value: string; icon: Parameters<typeof AppIcon>[0]['name']; error?: string; onPress: () => void }) {
+  const colors = useColors();
+  const s = useStyles();
   return (
     <View style={{ gap: 7 }}>
       <AppText variant="bodyMedium">{label}</AppText>
@@ -495,6 +515,7 @@ function EditField({ label, value, icon, error, onPress }: { label: string; valu
 }
 
 function InfoRow({ label, value, bold = false }: { label: string; value: string; bold?: boolean }) {
+  const s = useStyles();
   return (
     <View style={s.rowBetween}>
       <AppText variant={bold ? 'h3' : 'body'} style={s.muted}>{label}</AppText>
@@ -505,6 +526,8 @@ function InfoRow({ label, value, bold = false }: { label: string; value: string;
 
 /** Previous / next arrows around a period label — the one way dates are stepped through in the app. */
 function PeriodStepper({ label, onPrevious, onNext, nextDisabled = false, subject }: { label: string; onPrevious: () => void; onNext: () => void; nextDisabled?: boolean; subject: string }) {
+  const colors = useColors();
+  const s = useStyles();
   return (
     <View style={s.stepper}>
       <PressableScale accessibilityRole="button" accessibilityLabel={`Previous ${subject}`} hitSlop={6} onPress={() => { selectionFeedback(); onPrevious(); }} style={s.stepperButton}><AppIcon name="chevron-left" size={22} /></PressableScale>
@@ -515,6 +538,9 @@ function PeriodStepper({ label, onPrevious, onNext, nextDisabled = false, subjec
 }
 
 export function WalletScreen() {
+  const colors = useColors();
+  const s = useStyles();
+  const { tint, ink } = useAdaptiveColor();
   const { categories } = useCategories();
   const bottomInset = useBottomNavInset();
   const { expenses } = useExpenses();
@@ -579,7 +605,7 @@ export function WalletScreen() {
               onPress={() => setBalancesHidden((value) => !value)}
               style={s.balanceEye}
             >
-              <AppIcon name={balancesHidden ? 'eye-off-outline' : 'eye-outline'} size={18} color={colors.white} />
+              <AppIcon name={balancesHidden ? 'eye-off-outline' : 'eye-outline'} size={18} color={colors.surface} />
             </PressableScale>
           </View>
           <AppText adjustsFontSizeToFit numberOfLines={1} style={s.balanceValue}>{secret(currency(walletTotalCents))}</AppText>
@@ -690,8 +716,8 @@ export function WalletScreen() {
             onPress={() => openCategory(category.id)}
             style={s.budgetRow}
           >
-            <View style={[s.budgetIcon, { backgroundColor: category.color ? `${category.color}22` : CATEGORY_TONES[category.id]?.background ?? colors.pale }]}>
-              <AppIcon name={category.icon} size={22} color={category.color ?? CATEGORY_TONES[category.id]?.foreground ?? colors.deepForest} />
+            <View style={[s.budgetIcon, { backgroundColor: category.color ? `${category.color}22` : tint(CATEGORY_TONES[category.id]?.background ?? colors.pale) }]}>
+              <AppIcon name={category.icon} size={22} color={ink(category.color ?? CATEGORY_TONES[category.id]?.foreground ?? colors.deepForest)} />
             </View>
             <View style={s.budgetInfo}>
               <AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{category.fullLabel}</AppText>
@@ -719,6 +745,8 @@ export function WalletScreen() {
 }
 
 export function AnalyticsScreen() {
+  const colors = useColors();
+  const s = useStyles();
   const { openAddExpense } = useAddExpenseOverlay();
   const { expenses, loading, loadError, refresh, revalidate } = useExpenses();
   const { incomeEntries } = useFinance();
@@ -758,6 +786,8 @@ export function AnalyticsScreen() {
  * label instead of pinned to the far edge of the screen.
  */
 function InsightsLink({ month }: { month: string }) {
+  const colors = useColors();
+  const s = useStyles();
   const [hovered, setHovered] = useState(false);
 
   return (
@@ -776,6 +806,8 @@ function InsightsLink({ month }: { month: string }) {
 }
 
 export function InsightsScreen() {
+  const colors = useColors();
+  const s = useStyles();
   const { openAddExpense } = useAddExpenseOverlay();
   const params = useLocalSearchParams<{ month?: string }>();
   const { expenses, loading, loadError, refresh, revalidate } = useExpenses();
@@ -807,10 +839,14 @@ export function InsightsScreen() {
 }
 
 function TrendMetric({ label, value }: { label: string; value: string }) {
+  const s = useStyles();
   return <View style={s.trendMetric}><AppText style={s.muted}>{label}</AppText><AppText variant="h3">{value}</AppText></View>;
 }
 
 export function CategoriesScreen() {
+  const colors = useColors();
+  const s = useStyles();
+  const { tint, ink } = useAdaptiveColor();
   const { categories, hiddenCategories, loading: categoriesLoading, error: categoriesError, refresh: refreshCategories, createCategory, updateCategory, hideCategory, restoreCategory } = useCategories();
   const { categories: dashboardCategories, isFull, isOnDashboard, addCategory, removeCategory } =
     useDashboardCategories();
@@ -903,8 +939,8 @@ export function CategoriesScreen() {
                 onPress={() => router.push({ pathname: '/category/[id]', params: { id: category.id } })}
                 style={({ pressed }) => [s.categoryMain, pressed && { opacity: 0.7 }]}
               >
-                <View style={[s.categoryIcon, { backgroundColor: category.color ? `${category.color}22` : CATEGORY_TONES[category.id]?.background ?? '#E1EBDD' }]}>
-                  <AppIcon name={category.icon} color={category.color ?? CATEGORY_TONES[category.id]?.foreground ?? colors.deepForest} />
+                <View style={[s.categoryIcon, { backgroundColor: category.color ? `${category.color}22` : tint(CATEGORY_TONES[category.id]?.background ?? '#E1EBDD') }]}>
+                  <AppIcon name={category.icon} color={ink(category.color ?? CATEGORY_TONES[category.id]?.foreground ?? colors.deepForest)} />
                 </View>
                 <AppText variant="h3" style={{ flex: 1 }} numberOfLines={1}>
                   {category.fullLabel}
@@ -954,7 +990,7 @@ export function CategoriesScreen() {
           {hiddenCategories.map((category) => (
             <Card key={category.id} style={s.categoryRow}>
               <View style={[s.categoryMain, s.categoryHidden]}>
-                <View style={[s.categoryIcon, { backgroundColor: '#E6E8E2' }]}><AppIcon name={category.icon} color={colors.muted} /></View>
+                <View style={[s.categoryIcon, { backgroundColor: tint('#E6E8E2') }]}><AppIcon name={category.icon} color={colors.muted} /></View>
                 <AppText variant="h3" style={{ flex: 1, color: colors.muted }} numberOfLines={1}>{category.fullLabel}</AppText>
               </View>
               <Pressable accessibilityRole="button" accessibilityLabel={`Show ${category.fullLabel} again`} hitSlop={6} onPress={() => void restore(category.id, category.fullLabel)} style={({ pressed }) => [s.categoryRestore, pressed && { opacity: 0.7 }]}>
@@ -982,6 +1018,8 @@ const SETTINGS_ROWS = [
 ] as const;
 
 function SettingsRow({ icon, label, route, index }: { icon: Parameters<typeof AppIcon>[0]['name']; label: string; route: string; index: number }) {
+  const colors = useColors();
+  const s = useStyles();
   const [hovered, setHovered] = useState(false);
 
   return (
@@ -1005,6 +1043,8 @@ function SettingsRow({ icon, label, route, index }: { icon: Parameters<typeof Ap
 }
 
 export function ProfileScreen() {
+  const colors = useColors();
+  const s = useStyles();
   const { signOut } = useAuth();
   const { displayName, initials, email, loading, loadError, refresh } = useProfile();
 
@@ -1123,7 +1163,7 @@ export function ProfileScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   page: { paddingTop: 16, gap: 16 },
   muted: { color: colors.muted },
   center: { textAlign: 'center' },
@@ -1251,12 +1291,12 @@ const s = StyleSheet.create({
   noLimits: { gap: 4, backgroundColor: 'rgba(255,253,247,.9)' },
   /* Wallet panel: dark summary card, then a card-face grid of wallets. */
   balanceCard: { borderRadius: radii.lg, padding: spacing.lg, gap: 6, backgroundColor: colors.deepForest, ...shadow },
-  balanceCaption: { color: 'rgba(255,255,255,.66)', fontFamily: 'JakartaSemiBold', fontSize: 9, lineHeight: 13, letterSpacing: 1.1 },
+  balanceCaption: { color: colors.surface, opacity: 0.66, fontFamily: 'JakartaSemiBold', fontSize: 9, lineHeight: 13, letterSpacing: 1.1 },
   balanceEye: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,.14)' },
-  balanceValue: { color: colors.white, fontFamily: 'JakartaExtraBold', fontSize: 34, lineHeight: 41 },
+  balanceValue: { color: colors.surface, fontFamily: 'JakartaExtraBold', fontSize: 34, lineHeight: 41 },
   balanceMetrics: { marginTop: 6, flexDirection: 'row', gap: 8 },
   balanceMetric: { flex: 1, minWidth: 0, gap: 2, paddingVertical: 9, paddingHorizontal: 11, borderRadius: radii.sm, backgroundColor: 'rgba(255,255,255,.12)' },
-  balanceMetricValue: { color: colors.white, fontFamily: 'JakartaBold', fontSize: 15, lineHeight: 20 },
+  balanceMetricValue: { color: colors.surface, fontFamily: 'JakartaBold', fontSize: 15, lineHeight: 20 },
   sectionHead: { marginTop: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   sectionLink: { minHeight: 34, flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 4 },
   sectionLinkText: { color: colors.forest, fontFamily: 'JakartaBold' },
@@ -1426,4 +1466,4 @@ const s = StyleSheet.create({
     maxWidth: '42%',
     gap: 2,
   },
-});
+}));

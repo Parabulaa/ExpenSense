@@ -2,7 +2,8 @@ import { Image } from 'expo-image';
 import { StyleSheet, View, type DimensionValue, type ImageStyle } from 'react-native';
 import Animated from 'react-native-reanimated';
 
-import { assets } from '@/constants/theme';
+import { assets, DARK_DECOR_OPACITY } from '@/constants/theme';
+import { useAppTheme } from '@/features/settings/ThemeProvider';
 import { useDrift } from './motion';
 
 const AnimatedImage = Animated.createAnimatedComponent(Image);
@@ -333,10 +334,11 @@ function OrganicLayer({ layer }: { layer: Layer }) {
 }
 
 export function OrganicBackground({ variant = 1 }: { variant?: Variant }) {
+  const { scheme } = useAppTheme();
   // Inert and clipped: decoration can never intercept a touch, shift layout,
   // or bleed past the mobile canvas.
   return (
-    <View pointerEvents="none" style={styles.layer}>
+    <View pointerEvents="none" style={[styles.layer, scheme === 'dark' && { opacity: DARK_DECOR_OPACITY }]}>
       {COMPOSITIONS[variant].map((layer, i) => (
         <OrganicLayer key={`${layer.asset}-${i}`} layer={layer} />
       ))}

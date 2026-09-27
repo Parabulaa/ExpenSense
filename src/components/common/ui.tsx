@@ -4,18 +4,22 @@ import { router } from 'expo-router';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
-import { ActivityIndicator, Pressable, StyleSheet, Text, type TextProps, TextInput, type TextInputProps, View } from 'react-native';
-import { assets, colors, radii, shadow, spacing, type } from '@/constants/theme';
+import { ActivityIndicator, Pressable, Text, type TextProps, TextInput, type TextInputProps, View } from 'react-native';
+import { assets, radii, shadow, spacing, type } from '@/constants/theme';
+import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 import { PressableScale } from './motion';
 export { OrganicBackground } from './organic-background';
 
 export function AppText({ children, variant = 'body', style, ...props }: PropsWithChildren<Omit<TextProps, 'style'> & { variant?: keyof typeof type; style?: any }>) {
+  const colors = useColors();
   return <Text {...props} style={[type[variant], { color: colors.text }, style]}>{children}</Text>;
 }
-export function AppIcon({ name, size = 24, color = colors.deepForest }: { name: keyof typeof MaterialCommunityIcons.glyphMap; size?: number; color?: string }) {
-  return <MaterialCommunityIcons name={name} size={size} color={color} />;
+export function AppIcon({ name, size = 24, color }: { name: keyof typeof MaterialCommunityIcons.glyphMap; size?: number; color?: string }) {
+  const colors = useColors();
+  return <MaterialCommunityIcons name={name} size={size} color={color ?? colors.deepForest} />;
 }
 export function Brand({ compact = false, large = false, align = 'center' }: { compact?: boolean; large?: boolean; align?: 'center' | 'left' }) {
+  const styles = useStyles();
   return (
     <View style={[styles.brand, compact && styles.brandCompact, large && styles.brandLarge, { alignSelf: align === 'left' ? 'flex-start' : 'center' }]}>
       <Image source={assets.logoMark} contentFit="contain" style={[styles.brandMark, compact && styles.brandMarkCompact, large && styles.brandMarkLarge]} />
@@ -30,6 +34,8 @@ export function Brand({ compact = false, large = false, align = 'center' }: { co
   );
 }
 export function PrimaryButton({ title, onPress, icon, danger = false, loading = false, disabled = false, loadingTitle, hideTrailingIcon = false }: { title: string; onPress?: () => void; icon?: keyof typeof MaterialCommunityIcons.glyphMap; danger?: boolean; loading?: boolean; disabled?: boolean; loadingTitle?: string; hideTrailingIcon?: boolean }) {
+  const colors = useColors();
+  const styles = useStyles();
   const isDisabled = disabled || loading;
   return (
     <PressableScale
@@ -53,9 +59,13 @@ export function PrimaryButton({ title, onPress, icon, danger = false, loading = 
     </PressableScale>
   );
 }
-export function SecondaryButton({ title, onPress, icon, disabled = false }: { title: string; onPress?: () => void; icon?: keyof typeof MaterialCommunityIcons.glyphMap; disabled?: boolean }) { return <Pressable accessibilityRole="button" accessibilityLabel={title} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.secondary, disabled && styles.disabled, pressed && !disabled && { opacity: .75 }]}>{icon && <AppIcon name={icon} />}<AppText variant="button">{title}</AppText></Pressable>; }
-export function BackButton({ onPress }: { onPress?: () => void }) { const goBack = () => router.canGoBack() ? router.back() : router.replace('/'); return <PressableScale accessibilityLabel="Go back" hitSlop={12} scaleTo={0.97} onPress={onPress ?? goBack} style={styles.back}><AppIcon name="arrow-left" size={25} /></PressableScale>; }
+export function SecondaryButton({ title, onPress, icon, disabled = false }: { title: string; onPress?: () => void; icon?: keyof typeof MaterialCommunityIcons.glyphMap; disabled?: boolean }) {
+  const styles = useStyles(); return <Pressable accessibilityRole="button" accessibilityLabel={title} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.secondary, disabled && styles.disabled, pressed && !disabled && { opacity: .75 }]}>{icon && <AppIcon name={icon} />}<AppText variant="button">{title}</AppText></Pressable>; }
+export function BackButton({ onPress }: { onPress?: () => void }) {
+  const styles = useStyles(); const goBack = () => router.canGoBack() ? router.back() : router.replace('/'); return <PressableScale accessibilityLabel="Go back" hitSlop={12} scaleTo={0.97} onPress={onPress ?? goBack} style={styles.back}><AppIcon name="arrow-left" size={25} /></PressableScale>; }
 export function FormInput({ icon, secure, right, style, inputStyle, error, label, hint, onFocus, onBlur, ...props }: Omit<TextInputProps, 'style'> & { icon?: keyof typeof MaterialCommunityIcons.glyphMap; secure?: boolean; right?: ReactNode; style?: any; inputStyle?: TextInputProps['style']; error?: string | null; label?: string; hint?: string }) {
+  const colors = useColors();
+  const styles = useStyles();
   const [focused, setFocused] = useState(false);
   // Error wins over hint so the field never shows contradictory guidance, and
   // the row below is always reserved by the same component either way.
@@ -80,8 +90,10 @@ export function FormInput({ icon, secure, right, style, inputStyle, error, label
     </View>
   );
 }
-export function Card({ children, style }: PropsWithChildren<{ style?: any }>) { return <View style={[styles.card, style]}>{children}</View>; }
+export function Card({ children, style }: PropsWithChildren<{ style?: any }>) {
+  const styles = useStyles(); return <View style={[styles.card, style]}>{children}</View>; }
 export function ProgressBar({ value, height = 12 }: { value: number; height?: number }) {
+  const styles = useStyles();
   const pct = Math.max(0, Math.min(value, 100));
   const progress = useSharedValue(0);
   const reduced = useReducedMotion();
@@ -91,8 +103,10 @@ export function ProgressBar({ value, height = 12 }: { value: number; height?: nu
   const fillStyle = useAnimatedStyle(() => ({ width: `${progress.value}%` }));
   return <View style={[styles.track, { height }]}><Animated.View style={[styles.fill, fillStyle]} /></View>;
 }
-export function StatusChip({ children, warning = false }: PropsWithChildren<{ warning?: boolean }>) { return <View style={[styles.chip, warning && styles.warningChip]}><AppText variant="bodyMedium" style={{ color: warning ? colors.warning : colors.success }}>{children}</AppText></View>; }
-const styles = StyleSheet.create({
+export function StatusChip({ children, warning = false }: PropsWithChildren<{ warning?: boolean }>) {
+  const colors = useColors();
+  const styles = useStyles(); return <View style={[styles.chip, warning && styles.warningChip]}><AppText variant="bodyMedium" style={{ color: warning ? colors.warning : colors.success }}>{children}</AppText></View>; }
+const useStyles = makeStyles((colors) => ({
   brand: { height: 72, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }, brandCompact: { height: 60, alignSelf: 'flex-start' }, brandLarge: { height: 92, gap: 4 }, brandMarkLarge: { width: 72, height: 72 }, brandTextLarge: { fontSize: 32, lineHeight: 37 }, taglineLarge: { fontSize: 8, lineHeight: 11, letterSpacing: 1.35 }, brandMark: { width: 56, height: 56 }, brandMarkCompact: { width: 48, height: 48 }, wordmark: { flexDirection: 'row', alignItems: 'center' }, brandText: { fontFamily: 'JakartaExtraBold', fontSize: 26, lineHeight: 30 }, brandTextCompact: { fontSize: 23, lineHeight: 27 }, brandSense: { color: colors.success }, tagline: { fontFamily: 'JakartaSemiBold', fontSize: 6.5, lineHeight: 9, letterSpacing: 1.1, color: colors.forest }, taglineCompact: { fontSize: 5.8, letterSpacing: .9 }, primary: { minHeight: 54, backgroundColor: colors.deepForest, borderRadius: radii.md, paddingHorizontal: spacing.xl, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 12 },
   secondary: { minHeight: 52, borderRadius: radii.md, borderWidth: 1.5, borderColor: '#C6D3C1', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 12, backgroundColor: colors.surface },
   back: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.pale }, inputWrap: { minHeight: 56, borderRadius: radii.md, backgroundColor: 'rgba(232,238,227,.86)', borderWidth: 1, borderColor: '#C9D5C5', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18 },
@@ -100,4 +114,4 @@ const styles = StyleSheet.create({
   field: { gap: 7 }, inputLabel: { color: colors.text, fontFamily: 'JakartaSemiBold', marginLeft: 2 }, inputHint: { color: colors.muted, marginTop: 6, marginLeft: 4 },
   inputWrapFocused: { borderColor: colors.forest, borderWidth: 1.5, backgroundColor: 'rgba(240,245,236,.96)' },
   track: { backgroundColor: '#DCE5D7', borderRadius: radii.pill, overflow: 'hidden', flex: 1 }, fill: { height: '100%', backgroundColor: colors.success, borderRadius: radii.pill }, chip: { alignSelf: 'flex-start', paddingHorizontal: 16, paddingVertical: 9, borderRadius: radii.pill, backgroundColor: '#E2F0DD' }, warningChip: { backgroundColor: colors.warningSoft },
-});
+}));

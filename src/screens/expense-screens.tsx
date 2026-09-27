@@ -12,7 +12,8 @@ import { FadeSlideIn, PressableScale, useDrift } from '@/components/common/motio
 import { Screen } from '@/components/common/screen';
 import { useToast } from '@/components/common/toast';
 import { AppIcon, AppText, BackButton, Card, FormInput, PrimaryButton, SecondaryButton, StatusChip } from '@/components/common/ui';
-import { assets, colors, radii, shadow, spacing } from '@/constants/theme';
+import { assets, radii, shadow, spacing } from '@/constants/theme';
+import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 import { useBudgets } from '@/features/budget/BudgetProvider';
 import { useCategories } from '@/features/categories/CategoriesProvider';
 import { useExpenses } from '@/features/expenses/ExpensesProvider';
@@ -31,6 +32,7 @@ import { formatPeso } from '@/lib/format';
 import { skipNextPanelRefresh } from '@/lib/panel-refresh';
 
 export function AddExpenseScreen() {
+  const styles = useStyles();
   const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
   const safeReturn = returnTo === '/transactions' || returnTo === '/analytics' || returnTo === '/wallet' ? returnTo : '/home';
   const close = () => {
@@ -42,6 +44,7 @@ export function AddExpenseScreen() {
 }
 
 export function AddExpenseSheet({ visible, onClose, onNavigate }: { visible: boolean; onClose: () => void; onNavigate?: (route: '/scanner' | '/manual-expense' | '/processing') => void }) {
+  const styles = useStyles();
   const leafDrift = useDrift({ x: 24, y: 20, rotate: 9, scale: 0.08, duration: 2400, baseRotate: 28 });
   const { setSource } = useReceipt();
   const navigate = (route: '/scanner' | '/manual-expense' | '/processing') => onNavigate ? onNavigate(route) : router.push(route);
@@ -75,6 +78,8 @@ export function AddExpenseSheet({ visible, onClose, onNavigate }: { visible: boo
 }
 
 function ExpenseOption({ icon, title, description, disabled = false, onPress }: { icon: Parameters<typeof AppIcon>[0]['name']; title: string; description: string; disabled?: boolean; onPress?: () => void }) {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <PressableScale accessibilityRole="button" accessibilityLabel={title} accessibilityHint={description} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={disabled ? [styles.option, styles.optionMuted] : styles.option}>
       <View style={[styles.optionIcon, disabled && styles.optionIconMuted]}>
@@ -90,6 +95,7 @@ function ExpenseOption({ icon, title, description, disabled = false, onPress }: 
 }
 
 export function ManualExpenseScreen() {
+  const styles = useStyles();
   const { findCategory } = useCategories();
   const { createExpense } = useExpenses();
   const { wallets, refresh: refreshFinance } = useFinance();
@@ -190,6 +196,8 @@ export function ManualExpenseScreen() {
 }
 
 function FormButton({ label, value, icon, placeholder, error, onPress }: { label: string; value: string; icon: Parameters<typeof AppIcon>[0]['name']; placeholder?: boolean; error?: string; onPress: () => void }) {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <View style={styles.fieldGroup}>
       <AppText variant="bodyMedium" style={styles.fieldLabel}>{label}</AppText>
@@ -204,6 +212,7 @@ function FormButton({ label, value, icon, placeholder, error, onPress }: { label
 }
 
 function SheetModal({ visible, title, onClose, children }: { visible: boolean; title: string; onClose: () => void; children: ReactNode }) {
+  const styles = useStyles();
   return (
     <DraggableBottomSheet visible={visible} onClose={onClose}>{(dismiss) => <>
       <View style={styles.rowBetween}>
@@ -216,6 +225,8 @@ function SheetModal({ visible, title, onClose, children }: { visible: boolean; t
 }
 
 function CategoryPicker({ visible, selectedId, onClose, onSelect }: { visible: boolean; selectedId: string; onClose: () => void; onSelect: (id: string) => void }) {
+  const colors = useColors();
+  const styles = useStyles();
   const { categories } = useCategories();
   return (
     <SheetModal visible={visible} title="Choose Category" onClose={onClose}>
@@ -236,6 +247,8 @@ function CategoryPicker({ visible, selectedId, onClose, onSelect }: { visible: b
 
 /** Wallet chooser shared by every form that moves money, so each lists wallets the same way. */
 export function WalletPicker({ visible, selectedId, title = 'Choose Wallet', excludeId, onClose, onSelect }: { visible: boolean; selectedId: string; title?: string; excludeId?: string; onClose: () => void; onSelect: (id: string) => void }) {
+  const colors = useColors();
+  const styles = useStyles();
   const { wallets } = useFinance();
   return (
     <SheetModal visible={visible} title={title} onClose={onClose}>
@@ -261,6 +274,7 @@ export function WalletPicker({ visible, selectedId, title = 'Choose Wallet', exc
 }
 
 export function ExpenseDatePicker({ value, time, title = 'Date & Time', onClose, onSelect }: { value: string; time: string; title?: string; onClose: () => void; onSelect: (value: string, time: string) => void }) {
+  const styles = useStyles();
   const [draft, setDraft] = useState(value);
   const [timeDraft, setTimeDraft] = useState(isValidLocalTime(time) ? time : nowLocalTime());
   const validDate = isValidLocalDate(draft) && draft <= todayLocalDate();
@@ -278,6 +292,8 @@ export function ExpenseDatePicker({ value, time, title = 'Date & Time', onClose,
 }
 
 export function ScannerScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const [permission, requestPermission] = useCameraPermissions(); const [torch, setTorch] = useState(false); const [busy, setBusy] = useState(false); const camera = useRef<CameraView>(null); const { setSource } = useReceipt();
   const pick = async () => { const access = await ImagePicker.requestMediaLibraryPermissionsAsync(); if (!access.granted) return; const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 }); const asset = result.assets?.[0]; if (!result.canceled && asset) { setSource({ uri: asset.uri, width: asset.width, height: asset.height, size: asset.fileSize }); router.replace('/processing'); } };
   if (!permission) return <Screen scroll={false} variant={4}><View style={styles.processing}><ActivityIndicator color={colors.deepForest} /><AppText>Checking camera access…</AppText></View></Screen>;
@@ -287,6 +303,8 @@ export function ScannerScreen() {
 }
 
 export function ProcessingScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { process, progress, completed, source } = useReceipt(); const started = useRef(false);
   useEffect(() => { if (started.current) return; started.current = true; if (!source) { router.replace('/add-expense'); return; } void process().then((result) => router.replace(result === 'review' ? '/receipt-review' : '/recognition-failed')); }, [process, source]);
   const steps = ['Preparing image', 'Checking image quality', 'Reading receipt', 'Checking receipt structure', 'Extracting details', 'Checking totals'];
@@ -304,6 +322,7 @@ const RECEIPT_KINDS: { id: Exclude<ReceiptKind, 'unknown'>; label: string; icon:
  * editing "350.5" never snaps to "350.50" mid-keystroke.
  */
 function MoneyField({ label, cents, onChange, style, chips = false }: { label?: string; cents: number; onChange: (cents: number) => void; style?: object; chips?: boolean }) {
+  const styles = useStyles();
   const [text, setText] = useState(cents ? (cents / 100).toFixed(2) : '');
   const set = (next: string) => { setText(next); onChange(Math.round((Number(next) || 0) * 100)); };
   const field = <FormInput label={label} icon={label ? 'currency-php' : undefined} placeholder="0.00" value={text} keyboardType="decimal-pad" inputMode="decimal" onChangeText={(value) => set(normalizeAmountInput(value, text))} style={style} />;
@@ -311,6 +330,8 @@ function MoneyField({ label, cents, onChange, style, chips = false }: { label?: 
 }
 
 function ChangeRow({ label, before, after }: { label: string; before: number; after: number }) {
+  const colors = useColors();
+  const styles = useStyles();
   const money = (value: number) => `${value < 0 ? '−' : ''}${formatPeso(Math.abs(value), { alwaysShowDecimals: true })}`;
   return (
     <View style={styles.changeRow}>
@@ -323,6 +344,8 @@ function ChangeRow({ label, before, after }: { label: string; before: number; af
 }
 
 export function ReceiptReviewScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { draft, updateDraft, save, saving, reset } = useReceipt();
   const { expenses, refresh } = useExpenses();
   const { findCategory } = useCategories();
@@ -430,6 +453,7 @@ export function ReceiptReviewScreen() {
 }
 
 export function RecognitionFailedScreen() {
+  const styles = useStyles();
   const { failure, failureMessage, setSource, startManualDraft } = useReceipt();
   const [picking, setPicking] = useState(false);
   // A photo that isn't a receipt is the user's to fix; a reader that is down isn't.
@@ -460,7 +484,7 @@ export function RecognitionFailedScreen() {
   </View></Screen>;
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   muted: { color: colors.muted }, white: { color: colors.surface }, center: { textAlign: 'center' }, fill: { width: '100%', height: '100%' },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   addExpenseModal: { flex: 1, width: '100%', maxWidth: 480, alignSelf: 'center', backgroundColor: 'transparent' },
@@ -494,4 +518,4 @@ const styles = StyleSheet.create({
   kindRow: { flexDirection: 'row', gap: 8 }, kindOption: { flex: 1, minHeight: 64, borderRadius: radii.md, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', gap: 4 }, kindOptionSelected: { backgroundColor: colors.deepForest, borderColor: colors.deepForest }, kindText: { color: colors.deepForest, fontFamily: 'JakartaSemiBold' }, kindTextSelected: { color: colors.surface, fontFamily: 'JakartaSemiBold' },
   changeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 }, changeLabel: { flex: 1, minWidth: 0 }, changeAfter: { color: colors.deepForest, fontFamily: 'JakartaBold' },
   warningText: { color: '#9A6400' }, itemEditRow: { flexDirection: 'row', gap: 8, alignItems: 'center' }, itemNameInput: { flex: 1 }, itemAmountInput: { width: 104 },
-});
+}));

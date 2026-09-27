@@ -1,25 +1,31 @@
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PressableScale } from '@/components/common/motion';
 import { Skeleton } from '@/components/common/skeleton';
 import { AppIcon, AppText } from '@/components/common/ui';
-import { colors, radii } from '@/constants/theme';
+import { radii } from '@/constants/theme';
+import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 import { attachmentUrl } from '@/features/expenses/attachment-service';
 
 export type PickedPhoto = { uri: string; width: number; height: number };
 
+// The photo viewer is always a black backdrop, so its control stays light in both themes.
+const VIEWER_CONTROL = 'rgba(255,255,255,.18)';
+
 /** Full-screen view of a receipt or attached photo. */
 export function PhotoViewer({ uri, onClose }: { uri: string | null; onClose: () => void }) {
+  const colors = useColors();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={Boolean(uri)} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <View style={styles.viewer}>
         {uri ? <Image source={{ uri }} contentFit="contain" style={styles.viewerImage} /> : null}
-        <Pressable accessibilityRole="button" accessibilityLabel="Close photo" hitSlop={10} onPress={onClose} style={[styles.viewerClose, { top: insets.top + 12 }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Close photo" hitSlop={10} onPress={onClose} style={[styles.viewerClose, { top: insets.top + 12, backgroundColor: VIEWER_CONTROL }]}>
           <AppIcon name="close" size={24} color={colors.white} />
         </Pressable>
       </View>
@@ -39,6 +45,8 @@ async function pick(source: 'camera' | 'library'): Promise<PickedPhoto | null> {
 
 /** Optional photo on a form: add from camera or gallery, preview, remove. */
 export function AttachmentField({ photo, onChange }: { photo: PickedPhoto | null; onChange: (photo: PickedPhoto | null) => void }) {
+  const colors = useColors();
+  const styles = useStyles();
   const [viewing, setViewing] = useState(false);
   const choose = async (source: 'camera' | 'library') => { const next = await pick(source); if (next) onChange(next); };
   return (
@@ -76,6 +84,8 @@ export function AttachmentField({ photo, onChange }: { photo: PickedPhoto | null
 
 /** A saved transaction's photo, loaded through a short-lived private link. */
 export function StoredAttachment({ path, label = 'Receipt photo' }: { path: string; label?: string }) {
+  const colors = useColors();
+  const styles = useStyles();
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [viewing, setViewing] = useState(false);
@@ -99,7 +109,7 @@ export function StoredAttachment({ path, label = 'Receipt photo' }: { path: stri
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   muted: { color: colors.muted },
   fill: { width: '100%', height: '100%' },
   field: { gap: 7 },
@@ -115,5 +125,5 @@ const styles = StyleSheet.create({
   storedThumb: { width: 64, height: 64, borderRadius: radii.sm, overflow: 'hidden', backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' },
   viewer: { flex: 1, backgroundColor: 'rgba(0,0,0,.94)', justifyContent: 'center' },
   viewerImage: { width: '100%', height: '86%' },
-  viewerClose: { position: 'absolute', right: 16, width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,.18)' },
-});
+  viewerClose: { position: 'absolute', right: 16, width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+}));

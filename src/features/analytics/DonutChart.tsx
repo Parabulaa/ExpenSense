@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { View, type LayoutChangeEvent } from 'react-native';
 import Animated, { useAnimatedProps, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
-import { colors } from '@/constants/theme';
+import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 import type { CategorySlice } from './analytics';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -82,6 +82,8 @@ export function DonutChart({
   minSize?: number;
   maxSize?: number;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   // Measured rather than fixed, so the chart fits whatever width the card gives
   // it instead of overflowing a narrow phone.
   const [available, setAvailable] = useState(0);
@@ -123,8 +125,8 @@ export function DonutChart({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   wrap: { alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
   svg: { transform: [{ rotate: '-90deg' }] },
   center: { position: 'absolute', alignItems: 'center' },
-});
+}));

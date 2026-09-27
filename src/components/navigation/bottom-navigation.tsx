@@ -1,7 +1,8 @@
 import { router, usePathname } from 'expo-router';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, shadow } from '@/constants/theme';
+import { shadow } from '@/constants/theme';
+import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 import { AppIcon, AppText } from '@/components/common/ui';
 import { PressableScale } from '@/components/common/motion';
 import { useAddExpenseOverlay } from '@/features/expenses/AddExpenseOverlayProvider';
@@ -32,6 +33,8 @@ export function useBottomNavInset() {
 }
 
 export function BottomNavigation() {
+  const colors = useColors();
+  const styles = useStyles();
   const { openAddExpense } = useAddExpenseOverlay();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
@@ -92,7 +95,7 @@ export function BottomNavigation() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   outer: {
     position: 'absolute',
     left: 0,
@@ -166,4 +169,4 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 1,
   },
-});
+}));

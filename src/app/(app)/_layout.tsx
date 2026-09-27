@@ -1,6 +1,6 @@
 import { Slot, router, usePathname } from 'expo-router';
 import { type PropsWithChildren, useEffect, useRef } from 'react';
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
+import { View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { OrganicBackground } from '@/components/common/organic-background';
 import { BottomNavigation } from '@/components/navigation/bottom-navigation';
 import { FloatingRadialMenu } from '@/components/navigation/floating-radial-menu';
-import { colors } from '@/constants/theme';
+import { makeStyles } from '@/features/settings/ThemeProvider';
 import { selectionFeedback } from '@/lib/haptics';
 
 /**
@@ -42,6 +42,7 @@ function rootIndexFor(pathname: string) {
  * chrome stays visually fixed whether the user swipes or taps a tab.
  */
 export default function AppShellLayout() {
+  const styles = useStyles();
   const pathname = usePathname();
   const index = rootIndexFor(pathname);
 
@@ -66,6 +67,7 @@ export default function AppShellLayout() {
 }
 
 function SwipeViewport({ index, children }: PropsWithChildren<{ index: number }>) {
+  const styles = useStyles();
   const { width } = useWindowDimensions();
   const canvasWidth = Math.min(width, 480);
   const translateX = useSharedValue(0);
@@ -169,7 +171,7 @@ function SwipeViewport({ index, children }: PropsWithChildren<{ index: number }>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: {
     flex: 1,
     alignItems: 'center',
@@ -186,4 +188,4 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   viewport: { flex: 1, overflow: 'hidden' },
   page: { flex: 1 },
-});
+}));

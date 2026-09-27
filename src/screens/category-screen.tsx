@@ -1,10 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
 import { FadeSlideIn } from '@/components/common/motion';
 import { Screen } from '@/components/common/screen';
 import { AppIcon, AppText, BackButton, Card, PrimaryButton, ProgressBar } from '@/components/common/ui';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing } from '@/constants/theme';
+import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 import { useCategories } from '@/features/categories/CategoriesProvider';
 import { useBudgets } from '@/features/budget/BudgetProvider';
 import { useExpenses } from '@/features/expenses/ExpensesProvider';
@@ -17,6 +18,8 @@ function formatMoney(value: number) {
 }
 
 export function CategoryDetailScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { expenses } = useExpenses();
   const { findCategory } = useCategories();
@@ -127,7 +130,7 @@ export function CategoryDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   page: { paddingVertical: spacing.lg, gap: 14 },
   center: { textAlign: 'center' },
   muted: { color: colors.muted },
@@ -177,4 +180,4 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: spacing.lg,
   },
-});
+}));

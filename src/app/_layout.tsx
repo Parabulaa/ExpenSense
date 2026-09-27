@@ -15,7 +15,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ToastProvider } from '@/components/common/toast';
-import { colors } from '@/constants/theme';
+import { ThemeProvider, useAppTheme } from '@/features/settings/ThemeProvider';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
 import { useAuthGuard } from '@/features/auth/hooks/useAuthGuard';
 import { BudgetProvider } from '@/features/budget/BudgetProvider';
@@ -46,11 +46,11 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <StatusBar style="dark" />
-
         <AuthProvider>
           <ProfileProvider>
             <SettingsProvider>
+            <ThemeProvider>
+              <ThemedStatusBar />
               <ExpensesProvider>
                 <FinanceProvider><ReceiptProvider><CategoriesProvider>
                   <BudgetProvider>
@@ -67,6 +67,7 @@ export default function RootLayout() {
                   </BudgetProvider>
                 </CategoriesProvider></ReceiptProvider></FinanceProvider>
               </ExpensesProvider>
+            </ThemeProvider>
             </SettingsProvider>
           </ProfileProvider>
         </AuthProvider>
@@ -75,10 +76,16 @@ export default function RootLayout() {
   );
 }
 
+function ThemedStatusBar() {
+  const { scheme } = useAppTheme();
+  return <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />;
+}
+
 // Waits for the initial Supabase session check before showing any route, so
 // we never flash a signed-out screen for a signed-in user (or vice versa),
 // and applies auth-based route protection for every navigation after that.
 function RootNavigation() {
+  const { colors } = useAppTheme();
   const { initialized } = useAuth();
   useAuthGuard();
 

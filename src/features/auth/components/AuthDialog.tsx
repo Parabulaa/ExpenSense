@@ -1,7 +1,8 @@
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/common/ui';
-import { colors, radii, shadow, spacing } from '@/constants/theme';
+import { radii, shadow, spacing } from '@/constants/theme';
+import { makeStyles } from '@/features/settings/ThemeProvider';
 
 export type AuthDialogAction = {
   label: string;
@@ -30,6 +31,7 @@ export function AuthDialog({
   tertiaryAction,
   onRequestClose,
 }: AuthDialogProps) {
+  const s = useStyles();
   // While an action is running the dialog must not be dismissable — backdrop
   // tap or hardware back would otherwise strand an in-flight request.
   const busy = Boolean(primaryAction.loading);
@@ -100,7 +102,7 @@ export function AuthDialog({
   );
 }
 
-const s = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   backdrop: {
     flex: 1,
     backgroundColor: colors.overlay,
@@ -143,4 +145,4 @@ const s = StyleSheet.create({
   tertiaryButtonText: { color: colors.muted },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.6 },
-});
+}));

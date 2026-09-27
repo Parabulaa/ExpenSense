@@ -14,7 +14,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PressableScale } from '@/components/common/motion';
 import { AppIcon, AppText } from '@/components/common/ui';
-import { colors, radii, shadow } from '@/constants/theme';
+import { radii, shadow } from '@/constants/theme';
+import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 import { useNotifications } from '@/features/notifications/NotificationsProvider';
 import { selectionFeedback } from '@/lib/haptics';
 
@@ -43,6 +44,8 @@ const ACTIONS: MenuAction[] = [
 ];
 
 export function FloatingRadialMenu() {
+  const colors = useColors();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const { unreadCount } = useNotifications();
   const [open, setOpen] = useState(false);
@@ -96,6 +99,8 @@ export function FloatingRadialMenu() {
 }
 
 function RadialAction({ action, badge, index, open, onPress }: { action: MenuAction; badge: number; index: number; open: boolean; onPress: () => void }) {
+  const colors = useColors();
+  const styles = useStyles();
   const reducedMotion = useReducedMotion();
   const progress = useSharedValue(0);
 
@@ -136,7 +141,7 @@ function RadialAction({ action, badge, index, open, onPress }: { action: MenuAct
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   backdrop: {
     position: 'absolute',
     top: 0,
@@ -231,4 +236,4 @@ const styles = StyleSheet.create({
   // Spans from the bell's edge to the trigger's edge along the line between their centres.
   connectorNotifications: { left: 153, top: 51, width: 25, transform: [{ rotate: '-40deg' }] },
   connectorFaq: { left: 192, top: 56, width: 1.5, height: 18 },
-});
+}));

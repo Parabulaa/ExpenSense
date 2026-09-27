@@ -4,13 +4,13 @@ import {
   Platform,
   RefreshControl,
   ScrollView,
-  StyleSheet,
   View,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors, spacing } from '@/constants/theme';
+import { spacing } from '@/constants/theme';
+import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 import { OrganicBackground } from './ui';
 
 type ScreenProps = PropsWithChildren<{
@@ -44,6 +44,8 @@ export function Screen({
   onRefresh,
   embedded = false,
 }: ScreenProps) {
+  const colors = useColors();
+  const styles = useStyles();
   const { width } = useWindowDimensions();
 
   const horizontalPadding =
@@ -131,7 +133,7 @@ export function Screen({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: {
     flex: 1,
     alignItems: 'center',
@@ -161,4 +163,4 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     flexGrow: 1,
   },
-});
+}));

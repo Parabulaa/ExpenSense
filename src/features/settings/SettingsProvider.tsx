@@ -5,11 +5,14 @@ const STORAGE_KEY = 'expensense.settings.v1';
 
 export type BudgetAlertThreshold = 80 | 90 | 100;
 
+export type ThemeMode = 'system' | 'light' | 'dark';
+
 export type AppSettings = {
   budgetAlerts: boolean;
   budgetAlertThreshold: BudgetAlertThreshold;
   spendingInsights: boolean;
   transactionReminders: boolean;
+  themeMode: ThemeMode;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -17,6 +20,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   budgetAlertThreshold: 80,
   spendingInsights: true,
   transactionReminders: false,
+  themeMode: 'system',
 };
 
 type SettingsContextValue = {
@@ -39,6 +43,9 @@ function parseSettings(raw: string | null): AppSettings {
         : DEFAULT_SETTINGS.budgetAlertThreshold,
       spendingInsights: typeof parsed.spendingInsights === 'boolean' ? parsed.spendingInsights : DEFAULT_SETTINGS.spendingInsights,
       transactionReminders: typeof parsed.transactionReminders === 'boolean' ? parsed.transactionReminders : DEFAULT_SETTINGS.transactionReminders,
+      themeMode: parsed.themeMode === 'light' || parsed.themeMode === 'dark' || parsed.themeMode === 'system'
+        ? parsed.themeMode
+        : DEFAULT_SETTINGS.themeMode,
     };
   } catch {
     // Corrupt or hand-edited storage shouldn't brick the settings screen.

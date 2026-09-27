@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, TextInput, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
@@ -23,7 +23,8 @@ import { Screen } from '@/components/common/screen';
 import { AppIcon, AppText, Card, ProgressBar } from '@/components/common/ui';
 import { Skeleton } from '@/components/common/skeleton';
 import { useBottomNavInset } from '@/components/navigation/bottom-navigation';
-import { colors, radii, shadow, spacing } from '@/constants/theme';
+import { radii, shadow, spacing } from '@/constants/theme';
+import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 import { analyticsForMonth, mascotInsight, previousMonth } from '@/features/analytics/analytics';
 import { mascotImage, mascotMood } from '@/features/analytics/mascot-mood';
 import {
@@ -117,6 +118,8 @@ function SparkBar({
   index: number;
   active: boolean;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const style = useAnimatedStyle(() => {
     const staged = Math.max(0, Math.min(1, grow.value * 6 - index));
     return { height: 12 + staged * ratio * 56 };
@@ -126,7 +129,7 @@ function SparkBar({
     <Animated.View
       style={[
         styles.sparkBar,
-        { backgroundColor: active ? colors.softGreen : '#CAD7C3' },
+        { backgroundColor: active ? colors.softGreen : colors.lightGreen },
         style,
       ]}
     />
@@ -134,6 +137,7 @@ function SparkBar({
 }
 
 function SparkBars({ bars }: { bars: number[] }) {
+  const styles = useStyles();
   const reduced = useReducedMotion();
   const grow = useSharedValue(reduced ? 1 : 0);
 
@@ -175,6 +179,8 @@ function MetricTile({
   loading?: boolean;
   onPress: () => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const [hovered, setHovered] = useState(false);
 
   return (
@@ -240,6 +246,8 @@ function CategoryTile({
   onDragCancel: () => void;
   onDrop: (id: string, target: number) => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const reduced = useReducedMotion();
   const dragX = useSharedValue(0);
   const dragY = useSharedValue(0);
@@ -358,6 +366,8 @@ function CategoryTile({
 }
 
 export function HomeScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const { user } = useAuth();
   const { expenses, loading: expensesLoading, loadError, revalidate: revalidateExpenses } = useExpenses();
   const { budgets, loading: budgetsLoading, revalidate: revalidateBudgets } = useBudgets();
@@ -819,7 +829,7 @@ export function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   page: {
     alignSelf: 'center',
     maxWidth: 480,
@@ -1213,4 +1223,4 @@ const styles = StyleSheet.create({
   assistantSuggestionText: { color: colors.deepForest, fontFamily: 'JakartaSemiBold' },
   assistantInput: { flex: 1, minHeight: 50, borderRadius: 25, paddingHorizontal: 17, fontFamily: 'JakartaRegular', fontSize: 15, color: colors.text, backgroundColor: '#F0F3EC', borderWidth: 1, borderColor: colors.line },
   assistantSend: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.deepForest },
-});
+}));

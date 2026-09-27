@@ -1,10 +1,11 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
 import { DraggableBottomSheet } from '@/components/common/draggable-bottom-sheet';
 import { AppIcon, AppText, PrimaryButton, SecondaryButton } from '@/components/common/ui';
-import { colors, radii } from '@/constants/theme';
+import { radii } from '@/constants/theme';
+import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 import type { InsightDetail } from './insight-details';
 import { mascotImage } from './mascot-mood';
 
@@ -13,6 +14,8 @@ import { mascotImage } from './mascot-mood';
  * mean, and concrete next steps — instead of dropping the user on another screen.
  */
 export function InsightDetailSheet({ detail, onClose }: { detail: InsightDetail | null; onClose: () => void }) {
+  const colors = useColors();
+  const styles = useStyles();
   const toneColor = detail?.tone === 'critical' ? colors.danger : detail?.tone === 'warning' ? colors.warning : colors.deepForest;
   const toneBackground = detail?.tone === 'critical' ? colors.dangerSoft : detail?.tone === 'warning' ? colors.warningSoft : colors.pale;
   return (
@@ -60,7 +63,7 @@ export function InsightDetailSheet({ detail, onClose }: { detail: InsightDetail 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   muted: { color: colors.muted },
   header: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   headerCopy: { flex: 1, minWidth: 0, gap: 3 },
@@ -71,4 +74,4 @@ const styles = StyleSheet.create({
   tips: { gap: 10 },
   tip: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   tipText: { flex: 1, minWidth: 0 },
-});
+}));

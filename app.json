@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/Branding/Logo_Mark.png",
     "scheme": "expensense",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.expensense.app"

@@ -1,8 +1,9 @@
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
 import { PressableScale } from '@/components/common/motion';
 import { AppIcon, AppText } from '@/components/common/ui';
-import { colors, radii, shadow } from '@/constants/theme';
+import { radii, shadow } from '@/constants/theme';
+import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 import type { Wallet } from '@/features/finance/types';
 import { walletAccent, walletTypeMeta } from '@/features/finance/wallet-presentation';
 import { formatPeso } from '@/lib/format';
@@ -28,6 +29,8 @@ type Props = {
  * into two different looks.
  */
 export function WalletCardFace({ wallet, index = 0, hidden = false, moreLabel, onPress, onMore }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const accent = walletAccent(wallet.color, index);
   const meta = walletTypeMeta(wallet.type);
   const balance = hidden ? HIDDEN_AMOUNT : formatPeso(wallet.balanceCents, { alwaysShowDecimals: true });
@@ -87,6 +90,8 @@ export function WalletCardFace({ wallet, index = 0, hidden = false, moreLabel, o
 
 /** Dashed twin of the card face, sized identically so the grid stays even. */
 export function AddWalletCard({ onPress }: { onPress: () => void }) {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <PressableScale
       accessibilityRole="button"
@@ -101,7 +106,8 @@ export function AddWalletCard({ onPress }: { onPress: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+// Fixed colors here sit on the wallet's own accent, which is the same in both themes.
+const useStyles = makeStyles((colors) => ({
   card: {
     width: '100%',
     aspectRatio: CARD_RATIO,
@@ -117,8 +123,8 @@ const styles = StyleSheet.create({
     gap: 5,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: '#C6D3C1',
-    backgroundColor: 'rgba(255,253,247,.72)',
+    borderColor: colors.lightGreen,
+    backgroundColor: colors.surface,
     shadowOpacity: 0,
     elevation: 0,
   },
@@ -186,4 +192,4 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: 'rgba(255,255,255,.85)',
   },
-});
+}), { adaptLiterals: false });

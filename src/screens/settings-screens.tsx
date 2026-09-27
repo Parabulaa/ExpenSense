@@ -1,13 +1,14 @@
 import Constants from 'expo-constants';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { Keyboard, Linking, StyleSheet, Switch, View } from 'react-native';
+import { Keyboard, Linking, Switch, View } from 'react-native';
 
 import { FadeSlideIn, PressableScale } from '@/components/common/motion';
 import { Screen } from '@/components/common/screen';
 import { useToast } from '@/components/common/toast';
 import { AppIcon, AppText, BackButton, Card, FormInput, PrimaryButton } from '@/components/common/ui';
-import { colors, radii, spacing } from '@/constants/theme';
+import { darkColors, lightColors, radii, spacing } from '@/constants/theme';
+import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 import * as authService from '@/features/auth/auth-service';
 import { validatePasswordsMatch, validateSignUpPassword } from '@/features/auth/auth-validation';
 import { errorCopyForKind } from '@/features/auth/copy';
@@ -22,7 +23,7 @@ import { useExpenses } from '@/features/expenses/ExpensesProvider';
 import { todayLocalDate } from '@/features/expenses/validation';
 import { useProfile } from '@/features/profile/ProfileProvider';
 import { MAX_FULL_NAME_LENGTH, validateProfileName } from '@/features/profile/validation';
-import { useSettings, type BudgetAlertThreshold } from '@/features/settings/SettingsProvider';
+import { useSettings, type BudgetAlertThreshold, type ThemeMode } from '@/features/settings/SettingsProvider';
 import { selectionFeedback } from '@/lib/haptics';
 
 /** Shared chrome for every settings sub-page: back arrow, title, subtitle. */
@@ -37,6 +38,7 @@ function SettingsPage({
   variant?: 4 | 8 | 11;
   children: React.ReactNode;
 }) {
+  const s = useStyles();
   return (
     <Screen variant={variant} bottomInset={48}>
       <View style={s.page}>
@@ -56,6 +58,7 @@ function SettingsPage({
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
+  const s = useStyles();
   return (
     <View style={s.infoRow}>
       <AppText variant="small" style={s.muted}>{label}</AppText>
@@ -65,6 +68,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 export function AccountInformationScreen() {
+  const s = useStyles();
   const { profile, displayName, email, loading, updateFullName } = useProfile();
   const { showToast } = useToast();
   const saving = useRef(false);
@@ -148,6 +152,7 @@ export function AccountInformationScreen() {
 }
 
 export function ChangePasswordScreen() {
+  const s = useStyles();
   const { showToast } = useToast();
   const saving = useRef(false);
   const [password, setPassword] = useState('');
@@ -266,6 +271,8 @@ function ToggleRow({
   disabled?: boolean;
   onValueChange: (next: boolean) => void;
 }) {
+  const colors = useColors();
+  const s = useStyles();
   return (
     <View style={s.toggleRow}>
       <View style={s.settingIcon}><AppIcon name={icon} size={21} color={colors.deepForest} /></View>
@@ -278,7 +285,7 @@ function ToggleRow({
         value={value}
         disabled={disabled}
         onValueChange={onValueChange}
-        trackColor={{ false: '#CBD8C6', true: colors.softGreen }}
+        trackColor={{ false: colors.lightGreen, true: colors.softGreen }}
         thumbColor={value ? colors.deepForest : colors.surface}
       />
     </View>
@@ -286,6 +293,8 @@ function ToggleRow({
 }
 
 export function NotificationsScreen() {
+  const colors = useColors();
+  const s = useStyles();
   const { settings, ready, updateSettings } = useSettings();
   const { showToast } = useToast();
 
@@ -369,33 +378,68 @@ export function NotificationsScreen() {
   );
 }
 
+const THEME_OPTIONS: { mode: ThemeMode; label: string; description: string; icon: Parameters<typeof AppIcon>[0]['name'] }[] = [
+  { mode: 'system', label: 'Match device', description: 'Follows your phone’s light or dark setting.', icon: 'theme-light-dark' },
+  { mode: 'light', label: 'Light', description: 'The cream and forest-green ExpenSense theme.', icon: 'white-balance-sunny' },
+  { mode: 'dark', label: 'Dark', description: 'Deep forest tones that are easier on the eyes at night.', icon: 'weather-night' },
+];
+
+// Swatches preview each theme's own colors, so they're set inline rather than
+// through the (theme-adapted) style sheet.
+const THEME_SWATCH: Record<ThemeMode, { backgroundColor: string; borderColor: string; icon: string }> = {
+  system: { backgroundColor: lightColors.pale, borderColor: darkColors.cream, icon: lightColors.deepForest },
+  light: { backgroundColor: lightColors.cream, borderColor: lightColors.lightGreen, icon: lightColors.deepForest },
+  dark: { backgroundColor: darkColors.cream, borderColor: darkColors.lightGreen, icon: darkColors.deepForest },
+};
+
 export function AppearanceScreen() {
+  const colors = useColors();
+  const s = useStyles();
+  const { settings, ready, updateSettings } = useSettings();
+  const { showToast } = useToast();
+
+  const choose = async (mode: ThemeMode) => {
+    if (mode === settings.themeMode) return;
+    selectionFeedback();
+    const saved = await updateSettings({ themeMode: mode });
+    if (!saved) showToast('Couldn’t save your theme on this device.', { tone: 'warning', icon: 'alert-circle-outline' });
+  };
+
   return (
     <SettingsPage title="Appearance" subtitle="How ExpenSense looks on this device.">
       <FadeSlideIn index={1}>
         <Card style={s.card}>
-          <View style={s.themeRow}>
-            <View style={[s.themeSwatch, s.themeSwatchLight]}>
-              <AppIcon name="white-balance-sunny" size={22} color={colors.deepForest} />
-            </View>
-            <View style={s.toggleCopy}>
-              <AppText variant="h3">Light</AppText>
-              <AppText variant="small" style={s.muted}>The cream and forest-green ExpenSense theme.</AppText>
-            </View>
-            <View style={s.activePill}><AppText variant="small" style={s.activePillText}>Active</AppText></View>
-          </View>
-
-          <View style={s.divider} />
-
-          <View style={[s.themeRow, s.themeRowDisabled]}>
-            <View style={[s.themeSwatch, s.themeSwatchDark]}>
-              <AppIcon name="weather-night" size={22} color={colors.lightGreen} />
-            </View>
-            <View style={s.toggleCopy}>
-              <AppText variant="h3" style={s.muted}>Dark</AppText>
-              <AppText variant="small" style={s.muted}>Not available yet — planned for a later release.</AppText>
-            </View>
-          </View>
+          {THEME_OPTIONS.map((option, i) => {
+            const active = settings.themeMode === option.mode;
+            const swatch = THEME_SWATCH[option.mode];
+            return (
+              <View key={option.mode}>
+                {i > 0 && <View style={s.divider} />}
+                <PressableScale
+                  accessibilityRole="radio"
+                  accessibilityLabel={option.label}
+                  accessibilityHint={option.description}
+                  accessibilityState={{ checked: active, disabled: !ready }}
+                  disabled={!ready}
+                  onPress={() => void choose(option.mode)}
+                  style={s.themeRow}
+                >
+                  <View style={[s.themeSwatch, { backgroundColor: swatch.backgroundColor, borderColor: swatch.borderColor }]}>
+                    <AppIcon name={option.icon} size={22} color={swatch.icon} />
+                  </View>
+                  <View style={s.toggleCopy}>
+                    <AppText variant="h3">{option.label}</AppText>
+                    <AppText variant="small" style={s.muted}>{option.description}</AppText>
+                  </View>
+                  <AppIcon
+                    name={active ? 'radiobox-marked' : 'radiobox-blank'}
+                    size={22}
+                    color={active ? colors.deepForest : colors.muted}
+                  />
+                </PressableScale>
+              </View>
+            );
+          })}
         </Card>
       </FadeSlideIn>
 
@@ -413,6 +457,8 @@ export function AppearanceScreen() {
 }
 
 function BulletRow({ icon, title, body }: { icon: Parameters<typeof AppIcon>[0]['name']; title: string; body: string }) {
+  const colors = useColors();
+  const s = useStyles();
   return (
     <View style={s.bulletRow}>
       <View style={s.settingIcon}><AppIcon name={icon} size={20} color={colors.deepForest} /></View>
@@ -425,6 +471,7 @@ function BulletRow({ icon, title, body }: { icon: Parameters<typeof AppIcon>[0][
 }
 
 export function PrivacyDataScreen() {
+  const s = useStyles();
   return (
     <SettingsPage title="Privacy & Data" subtitle="What ExpenSense stores and why." variant={11}>
       <FadeSlideIn index={1}>
@@ -509,6 +556,8 @@ const FAQ: { question: string; answer: string }[] = [
 ];
 
 function FaqItem({ question, answer, index }: { question: string; answer: string; index: number }) {
+  const colors = useColors();
+  const s = useStyles();
   const [open, setOpen] = useState(false);
 
   return (
@@ -531,6 +580,8 @@ function FaqItem({ question, answer, index }: { question: string; answer: string
 }
 
 export function HelpSupportScreen() {
+  const colors = useColors();
+  const s = useStyles();
   return (
     <SettingsPage title="Help & Support" subtitle="Answers to the most common questions.">
       {FAQ.map((item, index) => (
@@ -551,6 +602,8 @@ export function HelpSupportScreen() {
 }
 
 export function AboutScreen() {
+  const colors = useColors();
+  const s = useStyles();
   const version = Constants.expoConfig?.version ?? '1.0.0';
   const sdk = Constants.expoConfig?.sdkVersion;
 
@@ -598,7 +651,7 @@ export function AboutScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   page: { padding: 24, gap: 16 },
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
   headerCopy: { flex: 1, minWidth: 0, gap: 2 },
@@ -642,12 +695,7 @@ const s = StyleSheet.create({
   thresholdActiveText: { color: colors.surface },
   thresholdDisabled: { opacity: 0.5 },
   themeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6 },
-  themeRowDisabled: { opacity: 0.6 },
-  themeSwatch: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
-  themeSwatchLight: { backgroundColor: '#DDEBDD' },
-  themeSwatchDark: { backgroundColor: colors.text },
-  activePill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: radii.pill, backgroundColor: '#DDEBDD' },
-  activePillText: { color: colors.deepForest, fontFamily: 'JakartaSemiBold' },
+  themeSwatch: { width: 46, height: 46, borderRadius: 23, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   faqCard: {
     borderRadius: radii.lg,
     backgroundColor: 'rgba(255,253,247,.96)',
@@ -708,9 +756,11 @@ const s = StyleSheet.create({
   alertIconCritical: { backgroundColor: colors.dangerSoft },
   alertIconWarning: { backgroundColor: colors.warningSoft },
   unreadDot: { width: 9, height: 9, borderRadius: radii.pill, backgroundColor: colors.success },
-});
+}));
 
 export function NotificationsFeedScreen() {
+  const colors = useColors();
+  const s = useStyles();
   const { alerts, unreadCount, isRead, markAllRead } = useNotifications();
   const cleared = useRef(false);
   const { expenses } = useExpenses();

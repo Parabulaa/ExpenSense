@@ -6,7 +6,6 @@ import {
   type LayoutChangeEvent,
   Pressable,
   ScrollView,
-  StyleSheet,
   type StyleProp,
   useWindowDimensions,
   View,
@@ -28,7 +27,8 @@ import Animated, {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppIcon, AppText, Brand, Card, PrimaryButton, SecondaryButton } from '@/components/common/ui';
-import { assets, colors, radii } from '@/constants/theme';
+import { assets, radii } from '@/constants/theme';
+import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 
 type OnboardingPageData = {
   id: string;
@@ -93,6 +93,7 @@ const snapEasing = Easing.out(Easing.cubic);
 const AnimatedExpoImage = Animated.createAnimatedComponent(Image);
 
 export default function OnboardingExperience() {
+  const styles = useStyles();
   const windowSize = useWindowDimensions();
   const initialViewportWidth = Math.min(windowSize.width, SHELL_MAX_WIDTH);
   const initialViewportHeight = Math.max(
@@ -255,6 +256,7 @@ function OnboardingPage({
   heroHeight: number;
   compact: boolean;
 }) {
+  const styles = useStyles();
   return (
     <ScrollView
       style={[styles.page, { width, flexBasis: width }]}
@@ -293,6 +295,8 @@ function SummaryCard({
   summary: OnboardingPageData['summary'];
   compact: boolean;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <Card style={[styles.summaryCard, compact && styles.summaryCardCompact]}>
       <View style={[styles.summaryIcon, compact && styles.summaryIconCompact]}>
@@ -326,6 +330,7 @@ function Pagination({
   width: number;
   onSelect: (index: number) => void;
 }) {
+  const styles = useStyles();
   return (
     <View style={styles.pagination} accessibilityRole="tablist">
       {pages.map((page, index) => (
@@ -352,6 +357,8 @@ function PaginationDot({
   translateX: SharedValue<number>;
   onPress: () => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const dotStyle = useAnimatedStyle(() => {
     const position = width > 0 ? -translateX.value / width : 0;
     const distance = Math.abs(position - index);
@@ -443,6 +450,7 @@ function FloatingShape({
 }
 
 function AnimatedBackgroundLayer({ reducedMotion }: { reducedMotion: boolean }) {
+  const styles = useStyles();
   return (
     <View style={styles.backgroundLayer} accessible={false}>
       <FloatingShape
@@ -544,6 +552,7 @@ function HeroMascotLayer({
   width: number;
   heroHeight: number;
 }) {
+  const styles = useStyles();
   return (
     <View style={[styles.mascotLayer, { height: heroHeight }]} accessible={false}>
       {pages.map((page, index) => (
@@ -573,6 +582,7 @@ function HeroMascot({
   width: number;
   heroHeight: number;
 }) {
+  const styles = useStyles();
   const mascotWidth = Math.min(width * 0.6, 236);
 
   const fadeStyle = useAnimatedStyle(() => {
@@ -611,6 +621,7 @@ function SceneryBack({
   height: number;
   reducedMotion: boolean;
 }) {
+  const styles = useStyles();
   return (
     <View style={[styles.scenery, { height }]} accessible={false}>
       <FloatingShape
@@ -652,6 +663,7 @@ function SceneryFront({
   height: number;
   reducedMotion: boolean;
 }) {
+  const styles = useStyles();
   return (
     <View
       style={[styles.scenery, { height }]}
@@ -675,7 +687,7 @@ function SceneryFront({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   appBackground: {
     flex: 1,
     backgroundColor: colors.cream,
@@ -932,4 +944,4 @@ const styles = StyleSheet.create({
     height: 9,
     borderRadius: radii.pill,
   },
-});
+}));
