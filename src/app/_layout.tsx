@@ -85,17 +85,17 @@ function ThemedStatusBar() {
 // we never flash a signed-out screen for a signed-in user (or vice versa),
 // and applies auth-based route protection for every navigation after that.
 function RootNavigation() {
-  const { colors } = useAppTheme();
+  const { colors, ready: themeReady } = useAppTheme();
   const { initialized } = useAuth();
   useAuthGuard();
 
   useEffect(() => {
-    if (initialized) {
+    if (initialized && themeReady) {
       SplashScreen.hideAsync();
     }
-  }, [initialized]);
+  }, [initialized, themeReady]);
 
-  if (!initialized) return null;
+  if (!initialized || !themeReady) return null;
 
   return (
     <Stack

@@ -1,22 +1,23 @@
 import * as SystemUI from 'expo-system-ui';
-import { createContext, useContext, useEffect, useMemo, type PropsWithChildren } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 import { Appearance, StyleSheet, useColorScheme } from 'react-native';
 
 import { darkColors, palettes, type ColorSchemeName, type Palette } from '@/constants/theme';
 import { adaptSheetForDark, darkTint, lightInk } from '@/features/settings/adapt-color';
 import { useSettings } from '@/features/settings/SettingsProvider';
 
-type ThemeContextValue = { scheme: ColorSchemeName; colors: Palette };
+type ThemeContextValue = { scheme: ColorSchemeName; colors: Palette; ready: boolean };
 
-const ThemeContext = createContext<ThemeContextValue>({ scheme: 'light', colors: palettes.light });
+const ThemeContext = createContext<ThemeContextValue>({ scheme: 'light', colors: palettes.light, ready: false });
 
 /**
  * Resolves the user's Appearance choice (system / light / dark) into a palette.
  * Must sit inside SettingsProvider.
  */
 export function ThemeProvider({ children }: PropsWithChildren) {
-  const { settings } = useSettings();
+  const { settings, ready: settingsReady } = useSettings();
   const systemScheme = useColorScheme();
+  const [nativeThemeReady, setNativeThemeReady] = useState(false);
   const scheme: ColorSchemeName = settings.themeMode === 'system'
     ? (systemScheme === 'dark' ? 'dark' : 'light')
     : settings.themeMode;
@@ -25,14 +26,25 @@ export function ThemeProvider({ children }: PropsWithChildren) {
   // alerts) in step with an explicit choice; 'unspecified' hands control back
   // to the OS.
   useEffect(() => {
+    if (!settingsReady) return;
     Appearance.setColorScheme(settings.themeMode === 'system' ? 'unspecified' : settings.themeMode);
-  }, [settings.themeMode]);
+  }, [settings.themeMode, settingsReady]);
 
   useEffect(() => {
-    SystemUI.setBackgroundColorAsync(palettes[scheme].cream).catch(() => {});
-  }, [scheme]);
+    if (!settingsReady) return;
+    let active = true;
+    SystemUI.setBackgroundColorAsync(palettes[scheme].cream)
+      .catch(() => {})
+      .finally(() => { if (active) setNativeThemeReady(true); });
+    return () => { active = false; };
+  }, [scheme, settingsReady]);
 
-  const value = useMemo(() => ({ scheme, colors: palettes[scheme] }), [scheme]);
+  const ready = settingsReady && nativeThemeReady;
+  const value = useMemo(() => ({ scheme, colors: palettes[scheme], ready }), [ready, scheme]);
+
+  // The native splash remains visible while this returns null. This prevents
+  // the default settings object from ever producing a temporary light frame.
+  if (!ready) return null;
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
