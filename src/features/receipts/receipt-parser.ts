@@ -4,7 +4,8 @@ import type { ReceiptClassification, ReceiptDraft, ReceiptImage, ReceiptItemDraf
 const money = /(?:PHP|P|₱)?\s*([0-9]{1,7}(?:,[0-9]{3})*(?:\.[0-9]{2})|[0-9]{1,7},[0-9]{2})/i;
 const labels = /^(subtotal|sub total|tax|vat|vatable|total|cash|change|amount|balance|fee|service fee|ref|reference|transaction)/i;
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-const itemMetadata = /\b(?:tin|vat|invoice|receipt|serial|terminal|cashier|operator|table|order|date|time|address|telephone|tel\.?|permit|accreditation|official|customer|buyer)\b/i;
+const itemMetadata = /\b(?:auth(?:orization|orisation)?\s*code|approval\s*code|reference|ref\.?\s*(?:no|number)?|transaction(?:\s*(?:id|no|number))?|trace|rrn|qr\s*ph|merchant\s*id|terminal\s*id|account|card|payment|tender|change|tin|vat(?:able|\s*exempt)?|invoice|receipt|serial|terminal|cashier|operator|table|order|date|time|address|telephone|tel\.?|permit|accreditation|official|customer|buyer)\b/i;
+const nonMerchantMetadata = /\b(?:auth(?:orization|orisation)?|approval|reference|transaction|trace|rrn|qr\s*ph|merchant\s*id|terminal|cashier|operator|invoice|receipt|date|time|amount|subtotal|total|tax|vat|payment|card|account|successful|approved)\b/i;
 
 /** A detected type needs this much confidence before it is preselected. */
 export const CLASSIFICATION_THRESHOLD = 60;
@@ -170,7 +171,14 @@ export function receiptFingerprint(parts: { reference: string | null; merchant: 
 export function parseReceipt(rawText: string, image: ReceiptImage, providerConfidence = 0): ReceiptDraft {
   const lines = rawText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   const score = assessReceiptStructure(rawText);
-  const merchant = lines.find((line) => /[a-z]{3}/i.test(line) && !labels.test(line) && !/receipt|invoice/i.test(line))?.slice(0, 80) ?? 'Receipt';
+  const merchantLine = lines.find((line) =>
+    /[a-z]{3}/i.test(line)
+    && !labels.test(line)
+    && !nonMerchantMetadata.test(line)
+    && !money.test(line)
+    && !/^\W*[A-Z0-9]{4,}\W*$/i.test(line),
+  );
+  const merchant = merchantLine?.replace(/^merchant\s*[:#-]?\s*/i, '').slice(0, 80) || 'Receipt';
   const findLabeled = (pattern: RegExp, exclude?: RegExp) => {
     const line = [...lines].reverse().find((candidate) => pattern.test(candidate) && (!exclude || !exclude.test(candidate)) && money.test(candidate));
     const match = line?.match(money);
@@ -187,12 +195,19 @@ export function parseReceipt(rawText: string, image: ReceiptImage, providerConfi
     if (!matches.length) return [];
     const match = matches[matches.length - 1];
     let name = line.slice(0, match.index).replace(/^\d+\s*[x×]?\s*/i, '').trim();
-    // OCR often splits the product name from its quantity/price line.
+    // OCR sometimes splits a product name from its quantity/price line. Only
+    // the immediately preceding line is eligible: searching farther backward
+    // can turn payment metadata (for example an authorization code) into an
+    // item when the current amount is actually a VAT/subtotal value.
     if (name.length < 2 || !/[a-z]/i.test(name)) {
-      const previous = lines.slice(Math.max(0, index - 2), index).reverse().find((candidate) =>
-        /[a-z]{2}/i.test(candidate) && !labels.test(candidate) && !itemMetadata.test(candidate) && !money.test(candidate),
-      );
-      name = previous?.trim() ?? '';
+      const previous = lines[index - 1];
+      name = previous
+        && /[a-z]{2}/i.test(previous)
+        && !labels.test(previous)
+        && !itemMetadata.test(previous)
+        && !money.test(previous)
+        ? previous.trim()
+        : '';
     }
     if (itemMetadata.test(name)) return [];
     if (name.length < 2) return [];
@@ -202,7 +217,13 @@ export function parseReceipt(rawText: string, image: ReceiptImage, providerConfi
   const calculated = items.reduce((sum, item) => sum + item.lineTotalCents, 0);
   const defaultsToVat = detected.kind === 'expense' || detected.kind === 'unknown';
   const tax = printedTax || (defaultsToVat ? includedVatCents(total) : 0);
-  const resolvedSubtotal = subtotal || Math.max(0, total - tax) || calculated;
+  // When OCR repeats a VAT-inclusive grand total as "subtotal" and no printed
+  // VAT amount exists, derive the net value instead of displaying total + VAT.
+  const subtotalDuplicatesTotal = Boolean(total && subtotal && Math.abs(total - subtotal) <= 2);
+  const trustworthySubtotal = subtotal && !(defaultsToVat && !printedTax && subtotalDuplicatesTotal)
+    ? subtotal
+    : 0;
+  const resolvedSubtotal = trustworthySubtotal || Math.max(0, total - tax) || calculated;
   const resolvedTotal = total || resolvedSubtotal + tax;
   // A transfer's amount is what the recipient gets. E-wallet receipts often
   // print a "total sent" that already includes the fee; since the fee is

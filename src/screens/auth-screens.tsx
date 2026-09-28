@@ -23,13 +23,12 @@ import { useAuthDialog } from '@/features/auth/hooks/useAuthDialog';
 
 export function SplashScreen() {
   const s = useStyles();
-  const { height } = useWindowDimensions();
   const { session } = useAuth();
   useEffect(() => {
     const id = setTimeout(() => router.replace(session ? '/home' : '/onboarding'), 3200);
     return () => clearTimeout(id);
   }, [session]);
-  return <Screen scroll={false} background={false}><LiquidScene scene="splash"/><Animated.View entering={FadeIn.duration(500)} style={[s.splash,{minHeight:height}]}><View style={s.splashCopy}><Brand /><AppText variant="hero" style={s.center}>Smarter habits.{`\n`}<AppText variant="hero" style={s.green}>Brighter tomorrows.</AppText></AppText><AppText variant="h3" style={[s.center,s.muted]}>Take control of your spending{`\n`}one receipt at a time.</AppText></View><View style={s.splashLoading}><SplashLoadingDots /><AppText variant="bodyMedium" style={s.green}>Loading your brighter tomorrow...</AppText></View></Animated.View></Screen>;
+  return <Screen scroll={false} background={false}><LiquidScene scene="splash"/><Animated.View entering={FadeIn.duration(500)} style={s.splash}><View style={s.splashCopy}><Brand /><AppText variant="hero" style={s.center}>Smarter habits.{`\n`}<AppText variant="hero" style={s.green}>Brighter tomorrows.</AppText></AppText><AppText variant="h3" style={[s.center,s.muted]}>Take control of your spending{`\n`}one receipt at a time.</AppText></View><View style={s.splashLoading}><SplashLoadingDots /><AppText variant="bodyMedium" style={s.green}>Loading your brighter tomorrow...</AppText></View></Animated.View></Screen>;
 }
 
 function SplashLoadingDots() {
@@ -627,7 +626,7 @@ export function CreateAccountScreen() {
 }
 const useStyles = makeStyles((colors) => ({
   center:{textAlign:'center'},muted:{color:colors.muted},green:{color:colors.forest},
-  splash:{flex:1,alignItems:'center',paddingHorizontal:24},splashCopy:{position:'absolute',top:'10%',left:20,right:20,alignItems:'center',gap:16,zIndex:3},splashLoading:{position:'absolute',bottom:'7%',left:16,right:16,alignItems:'center',gap:12,zIndex:3},
+  splash:{flex:1,alignItems:'center',justifyContent:'space-between',paddingHorizontal:24,paddingTop:48,paddingBottom:32},splashCopy:{width:'100%',alignItems:'center',gap:16,zIndex:3},splashLoading:{width:'100%',alignItems:'center',gap:12,zIndex:3},
   dots:{flexDirection:'row',gap:10,justifyContent:'center',alignItems:'center'},dot:{width:10,height:10,borderRadius:5,backgroundColor:'#C8D8C1'},dotActive:{width:10,height:10,borderRadius:5,backgroundColor:colors.deepForest},
   backFloat:{position:'absolute',left:18,top:16,zIndex:20},
   onboarding:{paddingHorizontal:24,paddingBottom:22},onboardBrand:{position:'absolute',top:32,left:0,right:0,alignItems:'center'},onboardContent:{paddingTop:330,gap:10},feature:{flexDirection:'row',alignItems:'center',paddingVertical:10,paddingHorizontal:12,gap:14,backgroundColor:'rgba(238,242,233,.96)',borderRadius:22},featureIcon:{width:58,height:48,borderRadius:17,backgroundColor:'#DCE8D5',alignItems:'center',justifyContent:'center'},
