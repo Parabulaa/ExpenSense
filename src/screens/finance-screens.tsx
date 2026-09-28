@@ -147,15 +147,23 @@ export function WalletsScreen() {
         <View style={walletManageStyles.list}>
           {wallets.map((wallet, index) => {
             const meta = walletTypeMeta(wallet.type);
+            // Same row language as Categories and Budgets: round icon, name + meta,
+            // small tag, and soft pill actions.
             return <Card key={wallet.id} style={walletManageStyles.row}>
               <PressableScale accessibilityRole="button" accessibilityLabel={`Edit ${wallet.name}`} onPress={() => open(wallet)} style={walletManageStyles.main}>
-                <View style={[walletManageStyles.icon, { backgroundColor: walletAccent(wallet.color, index) }]}><AppIcon name={meta.icon} size={24} color="#FFFFFF" /></View>
-                <View style={s.grow}><View style={s.titleRow}><AppText variant="h3" numberOfLines={1} style={s.grow}>{wallet.name}</AppText>{wallet.isDefault ? <StatusChip>Default</StatusChip> : null}</View><AppText variant="small" style={s.muted}>{meta.label} · {money(wallet.balanceCents)}</AppText></View>
-                <AppIcon name="pencil-outline" size={20} color={colors.forest} />
+                <View style={[walletManageStyles.icon, { backgroundColor: walletAccent(wallet.color, index) }]}><AppIcon name={meta.icon} size={22} color="#FFFFFF" /></View>
+                <View style={s.grow}>
+                  <View style={walletManageStyles.nameRow}>
+                    <AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={walletManageStyles.name}>{wallet.name}</AppText>
+                    {wallet.isDefault ? <View style={[walletManageStyles.tag, { backgroundColor: colors.pale }]}><AppText variant="small" style={[walletManageStyles.tagText, { color: colors.deepForest }]}>Default</AppText></View> : null}
+                  </View>
+                  <AppText variant="small" style={s.muted}>{meta.label} · {wallet.balanceCents < 0 ? '−' : ''}{money(Math.abs(wallet.balanceCents))}</AppText>
+                </View>
+                <View style={[walletManageStyles.edit, { backgroundColor: colors.pale }]}><AppIcon name="pencil-outline" size={18} color={colors.deepForest} /></View>
               </PressableScale>
-              <View style={[walletManageStyles.actions, { borderTopColor: colors.line }]}>
-                <PressableScale accessibilityRole="button" accessibilityLabel={`Archive ${wallet.name}`} onPress={() => archive(wallet)} style={walletManageStyles.action}><AppIcon name="archive-arrow-down-outline" size={20} color={colors.forest} /><AppText variant="small">Archive</AppText></PressableScale>
-                <PressableScale accessibilityRole="button" accessibilityLabel={`Delete ${wallet.name} permanently`} onPress={() => permanentlyDelete(wallet)} style={[walletManageStyles.action, walletManageStyles.deleteAction, { borderLeftColor: colors.line }]}><AppIcon name="delete-outline" size={20} color={colors.danger} /><AppText variant="small" style={{ color: colors.danger }}>Delete</AppText></PressableScale>
+              <View style={walletManageStyles.actions}>
+                <PressableScale accessibilityRole="button" accessibilityLabel={`Archive ${wallet.name}`} onPress={() => archive(wallet)} style={[walletManageStyles.action, { backgroundColor: colors.pale }]}><AppIcon name="archive-arrow-down-outline" size={18} color={colors.deepForest} /><AppText variant="bodyMedium" style={{ color: colors.deepForest }}>Archive</AppText></PressableScale>
+                <PressableScale accessibilityRole="button" accessibilityLabel={`Delete ${wallet.name} permanently`} onPress={() => permanentlyDelete(wallet)} style={[walletManageStyles.action, { backgroundColor: colors.dangerSoft }]}><AppIcon name="delete-outline" size={18} color={colors.danger} /><AppText variant="bodyMedium" style={{ color: colors.danger }}>Delete</AppText></PressableScale>
               </View>
             </Card>;
           })}
@@ -271,12 +279,17 @@ export function WalletDetailScreen() {
 
 const walletManageStyles = {
   list: { gap: 12 },
-  row: { padding: 0, overflow: 'hidden' as const },
-  main: { minHeight: 86, padding: 14, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
-  icon: { width: 52, height: 52, borderRadius: 18, alignItems: 'center' as const, justifyContent: 'center' as const },
-  actions: { flexDirection: 'row' as const, borderTopWidth: 1 },
-  action: { flex: 1, minHeight: 48, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 7 },
-  deleteAction: { borderLeftWidth: 1 },
+  row: { gap: 12 },
+  main: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
+  // Matches the 44px round icons used on Categories and Budgets.
+  icon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center' as const, justifyContent: 'center' as const },
+  nameRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+  name: { flexShrink: 1 },
+  tag: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: radii.pill },
+  tagText: { fontFamily: 'JakartaSemiBold' },
+  edit: { width: 38, height: 38, borderRadius: 19, alignItems: 'center' as const, justifyContent: 'center' as const },
+  actions: { flexDirection: 'row' as const, gap: 8 },
+  action: { flex: 1, minHeight: 42, borderRadius: radii.pill, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6 },
 };
 
 export function GoalsScreen() {

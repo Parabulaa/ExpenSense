@@ -210,48 +210,105 @@ export function receiptFingerprint(parts: { reference: string | null; merchant: 
   return hash(basis);
 }
 
+/**
+ * Lines that are never a purchased item, including common OCR misreads of
+ * "VAT" (UAT, OAT, DAT, UA!) and platform or payment labels.
+ */
+const notAnItem = /\b(?:[vuod0]a[t!1](?:able)?|zero[\s-]*rated|exempt|sales$|food\s*panda|grab\s*food|delivery|service\s*charge|discount|change|cash|tender(?:ed)?|payment|card|gcash|maya|item\s*\(\s*s\s*\)|items?$|subtotal|total|amount|balance|due|charge\s*to|order|remarks?|fees?)\b/i;
+/** A POS item line starts with its quantity: "2 YUMBURGER 056", "1x SPAG". */
+const quantityLine = /^(\d{1,3})\s*[x×]?\s+([A-Za-z].*)$/;
+/** Where the item block ends: the first count, subtotal or total line. */
+const itemBlockEnd = /\bitem\s*\(\s*s\s*\)|\b\d+\s+items?\b|\bsub\s*total\b|\btotal\b|\bamount\s+due\b/i;
+/** Header lines that come just before the items. */
+const itemBlockHeader = /\bcashier\b|\btrans(?:action)?\s*#|\binvoice\b|\bsi\s*#|\bst\s*#|\btable\b|\bserver\b|\bguest\b|\bpos\b|\d{1,2}[/-]\d{1,2}[/-]\d{2,4}/i;
+
+function cleanItemName(raw: string) {
+  return raw
+    .replace(new RegExp(money.source, 'ig'), ' ')
+    .replace(/\b(?:php|p)\b/gi, ' ')
+    // VAT flags first ("80.00V" leaves a stray V), then trailing product codes: "YUMBURGER 056".
+    .replace(/\s+[VvZzEe]\s*$/, '')
+    .replace(/(?:\s+\d{2,5})+\s*$/, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+/**
+ * Extracts only real purchased items. OCR of thermal receipts often slides the
+ * price column a line up or down from the item names, so prices found in the
+ * item block are paired with the quantity lines in order rather than trusted
+ * to sit on the same line. Totals, VAT breakdowns, delivery-platform labels
+ * and payment lines are never items.
+ */
+export function extractItems(lines: string[]): ReceiptItemDraft[] {
+  const end = lines.findIndex((line) => itemBlockEnd.test(line));
+  const blockEnd = end === -1 ? lines.length : end;
+  let start = 0;
+  for (let index = 0; index < blockEnd; index += 1) if (itemBlockHeader.test(lines[index])) start = index + 1;
+  const block = lines.slice(start, blockEnd);
+
+  const named = block.flatMap((line, offset) => {
+    const match = quantityLine.exec(line.trim());
+    if (!match) return [];
+    const name = cleanItemName(match[2]);
+    if (name.replace(/[^a-z]/gi, '').length < 2 || notAnItem.test(name) || itemMetadata.test(name)) return [];
+    const inline = [...line.matchAll(new RegExp(money.source, 'ig'))].map((found) => cents(found[1]));
+    return [{ offset, name: name.slice(0, 80), quantity: Number(match[1]) || 1, inline }];
+  });
+
+  const prices = block.flatMap((line) => [...line.matchAll(new RegExp(money.source, 'ig'))].map((found) => cents(found[1])));
+
+  if (named.length) {
+    // Same count of names and prices: pair them in order, whatever line each price landed on.
+    const inOrder = prices.length === named.length;
+    let next = 0;
+    return named.map((item, index) => {
+      const lineTotalCents = inOrder ? prices[index] : item.inline.length ? item.inline[item.inline.length - 1] : prices[next] ?? 0;
+      if (!inOrder && !item.inline.length) next += 1;
+      return { id: `${item.offset}-${index}`, name: item.name, quantity: item.quantity, lineTotalCents };
+    }).slice(0, 30);
+  }
+
+  // No quantity column: a named line with its own price inside the item block.
+  return block.flatMap((line, offset) => {
+    const found = [...line.matchAll(new RegExp(money.source, 'ig'))];
+    if (!found.length) return [];
+    const name = cleanItemName(line.slice(0, found[found.length - 1].index));
+    if (name.replace(/[^a-z]/gi, '').length < 2 || notAnItem.test(name) || itemMetadata.test(name) || labels.test(name)) return [];
+    return [{ id: `${offset}`, name: name.slice(0, 80), quantity: 1, lineTotalCents: cents(found[found.length - 1][1]) }];
+  }).slice(0, 30);
+}
+
 export function parseReceipt(rawText: string, image: ReceiptImage, providerConfidence = 0): ReceiptDraft {
   const lines = rawText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   const score = assessReceiptStructure(rawText);
   const merchant = merchantFromLines(lines);
+  const moneyOnly = (line: string | undefined) => line && /^[^a-z]*$/i.test(line.replace(/\b(?:php|p)\b/gi, '')) ? line.match(money) : null;
   const findLabeled = (pattern: RegExp, exclude?: RegExp) => {
-    const line = [...lines].reverse().find((candidate) => pattern.test(candidate) && (!exclude || !exclude.test(candidate)) && money.test(candidate));
-    const match = line?.match(money);
-    return match ? cents(match[1]) : 0;
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      const candidate = lines[index];
+      if (!pattern.test(candidate) || (exclude && exclude.test(candidate))) continue;
+      const own = candidate.match(money);
+      if (own) return cents(own[1]);
+      // "PHP 192.00" / "TOTAL DUE" split across two lines by OCR.
+      const neighbour = moneyOnly(lines[index - 1]) ?? moneyOnly(lines[index + 1]);
+      if (neighbour) return cents(neighbour[1]);
+    }
+    return 0;
   };
   const total = findLabeled(/\b(total|amount due|balance due|grand total)\b/i, /\bsub\s?total\b/i)
-    || findLabeled(/\b(amount sent|total amount sent|amount paid|cash[\s-]?in amount|amount received|amount)\b/i, /\bfee\b/i);
+    || findLabeled(/\b(amount sent|total amount sent|amount paid|cash[\s-]?in amount|amount received)\b/i, /\bfee\b/i)
+    || findLabeled(/\bamount\b/i, /\b(fee|[vuod0]a[t!1])\b/i);
   const subtotal = findLabeled(/\bsub\s?total\b/i);
   const printedTax = findLabeled(/\b(tax|vat)\b/i, /\b(vatable|vat exempt|vat[\s-]?able)\b/i);
   const fee = findLabeled(/\b(fee|service fee|transfer fee|transaction fee|convenience fee)\b/i);
-  const items: ReceiptItemDraft[] = lines.flatMap((line, index) => {
-    if (labels.test(line)) return [];
-    const matches = [...line.matchAll(new RegExp(money.source, 'ig'))];
-    if (!matches.length) return [];
-    const match = matches[matches.length - 1];
-    let name = line.slice(0, match.index).replace(/^\d+\s*[x×]?\s*/i, '').trim();
-    // OCR sometimes splits a product name from its quantity/price line. Only
-    // the immediately preceding line is eligible: searching farther backward
-    // can turn payment metadata (for example an authorization code) into an
-    // item when the current amount is actually a VAT/subtotal value.
-    if (name.length < 2 || !/[a-z]/i.test(name)) {
-      const previous = lines[index - 1];
-      name = previous
-        && /[a-z]{2}/i.test(previous)
-        && !labels.test(previous)
-        && !itemMetadata.test(previous)
-        && !money.test(previous)
-        ? previous.trim()
-        : '';
-    }
-    if (itemMetadata.test(name)) return [];
-    if (name.length < 2) return [];
-    return [{ id: `${index}-${match[1]}`, name: name.slice(0, 80), quantity: Number(line.match(/^(\d+)\s*[x×]/i)?.[1] ?? 1), lineTotalCents: cents(match[1]) }];
-  }).slice(0, 30);
+  const items = extractItems(lines);
   const detected = classifyReceipt(rawText, items.length);
   const calculated = items.reduce((sum, item) => sum + item.lineTotalCents, 0);
-  const defaultsToVat = detected.kind === 'expense' || detected.kind === 'unknown';
-  const tax = printedTax || (defaultsToVat ? includedVatCents(total) : 0);
+  // Worked out for every receipt, not only ones detected as expenses, so it is
+  // already filled in if the user switches the type to Expense on review.
+  const defaultsToVat = true;
+  const tax = printedTax || includedVatCents(total);
   // When OCR repeats a VAT-inclusive grand total as "subtotal" and no printed
   // VAT amount exists, derive the net value instead of displaying total + VAT.
   const subtotalDuplicatesTotal = Boolean(total && subtotal && Math.abs(total - subtotal) <= 2);
