@@ -20,6 +20,7 @@ import { useExpenses } from '@/features/expenses/ExpensesProvider';
 import { useFinance } from '@/features/finance/FinanceProvider';
 import type { ExpenseFormErrors, ExpenseFormValues } from '@/features/expenses/types';
 import { useReceipt } from '@/features/receipts/ReceiptProvider';
+import { addedVatCents, includedVatCents } from '@/features/receipts/receipt-parser';
 import { formatDateTime, isFutureDateTime, isValidLocalDate, isValidLocalTime, MAX_MERCHANT_LENGTH, MAX_NOTES_LENGTH, normalizeAmountInput, nowLocalTime, todayLocalDate, validateExpenseForm } from '@/features/expenses/validation';
 import { TimeSelector } from '@/components/common/time-selector';
 import { AmountChips } from '@/components/common/amount-chips';
@@ -356,6 +357,7 @@ export function ReceiptReviewScreen() {
   const [walletOpen, setWalletOpen] = useState<'source' | 'destination' | null>(null);
   const [dateOpen, setDateOpen] = useState(false);
   const [viewingPhoto, setViewingPhoto] = useState(false);
+  const [taxEdited, setTaxEdited] = useState(false);
   useEffect(() => { if (draft && !draft.walletId && wallets.length) updateDraft({ walletId: (wallets.find(wallet => wallet.isDefault) ?? wallets[0]).id }); }, [draft, updateDraft, wallets]);
   if (!draft) return <Screen variant={4}><View style={styles.failed}><AppText variant="h2">No receipt is ready to review.</AppText><PrimaryButton title="Scan a Receipt" onPress={() => router.replace('/scanner')} /></View></Screen>;
 
@@ -430,10 +432,10 @@ export function ReceiptReviewScreen() {
       {kind === 'transfer' ? <FormButton label="To wallet" value={destination?.name ?? (wallets.length > 1 ? 'Select wallet' : 'Add another wallet first')} icon="wallet-plus-outline" placeholder={!destination} onPress={() => wallets.length > 1 ? setWalletOpen('destination') : router.push('/wallets' as never)} /> : null}
       {kind === 'expense' ? <>
         {draft.items.length > 0 ? <Card style={{ gap: 12 }}><AppText variant="h2">Items ({draft.items.length})</AppText>{draft.items.map((item, index) => <View key={item.id} style={styles.itemEditCard}><FormInput label={`Item ${index + 1}`} placeholder="Item name" value={item.name} onChangeText={(name) => updateDraft({ items: draft.items.map((current) => current.id === item.id ? { ...current, name } : current) })} /><MoneyField label="Amount" cents={item.lineTotalCents} onChange={(lineTotalCents) => updateDraft({ items: draft.items.map((current) => current.id === item.id ? { ...current, lineTotalCents } : current) })} /></View>)}</Card> : null}
-        <MoneyField label="Subtotal" cents={draft.subtotalCents} onChange={(subtotalCents) => updateDraft({ subtotalCents })} />
-        <MoneyField label="Tax" cents={draft.taxCents} onChange={(taxCents) => updateDraft({ taxCents })} />
+        <MoneyField label="Subtotal" cents={draft.subtotalCents} onChange={(subtotalCents) => { if (manual && !taxEdited) { const taxCents = addedVatCents(subtotalCents); updateDraft({ subtotalCents, taxCents, totalCents: subtotalCents + taxCents }); } else updateDraft({ subtotalCents }); }} />
+        <MoneyField label="Tax (12% VAT)" cents={draft.taxCents} onChange={(taxCents) => { setTaxEdited(true); updateDraft({ taxCents }); }} />
       </> : null}
-      <MoneyField chips label={kind === 'expense' ? 'Total' : 'Amount'} cents={draft.totalCents} onChange={(totalCents) => updateDraft({ totalCents })} />
+      <MoneyField chips label={kind === 'expense' ? 'Total' : 'Amount'} cents={draft.totalCents} onChange={(totalCents) => { if (kind === 'expense' && manual && !taxEdited) { const taxCents = includedVatCents(totalCents); updateDraft({ totalCents, taxCents, subtotalCents: Math.max(0, totalCents - taxCents) }); } else updateDraft({ totalCents }); }} />
       {kind === 'transfer' ? <MoneyField label="Transfer fee" cents={draft.feeCents} onChange={(feeCents) => updateDraft({ feeCents })} /> : null}
       <FormInput label="Notes (optional)" value={draft.notes} onChangeText={(notes) => updateDraft({ notes })} />
       {changes.length ? <Card style={{ gap: 10 }}>

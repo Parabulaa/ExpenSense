@@ -15,6 +15,16 @@ function cents(value: string) {
   return Math.round(Number(normalized) * 100);
 }
 
+/** VAT portion of a tax-inclusive Philippine peso amount. */
+export function includedVatCents(totalCents: number) {
+  return Math.max(0, Math.round(totalCents * 12 / 112));
+}
+
+/** VAT added to a tax-exclusive subtotal. */
+export function addedVatCents(subtotalCents: number) {
+  return Math.max(0, Math.round(subtotalCents * 0.12));
+}
+
 function pad(value: string | number) {
   return String(value).padStart(2, '0');
 }
@@ -169,7 +179,7 @@ export function parseReceipt(rawText: string, image: ReceiptImage, providerConfi
   const total = findLabeled(/\b(total|amount due|balance due|grand total)\b/i, /\bsub\s?total\b/i)
     || findLabeled(/\b(amount sent|total amount sent|amount paid|cash[\s-]?in amount|amount received|amount)\b/i, /\bfee\b/i);
   const subtotal = findLabeled(/\bsub\s?total\b/i);
-  const tax = findLabeled(/\b(tax|vat)\b/i, /\b(vatable|vat exempt|vat[\s-]?able)\b/i);
+  const printedTax = findLabeled(/\b(tax|vat)\b/i, /\b(vatable|vat exempt|vat[\s-]?able)\b/i);
   const fee = findLabeled(/\b(fee|service fee|transfer fee|transaction fee|convenience fee)\b/i);
   const items: ReceiptItemDraft[] = lines.flatMap((line, index) => {
     if (labels.test(line)) return [];
@@ -190,6 +200,8 @@ export function parseReceipt(rawText: string, image: ReceiptImage, providerConfi
   }).slice(0, 30);
   const detected = classifyReceipt(rawText, items.length);
   const calculated = items.reduce((sum, item) => sum + item.lineTotalCents, 0);
+  const defaultsToVat = detected.kind === 'expense' || detected.kind === 'unknown';
+  const tax = printedTax || (defaultsToVat ? includedVatCents(total) : 0);
   const resolvedSubtotal = subtotal || Math.max(0, total - tax) || calculated;
   const resolvedTotal = total || resolvedSubtotal + tax;
   // A transfer's amount is what the recipient gets. E-wallet receipts often
@@ -202,6 +214,7 @@ export function parseReceipt(rawText: string, image: ReceiptImage, providerConfi
   const reference = referenceFromText(rawText);
   const issues: string[] = [];
   if (!total) issues.push('Confirm the amount');
+  if (total && !printedTax && defaultsToVat) issues.push('12% VAT was estimated from the total');
   if (!printedDate) issues.push('No date was printed; today was used');
   if (detected.kind === 'unknown') issues.push('Choose whether this is an expense, cash-in or transfer');
   if (detected.kind === 'expense' && !items.length) issues.push('No line items were confidently detected');
