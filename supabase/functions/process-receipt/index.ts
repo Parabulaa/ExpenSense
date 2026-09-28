@@ -11,6 +11,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
   status,
   headers: { ...cors, 'Content-Type': 'application/json' },
 });
+const OCR_SCAN_LIMIT = 10;
 
 async function readWithGoogle(key: string, imageBase64: string) {
   const response = await fetch('https://vision.googleapis.com/v1/images:annotate', {
@@ -63,13 +64,28 @@ Deno.serve(async (request) => {
     if (!user) return json({ error: 'Unauthorized' }, 401);
 
     const { imageBase64 } = await request.json();
-    if (typeof imageBase64 !== 'string' || imageBase64.length > 9_000_000) {
+    if (typeof imageBase64 !== 'string' || imageBase64.length < 100 || imageBase64.length > 9_000_000) {
       throw new Error('Invalid image payload');
     }
 
     const googleKey = Deno.env.get('GOOGLE_VISION_API_KEY');
     if (!googleKey) throw new Error('Google Vision is not configured');
-    return json(await readWithGoogle(googleKey, imageBase64));
+    const { data: scansRemaining, error: quotaError } = await client.rpc('claim_receipt_ocr_scan');
+    if (quotaError) throw new Error('Could not verify your receipt scan allowance. Try again.');
+    if (Number(scansRemaining) < 0) {
+      return json({
+        error: `You have used all ${OCR_SCAN_LIMIT} receipt scans for this account. You can still enter expenses manually.`,
+        code: 'OCR_SCAN_LIMIT_REACHED',
+        limit: OCR_SCAN_LIMIT,
+        scansRemaining: 0,
+      }, 429);
+    }
+
+    return json({
+      ...await readWithGoogle(googleKey, imageBase64),
+      scanLimit: OCR_SCAN_LIMIT,
+      scansRemaining: Number(scansRemaining),
+    });
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : 'Receipt recognition failed' }, 422);
   }
