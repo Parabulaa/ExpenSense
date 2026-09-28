@@ -70,17 +70,15 @@ export async function deleteTransfer(id: string): Promise<FinanceResult<{ id: st
 }
 export async function archiveWallet(id: string): Promise<FinanceResult<{ id: string }>> {
   try {
-    const { data, error } = await supabase
-      .from('wallets')
-      .update({ status: 'archived' })
-      .eq('id', id)
-      .eq('status', 'active')
-      .eq('is_default', false)
-      .select('id')
-      .maybeSingle();
-    if (error) return failure(error);
-    if (!data) return { ok: false, message: "The default wallet can't be removed. Make another wallet the default first." };
-    return { ok: true, data: { id: data.id } };
+    const { data, error } = await supabase.rpc('manage_wallet', { p_wallet_id: id, p_action: 'archive' });
+    return error || !data ? failure(error) : { ok: true, data: { id } };
+  } catch (error) { return failure(error); }
+}
+
+export async function deleteWallet(id: string): Promise<FinanceResult<{ id: string }>> {
+  try {
+    const { data, error } = await supabase.rpc('manage_wallet', { p_wallet_id: id, p_action: 'delete' });
+    return error || !data ? failure(error) : { ok: true, data: { id } };
   } catch (error) { return failure(error); }
 }
 

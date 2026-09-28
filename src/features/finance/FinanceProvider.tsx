@@ -16,6 +16,7 @@ type Value = Snapshot & {
   revalidate: () => Promise<void>;
   saveWallet: (v: WalletInput) => Promise<FinanceResult<Wallet>>;
   archiveWallet: (id: string) => Promise<FinanceResult<{ id: string }>>;
+  deleteWallet: (id: string) => Promise<FinanceResult<{ id: string }>>;
   addIncome: (v: IncomeInput) => Promise<FinanceResult<IncomeEntry>>;
   deleteIncome: (id: string) => Promise<FinanceResult<{ id: string }>>;
   addTransfer: (v: TransferInput) => Promise<FinanceResult<WalletTransfer>>;
@@ -86,7 +87,13 @@ export function FinanceProvider({ children }: PropsWithChildren) {
   }, [ops, server]);
 
   const saveWallet = useCallback(async (v: WalletInput) => { const r = onlineOnly(await service.saveWallet(v)); if (r.ok) store(c => ({ ...c, wallets: [r.data, ...c.wallets.filter(x => x.id !== r.data.id)].map(x => r.data.isDefault && x.id !== r.data.id ? { ...x, isDefault: false } : x) })); return r; }, [store]);
-  const archiveWallet = useCallback(async (id: string) => { const r = onlineOnly(await service.archiveWallet(id)); if (r.ok) store(c => ({ ...c, wallets: c.wallets.filter(x => x.id !== id) })); return r; }, [store]);
+  const removeWalletFromStore = useCallback((id: string) => store(c => {
+    const removed = c.wallets.find(x => x.id === id);
+    const remaining = c.wallets.filter(x => x.id !== id);
+    return { ...c, wallets: removed?.isDefault && remaining.length ? remaining.map((x, index) => ({ ...x, isDefault: index === 0 })) : remaining };
+  }), [store]);
+  const archiveWallet = useCallback(async (id: string) => { const r = onlineOnly(await service.archiveWallet(id)); if (r.ok) removeWalletFromStore(id); return r; }, [removeWalletFromStore]);
+  const deleteWallet = useCallback(async (id: string) => { const r = onlineOnly(await service.deleteWallet(id)); if (r.ok) { removeWalletFromStore(id); await refresh(); } return r; }, [refresh, removeWalletFromStore]);
 
   const addIncome = useCallback(async (v: IncomeInput): Promise<FinanceResult<IncomeEntry>> => {
     const id = uuid();
@@ -131,7 +138,7 @@ export function FinanceProvider({ children }: PropsWithChildren) {
   const addToGoal = useCallback(async (g: SavingsGoal, n: number) => { const r = onlineOnly(await service.addToGoal(g, n)); if (r.ok) store(c => ({ ...c, goals: c.goals.map(x => x.id === r.data.id ? r.data : x) })); return r; }, [store]);
   const archiveGoal = useCallback(async (id: string) => { const r = onlineOnly(await service.archiveGoal(id)); if (r.ok) store(c => ({ ...c, goals: c.goals.filter(x => x.id !== id) })); return r; }, [store]);
 
-  const value = useMemo(() => ({ ...view, loading, error, refresh, revalidate, saveWallet, archiveWallet, addIncome, deleteIncome, addTransfer, deleteTransfer, saveGoal, addToGoal, archiveGoal }), [view, loading, error, refresh, revalidate, saveWallet, archiveWallet, addIncome, deleteIncome, addTransfer, deleteTransfer, saveGoal, addToGoal, archiveGoal]);
+  const value = useMemo(() => ({ ...view, loading, error, refresh, revalidate, saveWallet, archiveWallet, deleteWallet, addIncome, deleteIncome, addTransfer, deleteTransfer, saveGoal, addToGoal, archiveGoal }), [view, loading, error, refresh, revalidate, saveWallet, archiveWallet, deleteWallet, addIncome, deleteIncome, addTransfer, deleteTransfer, saveGoal, addToGoal, archiveGoal]);
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 export function useFinance() { const value = useContext(Context); if (!value) throw new Error('useFinance must be used within FinanceProvider'); return value; }
