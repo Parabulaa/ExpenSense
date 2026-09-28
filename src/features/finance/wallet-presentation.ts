@@ -1,5 +1,5 @@
 import type { MaterialCommunityIcons } from '@expo/vector-icons';
-import type { WalletType } from './types';
+import type { Wallet, WalletType } from './types';
 
 type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
@@ -24,4 +24,12 @@ export function walletTypeMeta(type: WalletType) {
 
 export function walletAccent(color: string | null, index = 0) {
   return color ?? walletColors[index % walletColors.length];
+}
+
+/** Keeps the user's default payment source anchored in the first slot. */
+export function defaultWalletFirst(wallets: Wallet[]) {
+  return wallets
+    .map((wallet, index) => ({ wallet, index }))
+    .sort((a, b) => Number(b.wallet.isDefault) - Number(a.wallet.isDefault) || a.index - b.index)
+    .map(({ wallet }) => wallet);
 }

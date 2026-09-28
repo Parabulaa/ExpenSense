@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { normalizeTime } from '@/features/expenses/validation';
 import { isNetworkError } from '@/lib/offline/network';
 import type { FinanceResult, GoalInput, IncomeEntry, IncomeInput, SavingsGoal, TransferInput, Wallet, WalletInput, WalletTransfer, WalletType } from './types';
+import { defaultWalletFirst } from './wallet-presentation';
 
 const ERROR = "Couldn't update your financial tools. Check your connection and try again.";
 const cents = (value: string | number) => Math.round(Number(value) * 100);
@@ -29,7 +30,7 @@ export async function loadFinance(): Promise<FinanceResult<{ wallets: Wallet[]; 
       supabase.from('wallet_transfers').select(transferFields).order('transaction_date', { ascending: false }).order('transaction_time', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }),
     ]);
     if (w.error || g.error || i.error || t.error) return failure(w.error ?? g.error ?? i.error ?? t.error);
-    return { ok: true, data: { wallets: (w.data ?? []).map(mapWallet), goals: (g.data ?? []).map(mapGoal), incomeEntries: (i.data ?? []).map(mapIncome), transfers: (t.data ?? []).map(mapTransfer) } };
+    return { ok: true, data: { wallets: defaultWalletFirst((w.data ?? []).map(mapWallet)), goals: (g.data ?? []).map(mapGoal), incomeEntries: (i.data ?? []).map(mapIncome), transfers: (t.data ?? []).map(mapTransfer) } };
   } catch (error) { return failure(error); }
 }
 

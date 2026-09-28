@@ -4,6 +4,7 @@ import { readCache, STALE_AFTER_MS, writeCache } from '@/lib/offline/cache';
 import { OFFLINE_MESSAGE, uuid } from '@/lib/offline/network';
 import { applyOps, enqueue, pendingWalletDeltas, useOutbox } from '@/lib/offline/outbox';
 import * as service from './finance-service';
+import { defaultWalletFirst } from './wallet-presentation';
 import type { FinanceResult, GoalInput, IncomeEntry, IncomeInput, SavingsGoal, TransferInput, Wallet, WalletInput, WalletTransfer } from './types';
 
 type Snapshot = { wallets: Wallet[]; goals: SavingsGoal[]; incomeEntries: IncomeEntry[]; transfers: WalletTransfer[] };
@@ -79,18 +80,18 @@ export function FinanceProvider({ children }: PropsWithChildren) {
   const view = useMemo<Snapshot>(() => {
     const deltas = pendingWalletDeltas(ops);
     return {
-      wallets: server.wallets.map((wallet) => deltas[wallet.id] ? { ...wallet, balanceCents: wallet.balanceCents + deltas[wallet.id] } : wallet),
+      wallets: defaultWalletFirst(server.wallets.map((wallet) => deltas[wallet.id] ? { ...wallet, balanceCents: wallet.balanceCents + deltas[wallet.id] } : wallet)),
       goals: server.goals,
       incomeEntries: applyOps(server.incomeEntries, ops, 'income', (op) => op.kind === 'income.create' ? { ...op.entry, pending: true } : null),
       transfers: applyOps(server.transfers, ops, 'transfer', (op) => op.kind === 'transfer.create' ? { ...op.transfer, pending: true } : null),
     };
   }, [ops, server]);
 
-  const saveWallet = useCallback(async (v: WalletInput) => { const r = onlineOnly(await service.saveWallet(v)); if (r.ok) store(c => ({ ...c, wallets: [r.data, ...c.wallets.filter(x => x.id !== r.data.id)].map(x => r.data.isDefault && x.id !== r.data.id ? { ...x, isDefault: false } : x) })); return r; }, [store]);
+  const saveWallet = useCallback(async (v: WalletInput) => { const r = onlineOnly(await service.saveWallet(v)); if (r.ok) store(c => ({ ...c, wallets: defaultWalletFirst([r.data, ...c.wallets.filter(x => x.id !== r.data.id)].map(x => r.data.isDefault && x.id !== r.data.id ? { ...x, isDefault: false } : x)) })); return r; }, [store]);
   const removeWalletFromStore = useCallback((id: string) => store(c => {
     const removed = c.wallets.find(x => x.id === id);
     const remaining = c.wallets.filter(x => x.id !== id);
-    return { ...c, wallets: removed?.isDefault && remaining.length ? remaining.map((x, index) => ({ ...x, isDefault: index === 0 })) : remaining };
+    return { ...c, wallets: defaultWalletFirst(removed?.isDefault && remaining.length ? remaining.map((x, index) => ({ ...x, isDefault: index === 0 })) : remaining) };
   }), [store]);
   const archiveWallet = useCallback(async (id: string) => { const r = onlineOnly(await service.archiveWallet(id)); if (r.ok) removeWalletFromStore(id); return r; }, [removeWalletFromStore]);
   const deleteWallet = useCallback(async (id: string) => { const r = onlineOnly(await service.deleteWallet(id)); if (r.ok) { removeWalletFromStore(id); await refresh(); } return r; }, [refresh, removeWalletFromStore]);

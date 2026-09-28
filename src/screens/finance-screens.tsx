@@ -11,8 +11,8 @@ import { radii, spacing } from '@/constants/theme';
 import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 import { useFinance } from '@/features/finance/FinanceProvider';
 import { incomeKindLabels, type IncomeKind, type SavingsGoal, type Wallet, type WalletType } from '@/features/finance/types';
-import { AddWalletCard, WalletCardFace } from '@/features/finance/components/WalletCardFace';
-import { walletColors, walletTypes } from '@/features/finance/wallet-presentation';
+import { WalletCardFace } from '@/features/finance/components/WalletCardFace';
+import { walletAccent, walletColors, walletTypeMeta, walletTypes } from '@/features/finance/wallet-presentation';
 import { formatPeso } from '@/lib/format';
 import { formatDateTime, formatExpenseDate, nowLocalTime, todayLocalDate } from '@/features/expenses/validation';
 import { Calendar } from '@/components/common/calendar';
@@ -69,7 +69,7 @@ function SheetField({ label, value, icon, placeholder, onPress }: { label: strin
 export function WalletsScreen() {
   const colors = useColors();
   const s = useStyles();
-  const { wallets, incomeEntries, transfers, loading, error, refresh, revalidate, saveWallet, archiveWallet, deleteWallet, addIncome, deleteIncome, addTransfer, deleteTransfer } = useFinance();
+  const { wallets, loading, error, refresh, revalidate, saveWallet, archiveWallet, deleteWallet, addIncome, addTransfer } = useFinance();
   const { showToast } = useToast();
   const [editing, setEditing] = useState<Wallet | 'new' | null>(null);
   const [name, setName] = useState(''); const [balance, setBalance] = useState(''); const [type, setType] = useState<WalletType>('cash'); const [color, setColor] = useState(walletColors[0]); const [isDefault, setDefault] = useState(false); const [saving, setSaving] = useState(false);
@@ -136,26 +136,35 @@ export function WalletsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.new, params.add, params.transfer, params.wallet, wallets]);
 
-  const history = [
-    ...incomeEntries.map(entry => ({ id: `in-${entry.id}`, date: entry.transactionDate, time: entry.transactionTime, created: entry.createdAt, title: entry.source, detail: `${incomeKindLabels[entry.kind]} · ${walletName(entry.walletId) ?? 'Wallet'}`, amount: `+${money(entry.amountCents)}`, color: wallets.find(w => w.id === entry.walletId)?.color ?? colors.forest, positive: true, onDelete: () => ask({ title: 'Delete this income?', message: 'The amount will be removed from the wallet balance.', label: 'Delete', run: () => deleteIncome(entry.id) }) })),
-    ...transfers.map(transfer => ({ id: `tr-${transfer.id}`, date: transfer.transactionDate, time: transfer.transactionTime, created: transfer.createdAt, title: `${walletName(transfer.fromWalletId) ?? 'Wallet'} → ${walletName(transfer.toWalletId) ?? 'Wallet'}`, detail: `Transfer${transfer.feeCents ? ` · ${money(transfer.feeCents)} fee` : ''}`, amount: money(transfer.amountCents), color: wallets.find(w => w.id === transfer.toWalletId)?.color ?? colors.forest, positive: false, onRevert: () => ask({ title: 'Revert this transfer?', message: 'Both wallets go back to how they were before this transfer, including the fee.', label: 'Revert', run: () => deleteTransfer(transfer.id) }) })),
-  ].sort((a, b) => b.date.localeCompare(a.date) || (b.time ?? '').localeCompare(a.time ?? '') || b.created.localeCompare(a.created)).slice(0, 8);
-
   const amountCents = parseMoney(form.amount) ?? 0;
   const feeCents = parseMoney(form.fee || '0') ?? 0;
   const fromWallet = wallets.find(w => w.id === form.walletId);
 
   return <Screen bottomInset={40} variant={7} refreshing={loading} onRefresh={refresh}>
     <View style={s.page}>
-      <View style={s.header}><BackButton /><View style={s.headerCopy}><AppText variant="title" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>Wallets</AppText><AppText style={s.muted}>Tap a card to open it, or use ••• to add income.</AppText></View></View>
-      <Card style={s.totalCard}><AppText style={s.muted}>Available across wallets</AppText><AppText variant="hero" adjustsFontSizeToFit numberOfLines={1}>{money(wallets.reduce((n, w) => n + w.balanceCents, 0))}</AppText><AppText variant="small" style={s.muted}>Expenses deduct automatically. Income and cash-ins add to the chosen wallet. Transfers move money between wallets without counting as spending.</AppText></Card>
-      {error && !wallets.length ? <Card><AppText variant="h3">Couldn&apos;t load wallets</AppText><SecondaryButton title="Try Again" onPress={refresh} /></Card> : <View style={s.walletGrid}>{wallets.map((wallet, index) => <View key={wallet.id} style={s.walletCell}><WalletCardFace wallet={wallet} index={index} moreLabel={`Add income to ${wallet.name}`} onPress={() => router.push({ pathname: '/wallet-detail/[id]', params: { id: wallet.id } } as never)} onMore={() => openMoneyIn(wallet)} /></View>)}<View style={s.walletCell}><AddWalletCard onPress={() => open()} /></View></View>}
-      {wallets.length ? <View style={s.actionRow}><View style={s.grow}><SecondaryButton title="Add Income" icon="cash-plus" onPress={() => openMoneyIn()} /></View><View style={s.grow}><SecondaryButton title="Transfer" icon="swap-horizontal" disabled={wallets.length < 2} onPress={() => openTransfer()} /></View></View> : null}
-      {wallets.length === 1 ? <AppText variant="small" style={s.muted}>Add a second wallet to move money between them.</AppText> : null}
-      {history.length ? <View style={s.history}><AppText variant="h2">Recent income and transfers</AppText>{history.map(item => <View key={item.id} style={s.historyRow}><View style={[s.historyDot, { backgroundColor: item.color }]} /><View style={s.grow}><AppText variant="bodyMedium" numberOfLines={1}>{item.title}</AppText><AppText variant="small" style={s.muted} numberOfLines={1}>{item.detail} · {formatDateTime(item.date, item.time)}</AppText></View><AppText variant="h3" style={{ color: item.positive ? colors.success : colors.deepForest }}>{item.amount}</AppText>{'onRevert' in item && item.onRevert ? <PressableScale accessibilityLabel={`Revert ${item.title}`} onPress={item.onRevert} style={s.historyDelete}><AppIcon name="undo-variant" size={18} color={colors.muted} /></PressableScale> : 'onDelete' in item && item.onDelete ? <PressableScale accessibilityLabel={`Delete ${item.title}`} onPress={item.onDelete} style={s.historyDelete}><AppIcon name="delete-outline" size={18} color={colors.muted} /></PressableScale> : <View style={s.historyDelete} />}</View>)}</View> : null}
+      <View style={s.header}><BackButton /><View style={s.headerCopy}><AppText variant="title" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>Manage wallets</AppText><AppText style={s.muted}>Edit, archive, or permanently delete a wallet.</AppText></View></View>
+      {error && !wallets.length ? <Card><AppText variant="h3">Couldn&apos;t load wallets</AppText><SecondaryButton title="Try Again" onPress={refresh} /></Card> : (
+        <View style={walletManageStyles.list}>
+          {wallets.map((wallet, index) => {
+            const meta = walletTypeMeta(wallet.type);
+            return <Card key={wallet.id} style={walletManageStyles.row}>
+              <PressableScale accessibilityRole="button" accessibilityLabel={`Edit ${wallet.name}`} onPress={() => open(wallet)} style={walletManageStyles.main}>
+                <View style={[walletManageStyles.icon, { backgroundColor: walletAccent(wallet.color, index) }]}><AppIcon name={meta.icon} size={24} color="#FFFFFF" /></View>
+                <View style={s.grow}><View style={s.titleRow}><AppText variant="h3" numberOfLines={1} style={s.grow}>{wallet.name}</AppText>{wallet.isDefault ? <StatusChip>Default</StatusChip> : null}</View><AppText variant="small" style={s.muted}>{meta.label} · {money(wallet.balanceCents)}</AppText></View>
+                <AppIcon name="pencil-outline" size={20} color={colors.forest} />
+              </PressableScale>
+              <View style={[walletManageStyles.actions, { borderTopColor: colors.line }]}>
+                <PressableScale accessibilityRole="button" accessibilityLabel={`Archive ${wallet.name}`} onPress={() => archive(wallet)} style={walletManageStyles.action}><AppIcon name="archive-arrow-down-outline" size={20} color={colors.forest} /><AppText variant="small">Archive</AppText></PressableScale>
+                <PressableScale accessibilityRole="button" accessibilityLabel={`Delete ${wallet.name} permanently`} onPress={() => permanentlyDelete(wallet)} style={[walletManageStyles.action, walletManageStyles.deleteAction, { borderLeftColor: colors.line }]}><AppIcon name="delete-outline" size={20} color={colors.danger} /><AppText variant="small" style={{ color: colors.danger }}>Delete</AppText></PressableScale>
+              </View>
+            </Card>;
+          })}
+          <PrimaryButton title="Add Wallet" icon="plus" onPress={() => open()} />
+        </View>
+      )}
     </View>
 
-    <DraggableBottomSheet visible={editing !== null} disabled={saving} onClose={() => setEditing(null)}><AppText variant="h2">{editing === 'new' ? 'Add Wallet' : 'Edit Wallet'}</AppText><FormInput label="Wallet name" value={name} onChangeText={setName} maxLength={60} /><AppText variant="bodyMedium">Wallet type</AppText><View style={s.chips}>{walletTypes.map(x => <PressableScale key={x.id} onPress={() => setType(x.id)} style={[s.chip, type === x.id && s.chipActive]}><AppIcon name={x.icon} size={18} color={type === x.id ? colors.surface : colors.deepForest} /><AppText variant="small" style={type === x.id ? s.white : undefined}>{x.label}</AppText></PressableScale>)}</View><AppText variant="bodyMedium">Wallet color</AppText><View style={s.colorRow}>{walletColors.map(value => <PressableScale key={value} accessibilityLabel={`Use wallet color ${value}`} onPress={() => setColor(value)} style={[s.colorChoice, { backgroundColor: value }, color === value && s.colorChoiceSelected]}>{color === value ? <AppIcon name="check" size={18} color={colors.surface} /> : null}</PressableScale>)}</View><FormInput label={editing === 'new' ? 'Opening balance' : 'Current balance'} icon="currency-php" value={balance} onChangeText={setBalance} keyboardType="decimal-pad" /><AmountChips value={balance} onChange={setBalance} /><PressableScale disabled={Boolean(editing && editing !== 'new' && editing.isDefault)} onPress={() => setDefault(v => !v)} style={s.defaultRow}><AppIcon name={isDefault ? 'checkbox-marked-circle' : 'checkbox-blank-circle-outline'} color={colors.success} /><View style={s.grow}><AppText variant="bodyMedium">Default wallet</AppText><AppText variant="small" style={s.muted}>{editing && editing !== 'new' && editing.isDefault ? 'To change it, set another wallet as the default.' : 'Preselected for new expenses'}</AppText></View></PressableScale><PrimaryButton title="Save Wallet" loading={saving} loadingTitle="Saving..." onPress={submit} />{editing && editing !== 'new' ? <><SecondaryButton title="Archive Wallet" icon="archive-outline" onPress={() => { const wallet = editing; setEditing(null); archive(wallet); }} /><PrimaryButton title="Delete Wallet Permanently" icon="delete-outline" danger onPress={() => { const wallet = editing; setEditing(null); permanentlyDelete(wallet); }} /></> : null}</DraggableBottomSheet>
+    <DraggableBottomSheet visible={editing !== null} disabled={saving} onClose={() => setEditing(null)}><AppText variant="h2">{editing === 'new' ? 'Add Wallet' : 'Edit Wallet'}</AppText><FormInput label="Wallet name" value={name} onChangeText={setName} maxLength={60} /><AppText variant="bodyMedium">Wallet type</AppText><View style={s.chips}>{walletTypes.map(x => <PressableScale key={x.id} onPress={() => setType(x.id)} style={[s.chip, type === x.id && s.chipActive]}><AppIcon name={x.icon} size={18} color={type === x.id ? colors.surface : colors.deepForest} /><AppText variant="small" style={type === x.id ? s.white : undefined}>{x.label}</AppText></PressableScale>)}</View><AppText variant="bodyMedium">Wallet color</AppText><View style={s.colorRow}>{walletColors.map(value => <PressableScale key={value} accessibilityLabel={`Use wallet color ${value}`} onPress={() => setColor(value)} style={[s.colorChoice, { backgroundColor: value }, color === value && s.colorChoiceSelected]}>{color === value ? <AppIcon name="check" size={18} color={colors.surface} /> : null}</PressableScale>)}</View><FormInput label={editing === 'new' ? 'Opening balance' : 'Current balance'} icon="currency-php" value={balance} onChangeText={setBalance} keyboardType="decimal-pad" /><AmountChips value={balance} onChange={setBalance} /><PressableScale disabled={Boolean(editing && editing !== 'new' && editing.isDefault)} onPress={() => setDefault(v => !v)} style={s.defaultRow}><AppIcon name={isDefault ? 'checkbox-marked-circle' : 'checkbox-blank-circle-outline'} color={colors.success} /><View style={s.grow}><AppText variant="bodyMedium">Default wallet</AppText><AppText variant="small" style={s.muted}>{editing && editing !== 'new' && editing.isDefault ? 'To change it, set another wallet as the default.' : 'Preselected for new expenses'}</AppText></View></PressableScale><PrimaryButton title="Save Wallet" loading={saving} loadingTitle="Saving..." onPress={submit} /></DraggableBottomSheet>
 
     <DraggableBottomSheet visible={moneySheet !== null} disabled={saving} onClose={() => { setPicker(null); setMoneySheet(null); }}>
       <AppText variant="h2">{moneySheet === 'transfer' ? 'Transfer' : 'Add Income'}</AppText>
@@ -190,11 +199,9 @@ export function WalletDetailScreen() {
   const s = useStyles();
   const { id } = useLocalSearchParams<{ id: string }>();
   const walletId = Array.isArray(id) ? id[0] : id;
-  const { wallets, incomeEntries, transfers, loading, refresh, revalidate, archiveWallet, deleteWallet } = useFinance();
+  const { wallets, incomeEntries, transfers, loading, refresh, revalidate } = useFinance();
   const { expenses, refresh: refreshExpenses, revalidate: revalidateExpenses } = useExpenses();
   const { findCategory } = useCategories();
-  const { showToast } = useToast();
-  const { ask, dialog: confirmDialog } = useConfirmDialog();
   useFocusEffect(useCallback(() => { void revalidate(); void revalidateExpenses(); }, [revalidate, revalidateExpenses]));
   const index = wallets.findIndex(item => item.id === walletId);
   const wallet = wallets[index];
@@ -225,9 +232,6 @@ export function WalletDetailScreen() {
     return totals;
   }, {})).map(([categoryId, cents]) => ({ categoryId, cents, label: findCategory(categoryId)?.fullLabel ?? 'Archived category' })).sort((a, b) => b.cents - a.cents);
   const maxCategory = categorySpending[0]?.cents ?? 1;
-  const archive = () => ask({ title: 'Archive wallet?', message: `${wallet.name} will be hidden while its complete history remains available in your transactions.${wallet.isDefault ? ' Another active wallet will become the default when available.' : ''}`, label: 'Archive', run: async () => { const result = await archiveWallet(wallet.id); showToast(result.ok ? 'Wallet archived.' : result.message, result.ok ? undefined : { tone: 'warning' }); if (result.ok) router.replace('/wallets'); } });
-  const permanentlyDelete = () => ask({ title: 'Delete wallet permanently?', message: `This cannot be undone. Expenses remain in transaction history without a wallet, but income and transfer records connected to ${wallet.name} will be deleted.${wallet.isDefault ? ' Another active wallet will become the default when available.' : ''}`, label: 'Delete', run: async () => { const result = await deleteWallet(wallet.id); showToast(result.ok ? 'Wallet deleted.' : result.message, result.ok ? undefined : { tone: 'warning' }); if (result.ok) { await refreshExpenses(); router.replace('/wallets'); } } });
-
   return <Screen bottomInset={40} variant={7} refreshing={loading} onRefresh={() => { void refresh(); void refreshExpenses(); }}>
     <View style={s.page}>
       <View style={s.header}><BackButton /><View style={s.headerCopy}><AppText variant="title" numberOfLines={1} adjustsFontSizeToFit>{wallet.name}</AppText><AppText style={s.muted}>{wallet.isDefault ? 'Default wallet' : 'Wallet'}</AppText></View></View>
@@ -261,16 +265,19 @@ export function WalletDetailScreen() {
           <AppText variant="h3" numberOfLines={1} style={{ color: row.cents > 0 ? colors.success : colors.deepForest }}>{row.cents > 0 ? '+' : '−'}{money(Math.abs(row.cents))}</AppText>
         </PressableScale>
       ))}
-      <View style={s.walletManagement}>
-        <AppText variant="h2">Wallet management</AppText>
-        <AppText variant="small" style={s.muted}>Archiving hides this wallet and preserves its history. Permanent deletion cannot be undone.</AppText>
-        <SecondaryButton title="Archive Wallet" icon="archive-outline" onPress={archive} />
-        <PrimaryButton title="Delete Wallet Permanently" icon="delete-outline" danger onPress={permanentlyDelete} />
-      </View>
     </View>
-    {confirmDialog}
   </Screen>;
 }
+
+const walletManageStyles = {
+  list: { gap: 12 },
+  row: { padding: 0, overflow: 'hidden' as const },
+  main: { minHeight: 86, padding: 14, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
+  icon: { width: 52, height: 52, borderRadius: 18, alignItems: 'center' as const, justifyContent: 'center' as const },
+  actions: { flexDirection: 'row' as const, borderTopWidth: 1 },
+  action: { flex: 1, minHeight: 48, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 7 },
+  deleteAction: { borderLeftWidth: 1 },
+};
 
 export function GoalsScreen() {
   const colors = useColors();
