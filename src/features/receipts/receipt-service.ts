@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import type { ExpenseResult } from '@/features/expenses/types';
 import type { ReceiptDraft, ReceiptImage } from './types';
 
-/** Just under the free OCR tier's 1 MB image limit. */
+/** Keeps OCR uploads compact while preserving small receipt text. */
 const MAX_UPLOAD_BYTES = 950_000;
 
 export async function optimizeReceipt(image: ReceiptImage): Promise<ReceiptImage> {
@@ -13,8 +13,7 @@ export async function optimizeReceipt(image: ReceiptImage): Promise<ReceiptImage
   const resize = longest > 1800 ? image.width >= image.height ? { width: 1800 } : { height: 1800 } : undefined;
   let result = await manipulateAsync(image.uri, resize ? [{ resize }] : [], { compress: 0.78, format: SaveFormat.JPEG });
   let info = await FileSystem.getInfoAsync(result.uri);
-  // The free OCR service accepts about 1 MB per image. Step down until the
-  // photo fits, keeping enough resolution for small receipt print.
+  // Step down large photos to reduce transfer time and OCR processing cost.
   for (const [longestSide, compress] of [[1500, 0.7], [1280, 0.6]] as const) {
     if (!info.exists || (info.size ?? 0) <= MAX_UPLOAD_BYTES) break;
     const smaller = result.width >= result.height ? { width: Math.min(longestSide, result.width) } : { height: Math.min(longestSide, result.height) };
