@@ -68,7 +68,21 @@ export async function deleteTransfer(id: string): Promise<FinanceResult<{ id: st
   try { const { error } = await supabase.from('wallet_transfers').delete().eq('id', id); return error ? failure(error) : { ok: true, data: { id } }; }
   catch (error) { return failure(error); }
 }
-export async function archiveWallet(id: string) { const { error } = await supabase.from('wallets').update({ status: 'archived', is_default: false }).eq('id', id); return error ? failure(error) : { ok: true as const, data: { id } }; }
+export async function archiveWallet(id: string): Promise<FinanceResult<{ id: string }>> {
+  try {
+    const { data, error } = await supabase
+      .from('wallets')
+      .update({ status: 'archived' })
+      .eq('id', id)
+      .eq('status', 'active')
+      .eq('is_default', false)
+      .select('id')
+      .maybeSingle();
+    if (error) return failure(error);
+    if (!data) return { ok: false, message: "The default wallet can't be removed. Make another wallet the default first." };
+    return { ok: true, data: { id: data.id } };
+  } catch (error) { return failure(error); }
+}
 
 export async function saveGoal(input: GoalInput): Promise<FinanceResult<SavingsGoal>> {
   try {

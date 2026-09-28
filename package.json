@@ -54,7 +54,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "export:web": "expo export --platform web",
-    "deploy:web": "npm run export:web && eas deploy --prod --environment preview",
+    "deploy:web": "npm run export:web && npx eas-cli@latest deploy --prod --environment preview --non-interactive",
     "lint": "expo lint"
   },
   "private": true
