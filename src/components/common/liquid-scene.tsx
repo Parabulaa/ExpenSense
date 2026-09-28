@@ -18,14 +18,12 @@ export function LiquidScene({ scene }: { scene: Scene }) {
   const shape1Motion = useSharedValue(0);
   const shape2Motion = useSharedValue(0);
   const accentMotion = useSharedValue(0);
-  const mascotMotion = useSharedValue(0);
 
   useEffect(() => {
     if (reducedMotion) {
       shape1Motion.value = 0;
       shape2Motion.value = 0;
       accentMotion.value = 0.5;
-      mascotMotion.value = 0.5;
       return;
     }
     const smooth = Easing.inOut(Easing.sin);
@@ -33,16 +31,13 @@ export function LiquidScene({ scene }: { scene: Scene }) {
     shape1Motion.value = withRepeat(withTiming(1, { duration: 2600, easing: smooth }), -1, true);
     shape2Motion.value = withDelay(240, withRepeat(withTiming(1, { duration: 3400, easing: smooth }), -1, true));
     accentMotion.value = withDelay(420, withRepeat(withTiming(1, { duration: 2200, easing: smooth }), -1, true));
-    mascotMotion.value = withRepeat(withTiming(1, { duration: 2800, easing: smooth }), -1, true);
-  }, [accentMotion, mascotMotion, shape1Motion, shape2Motion, reducedMotion]);
+  }, [accentMotion, shape1Motion, shape2Motion, reducedMotion]);
 
-  // Organic shape animations — subtle drift, rotation, breathing
+  // Organic shapes drift and rotate only; no scaling can visually resize the scene.
   const liquidLeft = useAnimatedStyle(() => ({
     transform: [
       { translateX: -28 + shape1Motion.value * 56 },
       { translateY: (shape1Motion.value - 0.5) * -16 },
-      { scaleX: 1.06 + shape1Motion.value * 0.08 },
-      { scaleY: 0.98 + shape1Motion.value * 0.04 },
       { rotate: `${-2 + shape1Motion.value * 4}deg` },
     ],
   }));
@@ -51,8 +46,6 @@ export function LiquidScene({ scene }: { scene: Scene }) {
     transform: [
       { translateX: 24 - shape2Motion.value * 48 },
       { translateY: (shape2Motion.value - 0.5) * 14 },
-      { scaleX: 1.04 + (1 - shape2Motion.value) * 0.09 },
-      { scaleY: 1 + shape2Motion.value * 0.035 },
       { rotate: `${3 - shape2Motion.value * 5}deg` },
     ],
     opacity: 0.7,
@@ -63,7 +56,6 @@ export function LiquidScene({ scene }: { scene: Scene }) {
       { translateX: (accentMotion.value - 0.5) * 34 },
       { translateY: (accentMotion.value - 0.5) * 22 },
       { rotate: `${-18 + accentMotion.value * 7}deg` },
-      { scale: 0.98 + accentMotion.value * 0.06 },
     ],
   }));
 
@@ -72,15 +64,6 @@ export function LiquidScene({ scene }: { scene: Scene }) {
       { translateX: (0.5 - accentMotion.value) * 30 },
       { translateY: (accentMotion.value - 0.5) * -24 },
       { rotate: `${156 + accentMotion.value * 8}deg` },
-      { scale: 0.97 + (1 - accentMotion.value) * 0.07 },
-    ],
-  }));
-
-  const mascotStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: (mascotMotion.value - 0.5) * -10 },
-      { rotate: `${(mascotMotion.value - 0.5) * 1.8}deg` },
-      { scale: 0.99 + mascotMotion.value * 0.025 },
     ],
   }));
 
@@ -101,9 +84,9 @@ export function LiquidScene({ scene }: { scene: Scene }) {
       </View>
 
       {/* Mascot: STATIC — no bobbing, no rotation */}
-      <Animated.View style={[styles.mascot, { top: mascotTop, width: mascotSize * scale, height: mascotSize * scale, marginLeft: -(mascotSize * scale) / 2 }, mascotStyle]}>
+      <View style={[styles.mascot, { top: mascotTop, width: mascotSize * scale, height: mascotSize * scale, marginLeft: -(mascotSize * scale) / 2 }]}>
         <Image source={assets.mascotNeutral} contentFit="contain" style={styles.fill} />
-      </Animated.View>
+      </View>
 
       <View pointerEvents="none" style={decor}>
         {scene === 'splash' && <Animated.Image source={assets.shape1} resizeMode="contain" style={[styles.bottomSplash, bottomAccent]} />}

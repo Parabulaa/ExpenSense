@@ -174,7 +174,10 @@ export default function OnboardingExperience() {
     transform: [{ translateX: translateX.value }],
   }));
 
-  const compact = viewport.height > 0 && viewport.height < 540;
+  // Use the stable device window for the layout breakpoint. Deriving this
+  // from the measured viewport made the compact controls change that same
+  // viewport's height, producing a regular/compact feedback loop.
+  const compact = windowSize.height < 760;
   const heroHeight = Math.min(Math.max(viewport.height * 0.46, compact ? 184 : 225), 275);
 
   return (
@@ -364,7 +367,6 @@ function PaginationDot({
     const distance = Math.abs(position - index);
 
     return {
-      width: interpolate(distance, [0, 1], [22, 9], Extrapolation.CLAMP),
       opacity: interpolate(distance, [0, 1], [1, 0.55], Extrapolation.CLAMP),
       backgroundColor: interpolateColor(
         distance,
@@ -393,7 +395,6 @@ type FloatingShapeProps = {
   driftX: number;
   driftY: number;
   rotation: number;
-  scale: number;
   baseRotation?: number;
   reducedMotion: boolean;
 };
@@ -405,7 +406,6 @@ function FloatingShape({
   driftX,
   driftY,
   rotation,
-  scale,
   baseRotation = 0,
   reducedMotion,
 }: FloatingShapeProps) {
@@ -435,7 +435,6 @@ function FloatingShape({
         { translateX: centered * driftX },
         { translateY: centered * driftY },
         { rotate: `${baseRotation + centered * rotation}deg` },
-        { scale: 1 + centered * scale },
       ],
     };
   });
@@ -460,7 +459,6 @@ function AnimatedBackgroundLayer({ reducedMotion }: { reducedMotion: boolean }) 
         driftX={30}
         driftY={22}
         rotation={5}
-        scale={0.05}
         baseRotation={22}
         reducedMotion={reducedMotion}
       />
@@ -471,7 +469,6 @@ function AnimatedBackgroundLayer({ reducedMotion }: { reducedMotion: boolean }) 
         driftX={-26}
         driftY={32}
         rotation={-5}
-        scale={0.045}
         baseRotation={-28}
         reducedMotion={reducedMotion}
       />
@@ -482,7 +479,6 @@ function AnimatedBackgroundLayer({ reducedMotion }: { reducedMotion: boolean }) 
         driftX={34}
         driftY={-28}
         rotation={6}
-        scale={0.05}
         baseRotation={-32}
         reducedMotion={reducedMotion}
       />
@@ -493,7 +489,6 @@ function AnimatedBackgroundLayer({ reducedMotion }: { reducedMotion: boolean }) 
         driftX={-28}
         driftY={26}
         rotation={-5.5}
-        scale={0.045}
         baseRotation={154}
         reducedMotion={reducedMotion}
       />
@@ -509,7 +504,6 @@ function AnimatedBackgroundLayer({ reducedMotion }: { reducedMotion: boolean }) 
         driftX={16}
         driftY={-10}
         rotation={1.4}
-        scale={0.02}
         baseRotation={-4}
         reducedMotion={reducedMotion}
       />
@@ -520,7 +514,6 @@ function AnimatedBackgroundLayer({ reducedMotion }: { reducedMotion: boolean }) 
         driftX={-18}
         driftY={12}
         rotation={-1.8}
-        scale={0.025}
         baseRotation={6}
         reducedMotion={reducedMotion}
       />
@@ -531,7 +524,6 @@ function AnimatedBackgroundLayer({ reducedMotion }: { reducedMotion: boolean }) 
         driftX={12}
         driftY={-14}
         rotation={3}
-        scale={0.04}
         baseRotation={-38}
         reducedMotion={reducedMotion}
       />
@@ -590,7 +582,6 @@ function HeroMascot({
     const distance = Math.abs(page - index);
     return {
       opacity: interpolate(distance, [0, 0.85], [1, 0], Extrapolation.CLAMP),
-      transform: [{ scale: interpolate(distance, [0, 1], [1, 0.94], Extrapolation.CLAMP) }],
     };
   });
 
@@ -634,7 +625,6 @@ function SceneryBack({
         driftX={20}
         driftY={-15}
         rotation={2}
-        scale={0.025}
         reducedMotion={reducedMotion}
       />
       <FloatingShape
@@ -647,7 +637,6 @@ function SceneryBack({
         driftX={-24}
         driftY={18}
         rotation={-2.4}
-        scale={0.035}
         reducedMotion={reducedMotion}
       />
     </View>
@@ -679,7 +668,6 @@ function SceneryFront({
         driftX={22}
         driftY={-20}
         rotation={2.6}
-        scale={0.03}
         baseRotation={4}
         reducedMotion={reducedMotion}
       />
@@ -941,6 +929,7 @@ const useStyles = makeStyles((colors) => ({
     gap: 8,
   },
   dot: {
+    width: 14,
     height: 9,
     borderRadius: radii.pill,
   },
