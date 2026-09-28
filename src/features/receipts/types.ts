@@ -10,6 +10,7 @@ export type ReceiptImage = {
   width: number;
   height: number;
   size?: number;
+  origin?: 'camera' | 'gallery';
 };
 
 /** What a confirmed receipt will record. `unknown` must be resolved by the user. */

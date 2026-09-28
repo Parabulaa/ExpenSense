@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type PropsWithChildren } from 'react';
-import { assessReceiptStructure, parseReceipt } from './receipt-parser';
+import { assessReceiptStructure, isLikelyReceiptScreenshot, parseReceipt } from './receipt-parser';
 import { nowLocalTime, todayLocalDate } from '@/features/expenses/validation';
 import { uuid } from '@/lib/offline/network';
 import { optimizeReceipt, recognizeReceipt, saveReceiptTransaction } from './receipt-service';
@@ -38,6 +38,7 @@ export function ReceiptProvider({ children }: PropsWithChildren) {
       setProgress(steps[0]); const optimized = await optimizeReceipt(source); setCompleted([steps[0]]);
       setProgress(steps[1]); if (Math.min(optimized.width, optimized.height) < 500) throw Object.assign(new Error('The image is too small. Try a clearer, closer photo.'), { kind: 'quality' }); setCompleted(steps.slice(0, 2));
       setProgress(steps[2]); const ocr = await recognizeReceipt(optimized); setCompleted(steps.slice(0, 3));
+      if (isLikelyReceiptScreenshot(ocr.rawText, optimized)) throw Object.assign(new Error('Screenshots are not accepted as receipt images. Upload a clear photo of the original receipt instead.'), { kind: 'not-receipt' });
       setProgress(steps[3]); const structure = assessReceiptStructure(ocr.rawText); if (structure < 4) throw Object.assign(new Error("We couldn't find enough receipt details in this image."), { kind: 'not-receipt' }); setCompleted(steps.slice(0, 4));
       setProgress(steps[4]); const parsed = parseReceipt(ocr.rawText, optimized, ocr.confidence); setCompleted(steps.slice(0, 5));
       setProgress(steps[5]); if (!parsed.totalCents) throw Object.assign(new Error("We couldn't find an amount on this receipt."), { kind: 'not-receipt' }); setDraft(parsed); setCompleted(steps); setProgress(null); processing.current = false; return 'review';

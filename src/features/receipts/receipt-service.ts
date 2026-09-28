@@ -20,7 +20,7 @@ export async function optimizeReceipt(image: ReceiptImage): Promise<ReceiptImage
     result = await manipulateAsync(result.uri, [{ resize: smaller }], { compress, format: SaveFormat.JPEG });
     info = await FileSystem.getInfoAsync(result.uri);
   }
-  return { uri: result.uri, width: result.width, height: result.height, size: info.exists ? info.size : undefined };
+  return { uri: result.uri, width: result.width, height: result.height, size: info.exists ? info.size : undefined, origin: image.origin };
 }
 
 export async function recognizeReceipt(image: ReceiptImage) {

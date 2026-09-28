@@ -4,6 +4,7 @@ import type { ReceiptClassification, ReceiptDraft, ReceiptImage, ReceiptItemDraf
 const money = /(?:PHP|P|₱)?\s*([0-9]{1,7}(?:,[0-9]{3})*(?:\.[0-9]{2})|[0-9]{1,7},[0-9]{2})/i;
 const labels = /^(subtotal|sub total|tax|vat|vatable|total|cash|change|amount|balance|fee|service fee|ref|reference|transaction)/i;
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const itemMetadata = /\b(?:tin|vat|invoice|receipt|serial|terminal|cashier|operator|table|order|date|time|address|telephone|tel\.?|permit|accreditation|official|customer|buyer)\b/i;
 
 /** A detected type needs this much confidence before it is preselected. */
 export const CLASSIFICATION_THRESHOLD = 60;
@@ -68,6 +69,22 @@ export function assessReceiptStructure(rawText: string) {
   if ((rawText.match(/[0-9]+[,.][0-9]{2}/g) ?? []).length >= 1) score += 1;
   if (rawText.split(/\r?\n/).filter(Boolean).length >= 5) score += 1;
   return score;
+}
+
+/** Rejects phone/app screenshots uploaded as if they were receipt photos. */
+export function isLikelyReceiptScreenshot(rawText: string, image: ReceiptImage) {
+  if (image.origin !== 'gallery') return false;
+  const lower = rawText.toLowerCase();
+  const aspect = Math.max(image.width, image.height) / Math.max(1, Math.min(image.width, image.height));
+  const appMarkers = [
+    /\breview receipt\b/, /\brecognition confidence\b/, /\btap the photo to view it\b/,
+    /\btransaction type\b/, /\bselect category\b/, /\bpaid from wallet\b/,
+    /\bconfirm\s*&\s*save\b/, /\bitems\s*\(\s*\d+\s*\)/,
+  ].filter((pattern) => pattern.test(lower)).length;
+  const screenChrome = [
+    /\bsos only\b/, /\b(?:4g|5g|lte|wi-?fi)\b/, /\b\d{1,3}%\b/,
+  ].filter((pattern) => pattern.test(lower)).length;
+  return appMarkers >= 2 || (aspect >= 1.7 && appMarkers >= 1 && screenChrome >= 1) || (aspect >= 1.9 && screenChrome >= 2);
 }
 
 type Signal = { kind: Exclude<ReceiptKind, 'unknown'>; weight: number; label: string; test: (lower: string, context: { items: number; reference: boolean }) => boolean };
@@ -156,9 +173,18 @@ export function parseReceipt(rawText: string, image: ReceiptImage, providerConfi
   const fee = findLabeled(/\b(fee|service fee|transfer fee|transaction fee|convenience fee)\b/i);
   const items: ReceiptItemDraft[] = lines.flatMap((line, index) => {
     if (labels.test(line)) return [];
-    const match = line.match(money);
-    if (!match) return [];
-    const name = line.slice(0, match.index).replace(/^\d+\s*[x×]?\s*/i, '').trim();
+    const matches = [...line.matchAll(new RegExp(money.source, 'ig'))];
+    if (!matches.length) return [];
+    const match = matches[matches.length - 1];
+    let name = line.slice(0, match.index).replace(/^\d+\s*[x×]?\s*/i, '').trim();
+    // OCR often splits the product name from its quantity/price line.
+    if (name.length < 2 || !/[a-z]/i.test(name)) {
+      const previous = lines.slice(Math.max(0, index - 2), index).reverse().find((candidate) =>
+        /[a-z]{2}/i.test(candidate) && !labels.test(candidate) && !itemMetadata.test(candidate) && !money.test(candidate),
+      );
+      name = previous?.trim() ?? '';
+    }
+    if (itemMetadata.test(name)) return [];
     if (name.length < 2) return [];
     return [{ id: `${index}-${match[1]}`, name: name.slice(0, 80), quantity: Number(line.match(/^(\d+)\s*[x×]/i)?.[1] ?? 1), lineTotalCents: cents(match[1]) }];
   }).slice(0, 30);

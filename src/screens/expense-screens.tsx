@@ -53,7 +53,7 @@ export function AddExpenseSheet({ visible, onClose, onNavigate }: { visible: boo
     if (!permission.granted) return;
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
     const asset = result.assets?.[0];
-    if (!result.canceled && asset) { setSource({ uri: asset.uri, width: asset.width, height: asset.height, size: asset.fileSize }); navigate('/processing'); }
+    if (!result.canceled && asset) { setSource({ uri: asset.uri, width: asset.width, height: asset.height, size: asset.fileSize, origin: 'gallery' }); navigate('/processing'); }
   };
   return (
       <DraggableBottomSheet visible={visible} onClose={onClose}>{(dismiss) => <>
@@ -295,10 +295,10 @@ export function ScannerScreen() {
   const colors = useColors();
   const styles = useStyles();
   const [permission, requestPermission] = useCameraPermissions(); const [torch, setTorch] = useState(false); const [busy, setBusy] = useState(false); const camera = useRef<CameraView>(null); const { setSource } = useReceipt();
-  const pick = async () => { const access = await ImagePicker.requestMediaLibraryPermissionsAsync(); if (!access.granted) return; const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 }); const asset = result.assets?.[0]; if (!result.canceled && asset) { setSource({ uri: asset.uri, width: asset.width, height: asset.height, size: asset.fileSize }); router.replace('/processing'); } };
+  const pick = async () => { const access = await ImagePicker.requestMediaLibraryPermissionsAsync(); if (!access.granted) return; const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 }); const asset = result.assets?.[0]; if (!result.canceled && asset) { setSource({ uri: asset.uri, width: asset.width, height: asset.height, size: asset.fileSize, origin: 'gallery' }); router.replace('/processing'); } };
   if (!permission) return <Screen scroll={false} variant={4}><View style={styles.processing}><ActivityIndicator color={colors.deepForest} /><AppText>Checking camera access…</AppText></View></Screen>;
   if (!permission.granted) return <Screen scroll={false} variant={4}><View style={styles.failed}><AppIcon name="camera-off-outline" size={72} color={colors.forest} /><AppText variant="title" style={styles.center}>Camera access is needed</AppText><AppText style={[styles.muted, styles.center]}>Allow camera access to scan a receipt, or choose one from your gallery.</AppText><PrimaryButton title="Allow Camera" onPress={permission.canAskAgain ? requestPermission : Linking.openSettings} /><SecondaryButton title="Choose from Gallery" onPress={pick} /></View></Screen>;
-  const capture = async () => { if (busy) return; setBusy(true); try { const photo = await camera.current?.takePictureAsync({ quality: 1, skipProcessing: false }); if (photo) { setSource({ uri: photo.uri, width: photo.width, height: photo.height }); router.replace('/processing'); } } finally { setBusy(false); } };
+  const capture = async () => { if (busy) return; setBusy(true); try { const photo = await camera.current?.takePictureAsync({ quality: 1, skipProcessing: false }); if (photo) { setSource({ uri: photo.uri, width: photo.width, height: photo.height, origin: 'camera' }); router.replace('/processing'); } } finally { setBusy(false); } };
   return <Screen scroll={false} variant={4}><View style={styles.scannerPage}><CameraView ref={camera} style={styles.camera} facing="back" enableTorch={torch}><View style={styles.cameraTop}><Pressable accessibilityLabel="Close scanner" hitSlop={10} onPress={() => router.back()} style={styles.scannerIconButton}><AppIcon name="close" color="#FFFFFF" size={32} /></Pressable><Pressable accessibilityLabel="Toggle flashlight" hitSlop={10} onPress={() => setTorch((value) => !value)} style={styles.scannerIconButton}><AppIcon name={torch ? 'flash' : 'flash-outline'} color="#FFFFFF" size={30} /></Pressable></View><Image source={assets.scanFrame} contentFit="contain" style={styles.scanFrame} /><View style={styles.cameraBottom}><AppText style={styles.scannerInstruction}>Position the whole receipt inside the frame.</AppText><View style={styles.captureRow}><Pressable accessibilityLabel="Choose receipt from gallery" hitSlop={10} onPress={pick} style={styles.scannerIconButton}><AppIcon name="image-outline" color="#FFFFFF" size={34} /></Pressable><Pressable accessibilityLabel="Capture receipt" disabled={busy} onPress={capture} style={styles.capture}>{busy ? <ActivityIndicator color="#173D2B" /> : null}</Pressable><View style={styles.scannerControlSpacer} /></View></View></CameraView></View></Screen>;
 }
 
@@ -414,7 +414,6 @@ export function ReceiptReviewScreen() {
           <AppText variant="small" style={styles.muted}>Tap the photo to view it.</AppText>
         </View>
       </View>
-      {manual ? null : draft.issues.map((issue) => <AppText key={issue} variant="small" style={styles.warningText}>• {issue}</AppText>)}
     </Card>
 
     <View style={styles.fieldGroup}>
@@ -443,6 +442,7 @@ export function ReceiptReviewScreen() {
         <AppText variant="small" style={styles.muted}>{kind === 'expense' ? 'Counts as spending in this category.' : kind === 'cash_in' ? 'Adds money to the wallet. It is not spending and does not change any budget.' : 'Moves money between wallets. It is not spending or income, and budgets are unchanged.'}</AppText>
       </Card> : null}
     </> : null}
+    {!manual && draft.issues.length > 0 ? <View style={styles.reviewWarnings}>{draft.issues.map((issue) => <AppText key={issue} variant="small" style={styles.warningText}>• {issue}</AppText>)}</View> : null}
     <PrimaryButton title="Confirm & Save" loadingTitle="Saving receipt…" loading={saving} disabled={saving || kind === 'unknown'} onPress={confirm} />
   </View>
   <CategoryPicker visible={categoryOpen} selectedId={draft.categoryId} onClose={() => setCategoryOpen(false)} onSelect={(categoryId) => { updateDraft({ categoryId }); setCategoryOpen(false); }} />
@@ -467,7 +467,7 @@ export function RecognitionFailedScreen() {
       if (!permission.granted) return;
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
       const asset = result.assets?.[0];
-      if (!result.canceled && asset) { setSource({ uri: asset.uri, width: asset.width, height: asset.height, size: asset.fileSize }); router.replace('/processing'); }
+      if (!result.canceled && asset) { setSource({ uri: asset.uri, width: asset.width, height: asset.height, size: asset.fileSize, origin: 'gallery' }); router.replace('/processing'); }
     } finally {
       setPicking(false);
     }
@@ -517,5 +517,5 @@ const useStyles = makeStyles((colors) => ({
   reviewTop: { flexDirection: 'row', gap: 16 }, receiptPhoto: { width: '42%', height: 210, borderRadius: 14, backgroundColor: '#59442E', padding: 8 }, failed: { flex: 1, justifyContent: 'center', padding: 28, gap: 18 }, failedMascot: { width: 260, height: 240, alignSelf: 'center' },
   kindRow: { flexDirection: 'row', gap: 8 }, kindOption: { flex: 1, minHeight: 64, borderRadius: radii.md, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', gap: 4 }, kindOptionSelected: { backgroundColor: colors.deepForest, borderColor: colors.deepForest }, kindText: { color: colors.deepForest, fontFamily: 'JakartaSemiBold' }, kindTextSelected: { color: colors.surface, fontFamily: 'JakartaSemiBold' },
   changeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 }, changeLabel: { flex: 1, minWidth: 0 }, changeAfter: { color: colors.deepForest, fontFamily: 'JakartaBold' },
-  warningText: { color: '#9A6400' }, itemEditCard: { gap: 12, padding: 12, borderRadius: radii.md, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.pale },
+  reviewWarnings: { gap: 8, paddingHorizontal: 4, paddingVertical: 8 }, warningText: { color: '#D8A11D' }, itemEditCard: { gap: 12, padding: 12, borderRadius: radii.md, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.pale },
 }));
