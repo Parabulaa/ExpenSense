@@ -27,6 +27,9 @@ export function ThemeProvider({ children }: PropsWithChildren) {
   // to the OS.
   useEffect(() => {
     if (!settingsReady) return;
+    // Native only: react-native-web has no setColorScheme, and calling it there
+    // throws during startup and leaves the web app blank.
+    if (typeof Appearance.setColorScheme !== 'function') return;
     Appearance.setColorScheme(settings.themeMode === 'system' ? 'unspecified' : settings.themeMode);
   }, [settings.themeMode, settingsReady]);
 
