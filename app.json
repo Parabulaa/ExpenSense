@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/Branding/Logo_Mark.png",
     "scheme": "expensense",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.expensense.app"
@@ -35,11 +35,7 @@
         {
           "backgroundColor": "#F5F2E8",
           "image": "./assets/Branding/Logo_Mark.png",
-          "imageWidth": 110,
-          "dark": {
-            "backgroundColor": "#0F1813",
-            "image": "./assets/Branding/Logo_Mark.png"
-          }
+          "imageWidth": 110
         }
       ],
       "@react-native-community/datetimepicker",

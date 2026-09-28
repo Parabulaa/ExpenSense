@@ -13,6 +13,8 @@ export type AppSettings = {
   spendingInsights: boolean;
   transactionReminders: boolean;
   themeMode: ThemeMode;
+  /** True once the user has picked an appearance themselves. */
+  themeChosen: boolean;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -20,7 +22,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   budgetAlertThreshold: 80,
   spendingInsights: true,
   transactionReminders: false,
-  themeMode: 'system',
+  // Light unless the user chooses otherwise. Following the phone by default made
+  // a fresh install start light and then flip to dark on screen.
+  themeMode: 'light',
+  themeChosen: false,
 };
 
 type SettingsContextValue = {
@@ -43,9 +48,12 @@ function parseSettings(raw: string | null): AppSettings {
         : DEFAULT_SETTINGS.budgetAlertThreshold,
       spendingInsights: typeof parsed.spendingInsights === 'boolean' ? parsed.spendingInsights : DEFAULT_SETTINGS.spendingInsights,
       transactionReminders: typeof parsed.transactionReminders === 'boolean' ? parsed.transactionReminders : DEFAULT_SETTINGS.transactionReminders,
-      themeMode: parsed.themeMode === 'light' || parsed.themeMode === 'dark' || parsed.themeMode === 'system'
+      // A saved 'system' from before appearance became a user choice was just the
+      // old default, not a decision — it becomes light until the user picks.
+      themeMode: parsed.themeMode === 'light' || parsed.themeMode === 'dark' || (parsed.themeMode === 'system' && parsed.themeChosen === true)
         ? parsed.themeMode
         : DEFAULT_SETTINGS.themeMode,
+      themeChosen: parsed.themeChosen === true,
     };
   } catch {
     // Corrupt or hand-edited storage shouldn't brick the settings screen.
@@ -82,7 +90,7 @@ export function SettingsProvider({ children }: PropsWithChildren) {
   const updateSettings = useCallback(async (patch: Partial<AppSettings>) => {
     let next = DEFAULT_SETTINGS;
     setSettings((current) => {
-      next = { ...current, ...patch };
+      next = { ...current, ...patch, ...(patch.themeMode ? { themeChosen: true } : {}) };
       return next;
     });
 
