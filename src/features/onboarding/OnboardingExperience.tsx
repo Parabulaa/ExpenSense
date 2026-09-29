@@ -239,6 +239,8 @@ export default function OnboardingExperience() {
                       heroHeight={heroHeight}
                       compact={compact}
                       onCopyLayout={onCopyLayout}
+                      // Scroll only when the content genuinely does not fit.
+                      scrollable={copyHeight > 0 && heroHeight + copyHeight + 12 > viewport.height}
                     />
                   ))}
                 </Animated.View>
@@ -268,6 +270,7 @@ function OnboardingPage({
   heroHeight,
   compact,
   onCopyLayout,
+  scrollable,
 }: {
   page: OnboardingPageData;
   width: number;
@@ -275,6 +278,7 @@ function OnboardingPage({
   heroHeight: number;
   compact: boolean;
   onCopyLayout: (height: number) => void;
+  scrollable: boolean;
 }) {
   const styles = useStyles();
   return (
@@ -288,7 +292,9 @@ function OnboardingPage({
       showsVerticalScrollIndicator={false}
       nestedScrollEnabled
       bounces={false}
-      scrollEnabled
+      // No Android edge glow: it drew faint lines at the top and bottom.
+      overScrollMode="never"
+      scrollEnabled={scrollable}
     >
       {/* Spacer only: the mascot now lives in a fixed layer above the track so
           it can't slide away with the page. */}
