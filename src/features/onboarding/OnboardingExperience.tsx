@@ -620,7 +620,7 @@ function SceneryBack({
 }) {
   const styles = useStyles();
   return (
-    <View style={[styles.scenery, { height }]} accessible={false}>
+    <View style={[styles.scenery, styles.sceneryOpenTop, { height }]} accessible={false}>
       <FloatingShape
         source={assets.shape4}
         style={[
@@ -815,6 +815,12 @@ const useStyles = makeStyles((colors) => ({
     top: 0,
     overflow: 'hidden',
     pointerEvents: 'none',
+  },
+  sceneryOpenTop: {
+    // The back scene is not clipped, so its shapes round off behind the header
+    // instead of ending in a straight line under it; the shell clips at the
+    // screen edges.
+    overflow: 'visible',
   },
   sceneryBack: {
     position: 'absolute',
