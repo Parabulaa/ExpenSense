@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
 import type { Session } from '@supabase/supabase-js';
 
@@ -121,6 +122,29 @@ export async function exchangeRecoveryCode(code: string): Promise<AuthResult<{ s
   }
 }
 
+// Opening a reset link signs the user in only so they can set a new password.
+// This flag marks that session as temporary: if they leave the reset screen or
+// close the app without saving, it is ended instead of becoming a normal login.
+const RECOVERY_PENDING_KEY = 'expensense.recovery-pending';
+
+export async function isRecoveryPending(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(RECOVERY_PENDING_KEY)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export async function finishRecovery(): Promise<void> {
+  await AsyncStorage.removeItem(RECOVERY_PENDING_KEY).catch(() => undefined);
+}
+
+/** Ends an unfinished reset session on this device only. */
+export async function abandonRecovery(): Promise<void> {
+  await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
+  await finishRecovery();
+}
+
 // Supabase's reset link carries either a one-time `code` (query) or, in the
 // implicit flow, the session itself in the `#access_token=…` fragment.
 export async function startRecoveryFromUrl(url: string): Promise<AuthResult<{ session: Session }>> {
@@ -128,6 +152,9 @@ export async function startRecoveryFromUrl(url: string): Promise<AuthResult<{ se
   const [beforeHash, hash = ''] = url.split('#');
   const query = read(beforeHash.split('?')[1] ?? '');
   const fragment = read(hash);
+
+  // Set before the session exists, so a crash in between still ends it later.
+  await AsyncStorage.setItem(RECOVERY_PENDING_KEY, '1').catch(() => undefined);
 
   const code = query.get('code');
   if (code) return exchangeRecoveryCode(code);

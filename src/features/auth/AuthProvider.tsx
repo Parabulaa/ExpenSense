@@ -22,11 +22,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
+    (async () => {
+      // A reset link was opened earlier but no new password was saved: that
+      // session was only for the reset, so it must not log the user in.
+      if (await authService.isRecoveryPending()) await authService.abandonRecovery();
+      const { data } = await supabase.auth.getSession();
       if (!mounted) return;
       setSession(data.session);
       setInitialized(true);
-    });
+    })();
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (!mounted) return;

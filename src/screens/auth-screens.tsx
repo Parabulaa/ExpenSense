@@ -356,7 +356,7 @@ export function CreateNewPasswordScreen() {
   const linkingUrl = Linking.useLinkingURL();
   const url = Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.href : linkingUrl;
   const hasRecovery = Boolean(url && /[?#&](code|access_token)=/.test(url));
-  const { signOut } = useAuth();
+  const { signOut, initialized } = useAuth();
   const [status, setStatus] = useState<'checking' | 'ready' | 'invalid'>(hasRecovery ? 'checking' : 'invalid');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -366,9 +366,18 @@ export function CreateNewPasswordScreen() {
   const [submitting, setSubmitting] = useState(false);
   const { dialogProps, showDialog, hideDialog } = useAuthDialog();
   const hasAttempted = useRef(false);
+  const passwordSaved = useRef(false);
+
+  // Leaving this screen without saving a new password ends the reset session,
+  // so the link alone never leaves the account signed in.
+  useEffect(() => () => {
+    if (hasAttempted.current && !passwordSaved.current) void authService.abandonRecovery();
+  }, []);
 
   useEffect(() => {
-    if (!url || !hasRecovery || hasAttempted.current) return;
+    // Wait until startup has cleared any earlier unfinished reset, so it
+    // cannot end the session this link is about to create.
+    if (!initialized || !url || !hasRecovery || hasAttempted.current) return;
     hasAttempted.current = true;
     setStatus('checking');
 
@@ -379,7 +388,7 @@ export function CreateNewPasswordScreen() {
         window.history.replaceState(null, '', window.location.pathname);
       }
     });
-  }, [url, hasRecovery]);
+  }, [initialized, url, hasRecovery]);
 
   useEffect(() => {
     if (status !== 'invalid') return;
@@ -404,7 +413,9 @@ export function CreateNewPasswordScreen() {
     const result = await authService.updatePassword(password);
 
     if (result.ok) {
+      passwordSaved.current = true;
       await signOut();
+      await authService.finishRecovery();
       setSubmitting(false);
       showDialog({
         title: authCopy.passwordResetSuccess.title,
