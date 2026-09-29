@@ -5,7 +5,6 @@ import {
   type ImageStyle,
   type LayoutChangeEvent,
   Pressable,
-  ScrollView,
   type StyleProp,
   useWindowDimensions,
   View,
@@ -186,9 +185,9 @@ export default function OnboardingExperience() {
   // The hero takes whatever the copy leaves, so the summary card is always
   // fully on screen: large phones keep the big scene, shorter ones or larger
   // font settings get a smaller mascot instead of a clipped card.
-  // Keeps the mascot large (the intended look); an unusually small screen
-  // scrolls a little rather than shrinking it further.
-  const MIN_HERO = 210;
+  // The page never scrolls, so only a very small screen shrinks the mascot
+  // this far; typical phones keep the full 275.
+  const MIN_HERO = 150;
   const MAX_HERO = 275;
   const heroHeight = copyHeight
     ? Math.min(MAX_HERO, Math.max(MIN_HERO, viewport.height - copyHeight - 12))
@@ -239,8 +238,6 @@ export default function OnboardingExperience() {
                       heroHeight={heroHeight}
                       compact={compact}
                       onCopyLayout={onCopyLayout}
-                      // Scroll only when the content genuinely does not fit.
-                      scrollable={copyHeight > 0 && heroHeight + copyHeight + 12 > viewport.height}
                     />
                   ))}
                 </Animated.View>
@@ -270,7 +267,6 @@ function OnboardingPage({
   heroHeight,
   compact,
   onCopyLayout,
-  scrollable,
 }: {
   page: OnboardingPageData;
   width: number;
@@ -278,24 +274,11 @@ function OnboardingPage({
   heroHeight: number;
   compact: boolean;
   onCopyLayout: (height: number) => void;
-  scrollable: boolean;
 }) {
   const styles = useStyles();
   return (
-    <ScrollView
-      style={[styles.page, { width, flexBasis: width }]}
-      contentContainerStyle={[
-        styles.pageContent,
-        { minHeight: height },
-        compact && styles.pageContentCompact,
-      ]}
-      showsVerticalScrollIndicator={false}
-      nestedScrollEnabled
-      bounces={false}
-      // No Android edge glow: it drew faint lines at the top and bottom.
-      overScrollMode="never"
-      scrollEnabled={scrollable}
-    >
+    // A plain view, never a scroller: the hero is sized so the page always fits.
+    <View style={[styles.page, { width, flexBasis: width }, styles.pageContent, compact && styles.pageContentCompact]}>
       {/* Spacer only: the mascot now lives in a fixed layer above the track so
           it can't slide away with the page. */}
       <View style={[styles.hero, styles.nonInteractive, { height: heroHeight }]} />
@@ -310,7 +293,7 @@ function OnboardingPage({
 
         <SummaryCard summary={page.summary} compact={compact} />
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -786,7 +769,10 @@ const useStyles = makeStyles((colors) => ({
   viewport: {
     flex: 1,
     width: '100%',
-    overflow: 'hidden',
+    // Not clipped: the shell already clips at the screen edges, and clipping
+    // here cut the background shapes into straight lines under the header
+    // and above the buttons.
+    overflow: 'visible',
   },
   track: {
     height: '100%',
