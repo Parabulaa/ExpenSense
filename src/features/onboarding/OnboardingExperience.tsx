@@ -186,7 +186,9 @@ export default function OnboardingExperience() {
   // The hero takes whatever the copy leaves, so the summary card is always
   // fully on screen: large phones keep the big scene, shorter ones or larger
   // font settings get a smaller mascot instead of a clipped card.
-  const MIN_HERO = 120;
+  // Keeps the mascot large (the intended look); an unusually small screen
+  // scrolls a little rather than shrinking it further.
+  const MIN_HERO = 210;
   const MAX_HERO = 275;
   const heroHeight = copyHeight
     ? Math.min(MAX_HERO, Math.max(MIN_HERO, viewport.height - copyHeight - 12))
@@ -862,9 +864,10 @@ const useStyles = makeStyles((colors) => ({
     maxWidth: 390,
     textAlign: 'center',
     color: colors.muted,
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 6,
+    // Two lines on a typical phone, which leaves the hero its full height.
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 4,
   },
   descriptionCompact: {
     fontSize: 13,
