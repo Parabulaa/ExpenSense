@@ -1,6 +1,7 @@
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, BackHandler, Pressable, View, useWindowDimensions } from 'react-native';
+import * as Linking from 'expo-linking';
+import { ActivityIndicator, BackHandler, Platform, Pressable, View, useWindowDimensions } from 'react-native';
 import Animated, { Easing, FadeIn, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { Screen } from '@/components/common/screen';
 import { LiquidScene } from '@/components/common/liquid-scene';
@@ -350,10 +351,13 @@ export function ForgotPasswordScreen() {
 export function CreateNewPasswordScreen() {
   const colors = useColors();
   const s = useStyles();
-  const params = useLocalSearchParams<{ code?: string }>();
-  const code = Array.isArray(params.code) ? params.code[0] : params.code;
+  // The raw link, since the reset session may arrive in the #fragment, which
+  // route params never include. On web the page URL is the link itself.
+  const linkingUrl = Linking.useLinkingURL();
+  const url = Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.href : linkingUrl;
+  const hasRecovery = Boolean(url && /[?#&](code|access_token)=/.test(url));
   const { signOut } = useAuth();
-  const [status, setStatus] = useState<'checking' | 'ready' | 'invalid'>(code ? 'checking' : 'invalid');
+  const [status, setStatus] = useState<'checking' | 'ready' | 'invalid'>(hasRecovery ? 'checking' : 'invalid');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState<string | null>(null);
@@ -364,13 +368,18 @@ export function CreateNewPasswordScreen() {
   const hasAttempted = useRef(false);
 
   useEffect(() => {
-    if (!code || hasAttempted.current) return;
+    if (!url || !hasRecovery || hasAttempted.current) return;
     hasAttempted.current = true;
+    setStatus('checking');
 
-    authService.exchangeRecoveryCode(code).then((result) => {
+    authService.startRecoveryFromUrl(url).then((result) => {
       setStatus(result.ok ? 'ready' : 'invalid');
+      // Drop the tokens from the address bar once they are used.
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
     });
-  }, [code]);
+  }, [url, hasRecovery]);
 
   useEffect(() => {
     if (status !== 'invalid') return;

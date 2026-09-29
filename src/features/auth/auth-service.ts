@@ -121,6 +121,29 @@ export async function exchangeRecoveryCode(code: string): Promise<AuthResult<{ s
   }
 }
 
+// Supabase's reset link carries either a one-time `code` (query) or, in the
+// implicit flow, the session itself in the `#access_token=…` fragment.
+export async function startRecoveryFromUrl(url: string): Promise<AuthResult<{ session: Session }>> {
+  const read = (part: string) => new URLSearchParams(part);
+  const [beforeHash, hash = ''] = url.split('#');
+  const query = read(beforeHash.split('?')[1] ?? '');
+  const fragment = read(hash);
+
+  const code = query.get('code');
+  if (code) return exchangeRecoveryCode(code);
+
+  const accessToken = fragment.get('access_token');
+  const refreshToken = fragment.get('refresh_token');
+  if (!accessToken || !refreshToken) return { ok: false, error: { kind: 'generic' } };
+  try {
+    const { data, error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+    if (error || !data.session) return { ok: false, error: { kind: classifyAuthError(error) } };
+    return { ok: true, data: { session: data.session } };
+  } catch (error) {
+    return { ok: false, error: { kind: classifyAuthError(error) } };
+  }
+}
+
 export async function updatePassword(newPassword: string): Promise<AuthResult<null>> {
   try {
     const { error } = await supabase.auth.updateUser({ password: newPassword });
