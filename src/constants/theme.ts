@@ -42,9 +42,9 @@ export const assets = {
   mascotNeutral: require('../../assets/Mascot/Mascot_Neutral.png'), mascotScanning: require('../../assets/Mascot/Mascot_Scanning.png'),
   mascotSuccess: require('../../assets/Mascot/Mascot_Success.png'), mascotConfused: require('../../assets/Mascot/Mascot_Confused.png'),
   mascotTip: require('../../assets/Mascot/Mascot_Tip.png'), mascotWarning: require('../../assets/Mascot/Mascot_Warning.png'),
-  shape1: require('../../assets/Organic Shape/Organic_Shape_01.png'), shape2: require('../../assets/Organic Shape/Organic_Shape_02.png'),
-  shape3: require('../../assets/Organic Shape/Organic_Shape_03.png'), shape4: require('../../assets/Organic Shape/Organic_Shape_04.png'),
-  shape5: require('../../assets/Organic Shape/Organic_Shape_05.png'), shape6: require('../../assets/Organic Shape/Organic_Shape_06.png'),
+  shape1: require('../../assets/organic-shapes/Organic_Shape_01.png'), shape2: require('../../assets/organic-shapes/Organic_Shape_02.png'),
+  shape3: require('../../assets/organic-shapes/Organic_Shape_03.png'), shape4: require('../../assets/organic-shapes/Organic_Shape_04.png'),
+  shape5: require('../../assets/organic-shapes/Organic_Shape_05.png'), shape6: require('../../assets/organic-shapes/Organic_Shape_06.png'),
   receipt: require('../../assets/Receipt/Receipt_Standalone.png'), scanFrame: require('../../assets/Scan/Scan_Frame.png'),
   verified: require('../../assets/Status/Status_Verified.png'),
 } as const;
