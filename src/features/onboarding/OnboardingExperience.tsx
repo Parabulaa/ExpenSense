@@ -105,6 +105,11 @@ export default function OnboardingExperience() {
     height: initialViewportHeight,
   });
   const reducedMotion = Boolean(useReducedMotion());
+  // Height of the tallest page's text and summary card, measured on device.
+  // It depends only on width and font size, never on the hero, so sizing the
+  // hero from it cannot feed back into itself.
+  const [copyHeight, setCopyHeight] = useState(0);
+  const onCopyLayout = (height: number) => setCopyHeight((current) => (height > current + 1 ? Math.ceil(height) : current));
 
   const translateX = useSharedValue(0);
   const currentIndex = useSharedValue(0);
@@ -178,7 +183,14 @@ export default function OnboardingExperience() {
   // from the measured viewport made the compact controls change that same
   // viewport's height, producing a regular/compact feedback loop.
   const compact = windowSize.height < 760;
-  const heroHeight = Math.min(Math.max(viewport.height * 0.46, compact ? 184 : 225), 275);
+  // The hero takes whatever the copy leaves, so the summary card is always
+  // fully on screen: large phones keep the big scene, shorter ones or larger
+  // font settings get a smaller mascot instead of a clipped card.
+  const MIN_HERO = 120;
+  const MAX_HERO = 275;
+  const heroHeight = copyHeight
+    ? Math.min(MAX_HERO, Math.max(MIN_HERO, viewport.height - copyHeight - 12))
+    : Math.min(Math.max(viewport.height * 0.46, compact ? 184 : 225), MAX_HERO);
 
   return (
     <View style={styles.appBackground}>
@@ -224,6 +236,7 @@ export default function OnboardingExperience() {
                       height={viewport.height}
                       heroHeight={heroHeight}
                       compact={compact}
+                      onCopyLayout={onCopyLayout}
                     />
                   ))}
                 </Animated.View>
@@ -252,12 +265,14 @@ function OnboardingPage({
   height,
   heroHeight,
   compact,
+  onCopyLayout,
 }: {
   page: OnboardingPageData;
   width: number;
   height: number;
   heroHeight: number;
   compact: boolean;
+  onCopyLayout: (height: number) => void;
 }) {
   const styles = useStyles();
   return (
@@ -271,13 +286,13 @@ function OnboardingPage({
       showsVerticalScrollIndicator={false}
       nestedScrollEnabled
       bounces={false}
-      scrollEnabled={compact}
+      scrollEnabled
     >
       {/* Spacer only: the mascot now lives in a fixed layer above the track so
           it can't slide away with the page. */}
       <View style={[styles.hero, styles.nonInteractive, { height: heroHeight }]} />
 
-      <View style={[styles.copy, compact && styles.copyCompact]}>
+      <View style={[styles.copy, compact && styles.copyCompact]} onLayout={(event) => onCopyLayout(event.nativeEvent.layout.height)}>
         <AppText variant="title" style={[styles.title, compact && styles.titleCompact]}>
           {page.title}
         </AppText>
