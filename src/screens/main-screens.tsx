@@ -847,7 +847,7 @@ export function CategoriesScreen() {
   const colors = useColors();
   const s = useStyles();
   const { tint, ink } = useAdaptiveColor();
-  const { categories, hiddenCategories, loading: categoriesLoading, error: categoriesError, refresh: refreshCategories, createCategory, updateCategory, hideCategory, restoreCategory } = useCategories();
+  const { categories, hiddenCategories, loading: categoriesLoading, error: categoriesError, refresh: refreshCategories, createCategory, updateCategory, deleteCategory, hideCategory, restoreCategory } = useCategories();
   const { categories: dashboardCategories, isFull, isOnDashboard, addCategory, removeCategory } =
     useDashboardCategories();
   const { showToast } = useToast();
@@ -859,9 +859,11 @@ export function CategoriesScreen() {
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [hideId, setHideId] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const iconChoices = ['shape-outline', 'coffee-outline', 'home-outline', 'paw-outline', 'music-note-outline', 'briefcase-outline'] as const;
   const colorChoices = ['#315F43', '#C92525', '#E45C0A', '#3477B8', '#7057A3', '#28704B'] as const;
   const hiding = categories.find((item) => item.id === hideId);
+  const deleting = categories.find((item) => item.id === deleteId && item.custom);
 
   const openCreate = () => { setName(''); setIcon('shape-outline'); setColor('#315F43'); setFormError(null); setEditor({}); };
   const openEdit = (id: string) => { const category = categories.find((item) => item.id === id); if (!category?.custom) return; setName(category.fullLabel); setIcon(category.icon); setColor(category.color ?? '#315F43'); setFormError(null); setEditor({ id }); };
@@ -889,6 +891,12 @@ export function CategoriesScreen() {
     const result = await restoreCategory(id);
     if (!result.ok) { showToast(result.message, { tone: 'warning' }); return; }
     selectionFeedback(); showToast(`${label} is visible again.`);
+  };
+  const removeCustom = async () => {
+    if (!deleting || saving) return;
+    setSaving(true); const result = await deleteCategory(deleting.id); setSaving(false);
+    if (!result.ok) { showToast(result.message, { tone: 'warning' }); return; }
+    removeCategory(deleting.id); selectionFeedback(); showToast(`${deleting.fullLabel} deleted.`); setDeleteId(null); setEditor(null);
   };
 
   const reportLimit = () => {
@@ -1001,8 +1009,9 @@ export function CategoriesScreen() {
           ))}
         </> : null}
       </View>
-      <DraggableBottomSheet visible={Boolean(editor)} disabled={saving} onClose={() => setEditor(null)}><AppText variant="h2">{editor?.id ? 'Edit Category' : 'Add Category'}</AppText><FormInput label="Category name" placeholder="e.g. Pets" value={name} onChangeText={(value) => { setName(value); setFormError(null); }} maxLength={40} error={formError ?? undefined} /><AppText variant="bodyMedium">Icon</AppText><View style={s.choiceRow}>{iconChoices.map((value) => <PressableScale key={value} accessibilityLabel={`Use ${value} icon`} accessibilityState={{ selected: icon === value }} onPress={() => setIcon(value)} style={[s.choiceCircle, icon === value && s.choiceCircleActive]}><AppIcon name={value} color={icon === value ? colors.surface : colors.deepForest} /></PressableScale>)}</View><AppText variant="bodyMedium">Color</AppText><View style={s.choiceRow}>{colorChoices.map((value) => <PressableScale key={value} accessibilityLabel={`Use color ${value}`} accessibilityState={{ selected: color === value }} onPress={() => setColor(value)} style={[s.colorChoice, { backgroundColor: value }, color === value && s.colorChoiceActive]}>{color === value ? <AppIcon name="check" size={17} color={colors.surface} /> : null}</PressableScale>)}</View><PrimaryButton title={saving ? 'Saving…' : editor?.id ? 'Save Changes' : 'Add Category'} disabled={saving} onPress={() => void saveCategory()} />{editor?.id ? <SecondaryButton title="Hide Category" disabled={saving} onPress={() => setHideId(editor.id ?? null)} /> : null}</DraggableBottomSheet>
+      <DraggableBottomSheet visible={Boolean(editor)} disabled={saving} onClose={() => setEditor(null)}><AppText variant="h2">{editor?.id ? 'Edit Category' : 'Add Category'}</AppText><FormInput label="Category name" placeholder="e.g. Pets" value={name} onChangeText={(value) => { setName(value); setFormError(null); }} maxLength={40} error={formError ?? undefined} /><AppText variant="bodyMedium">Icon</AppText><View style={s.choiceRow}>{iconChoices.map((value) => <PressableScale key={value} accessibilityLabel={`Use ${value} icon`} accessibilityState={{ selected: icon === value }} onPress={() => setIcon(value)} style={[s.choiceCircle, icon === value && s.choiceCircleActive]}><AppIcon name={value} color={icon === value ? colors.surface : colors.deepForest} /></PressableScale>)}</View><AppText variant="bodyMedium">Color</AppText><View style={s.choiceRow}>{colorChoices.map((value) => <PressableScale key={value} accessibilityLabel={`Use color ${value}`} accessibilityState={{ selected: color === value }} onPress={() => setColor(value)} style={[s.colorChoice, { backgroundColor: value }, color === value && s.colorChoiceActive]}>{color === value ? <AppIcon name="check" size={17} color={colors.surface} /> : null}</PressableScale>)}</View><PrimaryButton title={saving ? 'Saving…' : editor?.id ? 'Save Changes' : 'Add Category'} disabled={saving} onPress={() => void saveCategory()} />{editor?.id ? <SecondaryButton title="Delete Category" disabled={saving} onPress={() => setDeleteId(editor.id ?? null)} /> : null}</DraggableBottomSheet>
       <AuthDialog visible={Boolean(hiding)} title={`Hide ${hiding?.fullLabel ?? 'category'}?`} message="It won't be offered for new expenses or budgets. Past transactions keep it, and you can show it again from Hidden Categories." primaryAction={{ label: 'Hide', destructive: true, loading: saving, onPress: () => void hide() }} secondaryAction={{ label: 'Cancel', onPress: () => setHideId(null) }} onRequestClose={() => setHideId(null)} />
+      <AuthDialog visible={Boolean(deleting)} title={`Delete ${deleting?.fullLabel ?? 'category'}?`} message="This removes the category permanently. Existing transactions will keep their amounts, but the category cannot be restored." primaryAction={{ label: 'Delete', destructive: true, loading: saving, onPress: () => void removeCustom() }} secondaryAction={{ label: 'Cancel', onPress: () => setDeleteId(null) }} onRequestClose={() => setDeleteId(null)} />
     </Screen>
   );
 }

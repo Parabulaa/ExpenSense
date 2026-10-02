@@ -1,5 +1,6 @@
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
 
 import { supabase } from '@/lib/supabase';
 import type { ExpenseResult } from '@/features/expenses/types';
@@ -8,23 +9,50 @@ import type { ReceiptDraft, ReceiptImage } from './types';
 /** Keeps OCR uploads compact while preserving small receipt text. */
 const MAX_UPLOAD_BYTES = 950_000;
 
+function dataUriSize(uri: string) {
+  const base64 = uri.includes(',') ? uri.slice(uri.indexOf(',') + 1) : uri;
+  return Math.floor((base64.length * 3) / 4) - (base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0);
+}
+
+async function imageSize(uri: string) {
+  // CameraView returns data URIs on web because browser file paths do not
+  // exist. The legacy FileSystem metadata methods are native-only there.
+  if (uri.startsWith('data:')) return dataUriSize(uri);
+  if (Platform.OS === 'web') return (await (await fetch(uri)).blob()).size;
+  const info = await FileSystem.getInfoAsync(uri);
+  return info.exists ? info.size : undefined;
+}
+
+async function webUriToBase64(uri: string) {
+  if (uri.startsWith('data:')) return uri.slice(uri.indexOf(',') + 1);
+  const blob = await (await fetch(uri)).blob();
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read the selected image'));
+    reader.onload = () => resolve(String(reader.result).slice(String(reader.result).indexOf(',') + 1));
+    reader.readAsDataURL(blob);
+  });
+}
+
 export async function optimizeReceipt(image: ReceiptImage): Promise<ReceiptImage> {
   const longest = Math.max(image.width, image.height);
   const resize = longest > 1800 ? image.width >= image.height ? { width: 1800 } : { height: 1800 } : undefined;
   let result = await manipulateAsync(image.uri, resize ? [{ resize }] : [], { compress: 0.78, format: SaveFormat.JPEG });
-  let info = await FileSystem.getInfoAsync(result.uri);
+  let size = await imageSize(result.uri);
   // Step down large photos to reduce transfer time and OCR processing cost.
   for (const [longestSide, compress] of [[1500, 0.7], [1280, 0.6]] as const) {
-    if (!info.exists || (info.size ?? 0) <= MAX_UPLOAD_BYTES) break;
+    if (size === undefined || size <= MAX_UPLOAD_BYTES) break;
     const smaller = result.width >= result.height ? { width: Math.min(longestSide, result.width) } : { height: Math.min(longestSide, result.height) };
     result = await manipulateAsync(result.uri, [{ resize: smaller }], { compress, format: SaveFormat.JPEG });
-    info = await FileSystem.getInfoAsync(result.uri);
+    size = await imageSize(result.uri);
   }
-  return { uri: result.uri, width: result.width, height: result.height, size: info.exists ? info.size : undefined, origin: image.origin };
+  return { uri: result.uri, width: result.width, height: result.height, size, origin: image.origin };
 }
 
 export async function recognizeReceipt(image: ReceiptImage) {
-  const imageBase64 = await FileSystem.readAsStringAsync(image.uri, { encoding: FileSystem.EncodingType.Base64 });
+  const imageBase64 = Platform.OS === 'web'
+    ? await webUriToBase64(image.uri)
+    : await FileSystem.readAsStringAsync(image.uri, { encoding: FileSystem.EncodingType.Base64 });
   const { data, error } = await supabase.functions.invoke('process-receipt', { body: { imageBase64, mimeType: 'image/jpeg' } });
   if (error) {
     const context = (error as { context?: Response }).context;

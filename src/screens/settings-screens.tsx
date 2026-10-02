@@ -539,7 +539,7 @@ const FAQ: { question: string; answer: string }[] = [
   },
   {
     question: 'Can I hide a category I never use?',
-    answer: 'Yes. In Categories, tap the eye icon next to a default category, or edit a custom one and choose Hide Category. Past transactions keep it, and you can show it again from Hidden Categories.',
+    answer: 'Yes. In Categories, tap the eye icon next to a default category to hide it, or edit a custom category and choose Delete Category. Hidden default categories can be restored later.',
   },
   {
     question: 'Where do the insights come from?',

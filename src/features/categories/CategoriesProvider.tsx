@@ -17,6 +17,7 @@ type Value = {
   refresh: () => Promise<void>;
   createCategory: (input: CategoryInput) => Promise<CategoryResult<DashboardCategory>>;
   updateCategory: (id: string, input: CategoryInput) => Promise<CategoryResult<DashboardCategory>>;
+  deleteCategory: (id: string) => Promise<CategoryResult<{ id: string }>>;
   /** Hides a default category or archives a custom one. History is preserved either way. */
   hideCategory: (id: string) => Promise<CategoryResult<{ id: string }>>;
   restoreCategory: (id: string) => Promise<CategoryResult<{ id: string }>>;
@@ -50,6 +51,7 @@ export function CategoriesProvider({ children }: PropsWithChildren) {
   }, [initialized, refresh]);
   const createCategory = useCallback(async (input: CategoryInput) => { const result = await service.createCustomCategory(input); if (result.ok) setCustom((current) => [...current, result.data]); return result; }, []);
   const updateCategory = useCallback(async (id: string, input: CategoryInput) => { const result = await service.updateCustomCategory(id, input); if (result.ok) setCustom((current) => current.map((item) => item.id === id ? result.data : item)); return result; }, []);
+  const deleteCategory = useCallback(async (id: string) => { const result = await service.deleteCustomCategory(id); if (result.ok) setCustom((current) => current.filter((item) => item.id !== id)); return result; }, []);
   const isDefault = useCallback((id: string) => categoryLibrary.some((item) => item.id === id), []);
   const hideCategory = useCallback(async (id: string): Promise<CategoryResult<{ id: string }>> => {
     if (isDefault(id)) {
@@ -78,7 +80,7 @@ export function CategoriesProvider({ children }: PropsWithChildren) {
   const categories = useMemo(() => allCategories.filter((item) => !item.archived), [allCategories]);
   const hiddenCategories = useMemo(() => allCategories.filter((item) => item.archived), [allCategories]);
   const findCategory = useCallback((id: string | undefined) => allCategories.find((item) => item.id === id) ?? null, [allCategories]);
-  const value = useMemo(() => ({ categories, allCategories, hiddenCategories, loading, error, refresh, createCategory, updateCategory, hideCategory, restoreCategory, findCategory }), [allCategories, categories, createCategory, error, findCategory, hiddenCategories, hideCategory, loading, refresh, restoreCategory, updateCategory]);
+  const value = useMemo(() => ({ categories, allCategories, hiddenCategories, loading, error, refresh, createCategory, updateCategory, deleteCategory, hideCategory, restoreCategory, findCategory }), [allCategories, categories, createCategory, deleteCategory, error, findCategory, hiddenCategories, hideCategory, loading, refresh, restoreCategory, updateCategory]);
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 export function useCategories() { const value = useContext(Context); if (!value) throw new Error('useCategories must be used within CategoriesProvider'); return value; }

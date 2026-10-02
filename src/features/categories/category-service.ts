@@ -28,6 +28,10 @@ export async function archiveCustomCategory(id: string): Promise<CategoryResult<
   try { const { error } = await supabase.from('custom_categories').update({ archived_at: new Date().toISOString() }).eq('id', id); return error ? { ok: false, message: ERROR } : { ok: true, data: { id } }; }
   catch { return { ok: false, message: ERROR }; }
 }
+export async function deleteCustomCategory(id: string): Promise<CategoryResult<{ id: string }>> {
+  try { const { error } = await supabase.from('custom_categories').delete().eq('id', id); return error ? { ok: false, message: ERROR } : { ok: true, data: { id } }; }
+  catch { return { ok: false, message: ERROR }; }
+}
 export async function restoreCustomCategory(id: string): Promise<CategoryResult<{ id: string }>> {
   try { const { error } = await supabase.from('custom_categories').update({ archived_at: null }).eq('id', id); return error ? { ok: false, message: error.code === '23505' ? DUPLICATE : ERROR } : { ok: true, data: { id } }; }
   catch { return { ok: false, message: ERROR }; }

@@ -295,12 +295,14 @@ export function ExpenseDatePicker({ value, time, title = 'Date & Time', onClose,
 export function ScannerScreen() {
   const colors = useColors();
   const styles = useStyles();
-  const [permission, requestPermission] = useCameraPermissions(); const [torch, setTorch] = useState(false); const [busy, setBusy] = useState(false); const camera = useRef<CameraView>(null); const { setSource } = useReceipt();
+  const { showToast } = useToast();
+  const [permission, requestPermission] = useCameraPermissions(); const [torch, setTorch] = useState(false); const [busy, setBusy] = useState(false); const [ready, setReady] = useState(false); const [cameraError, setCameraError] = useState<string | null>(null); const camera = useRef<CameraView>(null); const { setSource } = useReceipt();
   const pick = async () => { const access = await ImagePicker.requestMediaLibraryPermissionsAsync(); if (!access.granted) return; const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 }); const asset = result.assets?.[0]; if (!result.canceled && asset) { setSource({ uri: asset.uri, width: asset.width, height: asset.height, size: asset.fileSize, origin: 'gallery' }); router.replace('/processing'); } };
   if (!permission) return <Screen scroll={false} variant={4}><View style={styles.processing}><ActivityIndicator color={colors.deepForest} /><AppText>Checking camera access…</AppText></View></Screen>;
   if (!permission.granted) return <Screen scroll={false} variant={4}><View style={styles.failed}><AppIcon name="camera-off-outline" size={72} color={colors.forest} /><AppText variant="title" style={styles.center}>Camera access is needed</AppText><AppText style={[styles.muted, styles.center]}>Allow camera access to scan a receipt, or choose one from your gallery.</AppText><PrimaryButton title="Allow Camera" onPress={permission.canAskAgain ? requestPermission : Linking.openSettings} /><SecondaryButton title="Choose from Gallery" onPress={pick} /></View></Screen>;
-  const capture = async () => { if (busy) return; setBusy(true); try { const photo = await camera.current?.takePictureAsync({ quality: 1, skipProcessing: false }); if (photo) { setSource({ uri: photo.uri, width: photo.width, height: photo.height, origin: 'camera' }); router.replace('/processing'); } } finally { setBusy(false); } };
-  return <Screen scroll={false} variant={4}><View style={styles.scannerPage}><CameraView ref={camera} style={styles.camera} facing="back" enableTorch={torch}><View style={styles.cameraTop}><Pressable accessibilityLabel="Close scanner" hitSlop={10} onPress={() => router.back()} style={styles.scannerIconButton}><AppIcon name="close" color="#FFFFFF" size={32} /></Pressable><Pressable accessibilityLabel="Toggle flashlight" hitSlop={10} onPress={() => setTorch((value) => !value)} style={styles.scannerIconButton}><AppIcon name={torch ? 'flash' : 'flash-outline'} color="#FFFFFF" size={30} /></Pressable></View><Image source={assets.scanFrame} contentFit="contain" style={styles.scanFrame} /><View style={styles.cameraBottom}><AppText style={styles.scannerInstruction}>Position the whole receipt inside the frame.</AppText><View style={styles.captureRow}><Pressable accessibilityLabel="Choose receipt from gallery" hitSlop={10} onPress={pick} style={styles.scannerIconButton}><AppIcon name="image-outline" color="#FFFFFF" size={34} /></Pressable><Pressable accessibilityLabel="Capture receipt" disabled={busy} onPress={capture} style={styles.capture}>{busy ? <ActivityIndicator color="#173D2B" /> : null}</Pressable><View style={styles.scannerControlSpacer} /></View></View></CameraView></View></Screen>;
+  const capture = async () => { if (busy || !ready) return; setBusy(true); try { const photo = await camera.current?.takePictureAsync({ quality: 0.9, skipProcessing: false }); if (!photo) throw new Error('No photo returned'); setSource({ uri: photo.uri, width: photo.width, height: photo.height, origin: 'camera' }); router.replace('/processing'); } catch { showToast("Couldn't take the photo. Try again or choose one from your gallery.", { tone: 'warning' }); } finally { setBusy(false); } };
+  if (cameraError) return <Screen scroll={false} variant={4}><View style={styles.failed}><AppIcon name="camera-off-outline" size={72} color={colors.forest} /><AppText variant="title" style={styles.center}>Camera unavailable</AppText><AppText style={[styles.muted, styles.center]}>{cameraError}</AppText><PrimaryButton title="Try Again" onPress={() => { setCameraError(null); setReady(false); }} /><SecondaryButton title="Choose from Gallery" onPress={pick} /></View></Screen>;
+  return <Screen scroll={false} variant={4}><View style={styles.scannerPage}><CameraView ref={camera} style={styles.camera} facing="back" enableTorch={torch} onCameraReady={() => setReady(true)} onMountError={() => setCameraError('Try again, check browser camera access, or choose a receipt from your gallery.')}><View style={styles.cameraTop}><Pressable accessibilityLabel="Close scanner" hitSlop={10} onPress={() => router.back()} style={styles.scannerIconButton}><AppIcon name="close" color="#FFFFFF" size={32} /></Pressable>{Platform.OS === 'web' ? <View style={styles.scannerControlSpacer} /> : <Pressable accessibilityLabel="Toggle flashlight" hitSlop={10} onPress={() => setTorch((value) => !value)} style={styles.scannerIconButton}><AppIcon name={torch ? 'flash' : 'flash-outline'} color="#FFFFFF" size={30} /></Pressable>}</View><Image source={assets.scanFrame} contentFit="contain" style={styles.scanFrame} /><View style={styles.cameraBottom}><AppText style={styles.scannerInstruction}>{ready ? 'Position the whole receipt inside the frame.' : 'Starting camera…'}</AppText><View style={styles.captureRow}><Pressable accessibilityLabel="Choose receipt from gallery" hitSlop={10} onPress={pick} style={styles.scannerIconButton}><AppIcon name="image-outline" color="#FFFFFF" size={34} /></Pressable><Pressable accessibilityLabel="Capture receipt" accessibilityState={{ disabled: busy || !ready }} disabled={busy || !ready} onPress={capture} style={[styles.capture, !ready && { opacity: 0.55 }]}>{busy || !ready ? <ActivityIndicator color="#173D2B" /> : null}</Pressable><View style={styles.scannerControlSpacer} /></View></View></CameraView></View></Screen>;
 }
 
 export function ProcessingScreen() {
@@ -452,10 +454,15 @@ export function ReceiptReviewScreen() {
 
 export function RecognitionFailedScreen() {
   const styles = useStyles();
-  const { failure, failureMessage, setSource, startManualDraft } = useReceipt();
+  const { failure, setSource, startManualDraft } = useReceipt();
   const [picking, setPicking] = useState(false);
   // A photo that isn't a receipt is the user's to fix; a reader that is down isn't.
   const serviceProblem = failure === 'network' || failure === 'provider';
+  const friendlyMessage = failure === 'not-receipt'
+    ? "This doesn't look like a receipt. Try a clear photo showing the full receipt."
+    : failure === 'quality'
+      ? 'Try again with a clearer, closer photo of the full receipt.'
+      : 'Try again, or upload another image.';
   // Stays on this screen: pick another image here and go straight to reading it.
   const uploadAnother = async () => {
     if (picking) return;
@@ -475,7 +482,7 @@ export function RecognitionFailedScreen() {
   return <Screen scroll={false} variant={6}><View style={styles.failed}>
     <Image source={assets.mascotConfused} contentFit="contain" style={styles.failedMascot} />
     <AppText variant="title" style={styles.center}>{serviceProblem ? "We couldn't read\nthis receipt right now." : "We couldn't recognize\nthis as a receipt."}</AppText>
-    <AppText style={[styles.muted, styles.center]}>{failureMessage ?? 'Try a clearer photo with the full receipt visible.'}</AppText>
+    <AppText style={[styles.muted, styles.center]}>{friendlyMessage}</AppText>
     <PrimaryButton title="Retake Photo" icon="camera-outline" onPress={() => router.replace('/scanner')} />
     <SecondaryButton title={picking ? 'Opening Gallery…' : 'Upload Another Image'} icon="image-outline" disabled={picking} onPress={() => void uploadAnother()} />
     <SecondaryButton title="Fill In Details Myself" icon="pencil-outline" onPress={fillManually} />
