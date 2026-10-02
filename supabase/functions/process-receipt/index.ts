@@ -13,16 +13,19 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 });
 const OCR_SCAN_LIMIT = 10;
 
-async function readWithGoogle(key: string, imageBase64: string) {
-  const response = await fetch('https://vision.googleapis.com/v1/images:annotate', {
+async function readWithGoogle(key: string, imageBase64: string, mimeType: string) {
+  const pdf = mimeType === 'application/pdf';
+  const response = await fetch(`https://vision.googleapis.com/v1/${pdf ? 'files' : 'images'}:annotate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-    body: JSON.stringify({
-      requests: [{
-        image: { content: imageBase64 },
-        features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
-      }],
-    }),
+    body: JSON.stringify({ requests: [pdf ? {
+      inputConfig: { content: imageBase64, mimeType },
+      features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
+      pages: [1, 2, 3, 4, 5],
+    } : {
+      image: { content: imageBase64 },
+      features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
+    }] }),
     signal: AbortSignal.timeout(20_000),
   });
 
@@ -37,11 +40,12 @@ async function readWithGoogle(key: string, imageBase64: string) {
   }
 
   const payload = await response.json();
-  const result = payload.responses?.[0];
-  if (result?.error) throw new Error(String(result.error.message ?? 'Google Vision could not process the image.'));
-  const rawText = String(result?.fullTextAnnotation?.text ?? '').trim();
+  const results = pdf ? payload.responses?.[0]?.responses ?? [] : [payload.responses?.[0]];
+  const providerError = results.find((item: any) => item?.error)?.error;
+  if (providerError) throw new Error(String(providerError.message ?? 'Google Vision could not process the file.'));
+  const rawText = results.map((item: any) => String(item?.fullTextAnnotation?.text ?? '').trim()).filter(Boolean).join('\n').trim();
   if (!rawText) throw new Error("We couldn't find any text in this photo. Try a clearer, closer photo.");
-  const words = (result?.fullTextAnnotation?.pages ?? [])
+  const words = results.flatMap((item: any) => item?.fullTextAnnotation?.pages ?? [])
     .flatMap((page: any) => page.blocks ?? [])
     .flatMap((block: any) => block.paragraphs ?? [])
     .flatMap((paragraph: any) => paragraph.words ?? []);
@@ -63,7 +67,8 @@ Deno.serve(async (request) => {
     const { data: { user } } = await client.auth.getUser();
     if (!user) return json({ error: 'Unauthorized' }, 401);
 
-    const { imageBase64 } = await request.json();
+    const { imageBase64, mimeType = 'image/jpeg' } = await request.json();
+    if (!['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(mimeType)) throw new Error('Unsupported receipt file type');
     if (typeof imageBase64 !== 'string' || imageBase64.length < 100 || imageBase64.length > 9_000_000) {
       throw new Error('Invalid image payload');
     }
@@ -82,7 +87,7 @@ Deno.serve(async (request) => {
     }
 
     return json({
-      ...await readWithGoogle(googleKey, imageBase64),
+      ...await readWithGoogle(googleKey, imageBase64, mimeType),
       scanLimit: OCR_SCAN_LIMIT,
       scansRemaining: Number(scansRemaining),
     });

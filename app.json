@@ -51,7 +51,8 @@
         {
           "photosPermission": "Allow ExpenSense to choose receipt images from your library."
         }
-      ]
+      ],
+      "expo-document-picker"
     ],
     "experiments": {
       "typedRoutes": true,

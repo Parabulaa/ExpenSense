@@ -35,6 +35,7 @@ async function webUriToBase64(uri: string) {
 }
 
 export async function optimizeReceipt(image: ReceiptImage): Promise<ReceiptImage> {
+  if (image.mimeType === 'application/pdf') return image;
   const longest = Math.max(image.width, image.height);
   const resize = longest > 1800 ? image.width >= image.height ? { width: 1800 } : { height: 1800 } : undefined;
   let result = await manipulateAsync(image.uri, resize ? [{ resize }] : [], { compress: 0.78, format: SaveFormat.JPEG });
@@ -46,14 +47,14 @@ export async function optimizeReceipt(image: ReceiptImage): Promise<ReceiptImage
     result = await manipulateAsync(result.uri, [{ resize: smaller }], { compress, format: SaveFormat.JPEG });
     size = await imageSize(result.uri);
   }
-  return { uri: result.uri, width: result.width, height: result.height, size, origin: image.origin };
+  return { uri: result.uri, width: result.width, height: result.height, size, origin: image.origin, mimeType: 'image/jpeg', fileName: image.fileName };
 }
 
 export async function recognizeReceipt(image: ReceiptImage) {
   const imageBase64 = Platform.OS === 'web'
     ? await webUriToBase64(image.uri)
     : await FileSystem.readAsStringAsync(image.uri, { encoding: FileSystem.EncodingType.Base64 });
-  const { data, error } = await supabase.functions.invoke('process-receipt', { body: { imageBase64, mimeType: 'image/jpeg' } });
+  const { data, error } = await supabase.functions.invoke('process-receipt', { body: { imageBase64, mimeType: image.mimeType ?? 'image/jpeg' } });
   if (error) {
     const context = (error as { context?: Response }).context;
     if (context) {
@@ -82,11 +83,12 @@ export async function saveReceiptTransaction(draft: ReceiptDraft): Promise<Expen
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return { ok: false, message: 'Sign in again before saving this receipt.' };
   const token = `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
-  const path = `${auth.user.id}/${token}/receipt.jpg`;
+  const pdf = draft.image.mimeType === 'application/pdf';
+  const path = `${auth.user.id}/${token}/receipt.${pdf ? 'pdf' : 'jpg'}`;
   const expense = draft.kind === 'expense';
   try {
     const bytes = await (await fetch(draft.image.uri)).arrayBuffer();
-    const upload = await supabase.storage.from('receipts').upload(path, bytes, { contentType: 'image/jpeg', upsert: false });
+    const upload = await supabase.storage.from('receipts').upload(path, bytes, { contentType: draft.image.mimeType ?? 'image/jpeg', upsert: false });
     if (upload.error) return { ok: false, message: "Couldn't upload the receipt image. Try again." };
     const { data, error } = await supabase.rpc('save_receipt_transaction', {
       p_type: draft.kind,

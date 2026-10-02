@@ -1,5 +1,6 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Image } from 'expo-image';
+import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -48,6 +49,7 @@ export function AddExpenseSheet({ visible, onClose, onNavigate }: { visible: boo
   const styles = useStyles();
   const leafDrift = useDrift({ x: 24, y: 20, rotate: 9, scale: 0.08, duration: 2400, baseRotate: 28 });
   const { setSource } = useReceipt();
+  const { showToast } = useToast();
   const navigate = (route: '/scanner' | '/manual-expense' | '/processing') => onNavigate ? onNavigate(route) : router.push(route);
   const upload = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -55,6 +57,15 @@ export function AddExpenseSheet({ visible, onClose, onNavigate }: { visible: boo
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
     const asset = result.assets?.[0];
     if (!result.canceled && asset) { setSource({ uri: asset.uri, width: asset.width, height: asset.height, size: asset.fileSize, origin: 'gallery' }); navigate('/processing'); }
+  };
+  const importOnline = async () => {
+    const result = await DocumentPicker.getDocumentAsync({ type: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'], copyToCacheDirectory: true, base64: true });
+    const asset = result.assets?.[0];
+    if (result.canceled || !asset) return;
+    if ((asset.size ?? 0) > 6_000_000) { showToast('Choose a receipt file smaller than 6 MB.', { tone: 'warning' }); return; }
+    const mimeType = asset.mimeType ?? (asset.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+    setSource({ uri: asset.uri, width: mimeType === 'application/pdf' ? 1000 : 1200, height: mimeType === 'application/pdf' ? 1400 : 1600, size: asset.size, origin: 'online', mimeType, fileName: asset.name });
+    navigate('/processing');
   };
   return (
       <DraggableBottomSheet visible={visible} onClose={onClose}>{(dismiss) => <>
@@ -71,6 +82,7 @@ export function AddExpenseSheet({ visible, onClose, onNavigate }: { visible: boo
         <View style={styles.sheetContent}>
           <ExpenseOption icon="line-scan" title="Scan Receipt" description="Use your camera" onPress={() => navigate('/scanner')} />
           <ExpenseOption icon="image-outline" title="Upload Receipt" description="Choose from gallery" onPress={upload} />
+          <ExpenseOption icon="file-document-outline" title="Import Online Receipt" description="Screenshot, image, or PDF" onPress={() => void importOnline()} />
           <ExpenseOption icon="file-document-edit-outline" title="Manual Entry" description="Enter details manually" onPress={() => navigate('/manual-expense')} />
         </View>
         <View style={styles.sheetContent}><SecondaryButton title="Cancel" onPress={dismiss} /></View>
@@ -405,17 +417,20 @@ export function ReceiptReviewScreen() {
   const detectedLabel = RECEIPT_KINDS.find((item) => item.id === draft.detected.kind)?.label;
   // Started from "Fill In Details Myself": nothing was read, so no reading stats apply.
   const manual = draft.fingerprint.startsWith('manual|');
+  const documentLabel = draft.documentType === 'invoice' ? 'Invoice' : draft.documentType === 'payment_confirmation' ? 'Payment confirmation' : draft.documentType === 'online_receipt' ? 'Online receipt' : 'Paper receipt';
+  const pdf = draft.image.mimeType === 'application/pdf';
 
   return <Screen variant={4}><View style={styles.formPage}>
     <BackButton />
     <Card style={{ gap: 16 }}>
       <View style={styles.reviewTop}>
-        <PressableScale accessibilityRole="button" accessibilityLabel="View receipt photo" onPress={() => setViewingPhoto(true)} style={styles.receiptPhoto}><Image source={{ uri: draft.image.uri }} contentFit="cover" style={styles.fill} /></PressableScale>
+        <PressableScale accessibilityRole="button" accessibilityLabel={pdf ? 'Imported PDF receipt' : 'View receipt photo'} disabled={pdf} onPress={() => setViewingPhoto(true)} style={styles.receiptPhoto}>{pdf ? <View style={[styles.fill, { alignItems: 'center', justifyContent: 'center' }]}><AppIcon name="file-document-outline" size={42} color={colors.deepForest} /></View> : <Image source={{ uri: draft.image.uri }} contentFit="cover" style={styles.fill} />}</PressableScale>
         <View style={styles.optionCopy}>
           <AppText variant="h2">{manual ? 'Receipt details' : 'Review receipt'}</AppText>
+          <StatusChip>{documentLabel}</StatusChip>
           {manual ? <StatusChip>Manual entry</StatusChip> : <StatusChip warning={draft.issues.length > 0}>{draft.issues.length ? 'Needs Review' : 'Ready'}</StatusChip>}
           <AppText style={styles.muted}>{manual ? 'Your photo is attached. Fill in the details below.' : `${draft.confidence}% recognition confidence`}</AppText>
-          <AppText variant="small" style={styles.muted}>Tap the photo to view it.</AppText>
+          <AppText variant="small" style={styles.muted}>{pdf ? draft.image.fileName ?? 'Imported PDF' : 'Tap the photo to view it.'}</AppText>
           <View style={styles.kindStack} accessibilityRole="radiogroup" accessibilityLabel="Transaction type">{RECEIPT_KINDS.map((option) => { const selected = kind === option.id; return <PressableScale key={option.id} accessibilityRole="radio" accessibilityState={{ selected }} onPress={() => { selectionFeedback(); updateDraft({ kind: option.id }); }} style={[styles.kindCompact, selected && styles.kindCompactSelected]}><AppIcon name={option.icon} size={17} color={selected ? colors.surface : colors.deepForest} /><AppText variant="small" numberOfLines={1} style={selected ? styles.kindTextSelected : styles.kindText}>{option.label}</AppText></PressableScale>; })}</View>
         </View>
       </View>
@@ -448,13 +463,14 @@ export function ReceiptReviewScreen() {
   <CategoryPicker visible={categoryOpen} selectedId={draft.categoryId} onClose={() => setCategoryOpen(false)} onSelect={(categoryId) => { updateDraft({ categoryId }); setCategoryOpen(false); }} />
   <WalletPicker visible={walletOpen !== null} title={walletOpen === 'destination' ? 'Transfer To' : kind === 'transfer' ? 'Transfer From' : 'Choose Wallet'} selectedId={walletOpen === 'destination' ? draft.destinationWalletId : draft.walletId} excludeId={kind === 'transfer' ? (walletOpen === 'destination' ? draft.walletId : draft.destinationWalletId) : undefined} onClose={() => setWalletOpen(null)} onSelect={(id) => { updateDraft(walletOpen === 'destination' ? { destinationWalletId: id } : { walletId: id }); setWalletOpen(null); }} />
   {dateOpen ? <ExpenseDatePicker value={draft.transactionDate} time={draft.transactionTime} onClose={() => setDateOpen(false)} onSelect={(transactionDate, transactionTime) => { updateDraft({ transactionDate, transactionTime }); setDateOpen(false); }} /> : null}
-  <PhotoViewer uri={viewingPhoto ? draft.image.uri : null} onClose={() => setViewingPhoto(false)} />
+  <PhotoViewer uri={viewingPhoto && !pdf ? draft.image.uri : null} onClose={() => setViewingPhoto(false)} />
   </Screen>;
 }
 
 export function RecognitionFailedScreen() {
   const styles = useStyles();
   const { failure, setSource, startManualDraft } = useReceipt();
+  const { showToast } = useToast();
   const [picking, setPicking] = useState(false);
   // A photo that isn't a receipt is the user's to fix; a reader that is down isn't.
   const serviceProblem = failure === 'network' || failure === 'provider';
@@ -468,11 +484,14 @@ export function RecognitionFailedScreen() {
     if (picking) return;
     setPicking(true);
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) return;
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
+      const result = await DocumentPicker.getDocumentAsync({ type: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'], copyToCacheDirectory: true, base64: true });
       const asset = result.assets?.[0];
-      if (!result.canceled && asset) { setSource({ uri: asset.uri, width: asset.width, height: asset.height, size: asset.fileSize, origin: 'gallery' }); router.replace('/processing'); }
+      if (!result.canceled && asset) {
+        if ((asset.size ?? 0) > 6_000_000) { showToast('Choose a receipt file smaller than 6 MB.', { tone: 'warning' }); return; }
+        const mimeType = asset.mimeType ?? (asset.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+        setSource({ uri: asset.uri, width: mimeType === 'application/pdf' ? 1000 : 1200, height: mimeType === 'application/pdf' ? 1400 : 1600, size: asset.size, origin: 'online', mimeType, fileName: asset.name });
+        router.replace('/processing');
+      }
     } finally {
       setPicking(false);
     }
@@ -484,7 +503,7 @@ export function RecognitionFailedScreen() {
     <AppText variant="title" style={styles.center}>{serviceProblem ? "We couldn't read\nthis receipt right now." : "We couldn't recognize\nthis as a receipt."}</AppText>
     <AppText style={[styles.muted, styles.center]}>{friendlyMessage}</AppText>
     <PrimaryButton title="Retake Photo" icon="camera-outline" onPress={() => router.replace('/scanner')} />
-    <SecondaryButton title={picking ? 'Opening Gallery…' : 'Upload Another Image'} icon="image-outline" disabled={picking} onPress={() => void uploadAnother()} />
+    <SecondaryButton title={picking ? 'Opening Files…' : 'Import Another Receipt'} icon="file-document-outline" disabled={picking} onPress={() => void uploadAnother()} />
     <SecondaryButton title="Fill In Details Myself" icon="pencil-outline" onPress={fillManually} />
   </View></Screen>;
 }

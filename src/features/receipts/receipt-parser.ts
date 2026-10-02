@@ -1,5 +1,5 @@
 import { nowLocalTime, todayLocalDate } from '@/features/expenses/validation';
-import type { ReceiptClassification, ReceiptDraft, ReceiptImage, ReceiptItemDraft, ReceiptKind } from './types';
+import type { ReceiptClassification, ReceiptDocumentType, ReceiptDraft, ReceiptImage, ReceiptItemDraft, ReceiptKind } from './types';
 
 const money = /(?:PHP|P|₱)?\s*([0-9]{1,7}(?:,[0-9]{3})*(?:\.[0-9]{2})|[0-9]{1,7},[0-9]{2})/i;
 const labels = /^(subtotal|sub total|tax|vat|vatable|total|cash|change|amount|balance|fee|service fee|ref|reference|transaction)/i;
@@ -122,6 +122,13 @@ export function assessReceiptStructure(rawText: string) {
   if ((rawText.match(/[0-9]+[,.][0-9]{2}/g) ?? []).length >= 1) score += 1;
   if (rawText.split(/\r?\n/).filter(Boolean).length >= 5) score += 1;
   return score;
+}
+
+function documentTypeFromText(rawText: string, image: ReceiptImage): ReceiptDocumentType {
+  const lower = rawText.toLowerCase();
+  if (/\b(invoice|invoice number|invoice no\.?|bill to)\b/.test(lower)) return 'invoice';
+  if (/\b(payment (?:successful|confirmation|confirmed)|paid successfully|transaction (?:successful|completed)|amount sent)\b/.test(lower)) return 'payment_confirmation';
+  return image.origin === 'online' ? 'online_receipt' : 'paper_receipt';
 }
 
 /** Rejects phone/app screenshots uploaded as if they were receipt photos. */
@@ -338,6 +345,7 @@ export function parseReceipt(rawText: string, image: ReceiptImage, providerConfi
   const transactionDate = printedDate && printedDate <= today ? printedDate : today;
   return {
     image,
+    documentType: documentTypeFromText(rawText, image),
     kind: detected.kind,
     detected,
     merchant: detected.kind === 'cash_in' ? merchant || 'Cash-in' : merchant,

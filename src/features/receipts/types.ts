@@ -10,8 +10,12 @@ export type ReceiptImage = {
   width: number;
   height: number;
   size?: number;
-  origin?: 'camera' | 'gallery';
+  origin?: 'camera' | 'gallery' | 'online';
+  mimeType?: string;
+  fileName?: string;
 };
+
+export type ReceiptDocumentType = 'paper_receipt' | 'online_receipt' | 'invoice' | 'payment_confirmation';
 
 /** What a confirmed receipt will record. `unknown` must be resolved by the user. */
 export type ReceiptKind = 'expense' | 'cash_in' | 'transfer' | 'unknown';
@@ -26,6 +30,7 @@ export type ReceiptClassification = {
 
 export type ReceiptDraft = {
   image: ReceiptImage;
+  documentType: ReceiptDocumentType;
   /** Detected by the parser; the user can change it before confirming. */
   kind: ReceiptKind;
   detected: ReceiptClassification;
