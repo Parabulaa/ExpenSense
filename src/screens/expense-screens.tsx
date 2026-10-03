@@ -1,6 +1,5 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Image } from 'expo-image';
-import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -33,6 +32,30 @@ import { selectionFeedback } from '@/lib/haptics';
 import { formatPeso } from '@/lib/format';
 import { skipNextPanelRefresh } from '@/lib/panel-refresh';
 
+/**
+ * New builds can import PDFs through DocumentPicker. Older APKs do not contain
+ * that native module, so load it only on demand and safely fall back to the
+ * image library. This keeps OTA updates compatible with those installations.
+ */
+async function pickOnlineReceipt(onImageFallback: () => void) {
+  try {
+    const DocumentPicker = await import('expo-document-picker');
+    const result = await DocumentPicker.getDocumentAsync({ type: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'], copyToCacheDirectory: true, base64: true });
+    const asset = result.assets?.[0];
+    if (result.canceled || !asset) return null;
+    const mimeType = asset.mimeType ?? (asset.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+    return { uri: asset.uri, width: mimeType === 'application/pdf' ? 1000 : 1200, height: mimeType === 'application/pdf' ? 1400 : 1600, size: asset.size, origin: 'online' as const, mimeType, fileName: asset.name };
+  } catch {
+    onImageFallback();
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return null;
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
+    const asset = result.assets?.[0];
+    if (result.canceled || !asset) return null;
+    return { uri: asset.uri, width: asset.width, height: asset.height, size: asset.fileSize, origin: 'online' as const, mimeType: asset.mimeType ?? 'image/jpeg', fileName: asset.fileName ?? undefined };
+  }
+}
+
 export function AddExpenseScreen() {
   const styles = useStyles();
   const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
@@ -59,12 +82,10 @@ export function AddExpenseSheet({ visible, onClose, onNavigate }: { visible: boo
     if (!result.canceled && asset) { setSource({ uri: asset.uri, width: asset.width, height: asset.height, size: asset.fileSize, origin: 'gallery' }); navigate('/processing'); }
   };
   const importOnline = async () => {
-    const result = await DocumentPicker.getDocumentAsync({ type: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'], copyToCacheDirectory: true, base64: true });
-    const asset = result.assets?.[0];
-    if (result.canceled || !asset) return;
+    const asset = await pickOnlineReceipt(() => showToast('This APK can import receipt screenshots and images. Install the latest APK to import PDFs.', { tone: 'warning' }));
+    if (!asset) return;
     if ((asset.size ?? 0) > 6_000_000) { showToast('Choose a receipt file smaller than 6 MB.', { tone: 'warning' }); return; }
-    const mimeType = asset.mimeType ?? (asset.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
-    setSource({ uri: asset.uri, width: mimeType === 'application/pdf' ? 1000 : 1200, height: mimeType === 'application/pdf' ? 1400 : 1600, size: asset.size, origin: 'online', mimeType, fileName: asset.name });
+    setSource(asset);
     navigate('/processing');
   };
   return (
@@ -484,12 +505,10 @@ export function RecognitionFailedScreen() {
     if (picking) return;
     setPicking(true);
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'], copyToCacheDirectory: true, base64: true });
-      const asset = result.assets?.[0];
-      if (!result.canceled && asset) {
+      const asset = await pickOnlineReceipt(() => showToast('This APK can import receipt screenshots and images. Install the latest APK to import PDFs.', { tone: 'warning' }));
+      if (asset) {
         if ((asset.size ?? 0) > 6_000_000) { showToast('Choose a receipt file smaller than 6 MB.', { tone: 'warning' }); return; }
-        const mimeType = asset.mimeType ?? (asset.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
-        setSource({ uri: asset.uri, width: mimeType === 'application/pdf' ? 1000 : 1200, height: mimeType === 'application/pdf' ? 1400 : 1600, size: asset.size, origin: 'online', mimeType, fileName: asset.name });
+        setSource(asset);
         router.replace('/processing');
       }
     } finally {
