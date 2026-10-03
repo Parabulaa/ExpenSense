@@ -1142,6 +1142,8 @@ export function GoalsScreen() {
     saveGoal,
     moveGoalMoney,
     archiveGoal,
+    restoreGoal,
+    deleteGoal,
   } = useFinance();
   const { showToast } = useToast();
   const [mode, setMode] = useState<
@@ -1159,6 +1161,7 @@ export function GoalsScreen() {
   const [dateDraft, setDateDraft] = useState(todayLocalDate());
   const active = goals.filter((g) => g.status === "active");
   const completed = goals.filter((g) => g.status === "completed");
+  const archived = goals.filter((g) => g.status === "archived");
   const openNew = () => {
     setSelected(null);
     setMode("new");
@@ -1257,8 +1260,38 @@ export function GoalsScreen() {
       },
     });
   };
+  const restore = async (g: SavingsGoal) => {
+    const r = await restoreGoal(g.id);
+    showToast(
+      r.ok ? "Goal restored." : r.message,
+      r.ok ? undefined : { tone: "warning" },
+    );
+  };
+  const permanentlyDelete = (g: SavingsGoal) => {
+    if (g.currentCents > 0) {
+      showToast("Withdraw the goal balance before deleting it.", {
+        tone: "warning",
+      });
+      return;
+    }
+    ask({
+      title: "Delete goal permanently?",
+      message: `${g.name} and its activity history will be deleted. This cannot be undone.`,
+      label: "Delete",
+      run: async () => {
+        const r = await deleteGoal(g.id);
+        showToast(
+          r.ok ? "Goal permanently deleted." : r.message,
+          r.ok ? undefined : { tone: "warning" },
+        );
+      },
+    });
+  };
   const saved = useMemo(
-    () => goals.reduce((n, g) => n + g.currentCents, 0),
+    () =>
+      goals
+        .filter((g) => g.status !== "archived")
+        .reduce((n, g) => n + g.currentCents, 0),
     [goals],
   );
   // Projections intentionally use the current time so pull-to-refresh updates them.
@@ -1438,6 +1471,51 @@ export function GoalsScreen() {
     );
   };
   /* eslint-enable react-hooks/purity */
+  const archivedGoalCard = (g: SavingsGoal) => (
+    <Card key={g.id} style={s.archivedGoal}>
+      <View style={s.titleRow}>
+        <View style={s.grow}>
+          <AppText variant="h3" numberOfLines={1}>
+            {g.name}
+          </AppText>
+          <AppText variant="small" style={s.muted}>
+            Target {money(g.targetCents)}
+          </AppText>
+        </View>
+        <StatusChip>Archived</StatusChip>
+      </View>
+      <View style={s.actions}>
+        <PressableScale
+          accessibilityRole="button"
+          accessibilityLabel={`Restore ${g.name}`}
+          onPress={() => void restore(g)}
+          style={s.smallButton}
+        >
+          <AppIcon name="restore" size={18} />
+          <AppText variant="bodyMedium" numberOfLines={1} style={s.actionLabel}>
+            Restore
+          </AppText>
+        </PressableScale>
+        <PressableScale
+          accessibilityRole="button"
+          accessibilityLabel={`Permanently delete ${g.name}`}
+          onPress={() => permanentlyDelete(g)}
+          style={[s.smallButton, s.deleteGoalButton]}
+        >
+          <AppIcon name="delete-outline" size={18} color={colors.danger} />
+          <AppText
+            variant="bodyMedium"
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+            style={[s.actionLabel, s.deleteGoalLabel]}
+          >
+            Delete Permanently
+          </AppText>
+        </PressableScale>
+      </View>
+    </Card>
+  );
   const moving = mode === "contribute" || mode === "withdraw";
   return (
     <Screen
@@ -1482,7 +1560,21 @@ export function GoalsScreen() {
             {completed.map(goalCard)}
           </>
         ) : null}
-        {!loading && !goals.length && !error ? (
+        {archived.length ? (
+          <>
+            <View style={s.completedHeading}>
+              <View style={s.grow}>
+                <AppText variant="h2">Archived Goals</AppText>
+                <AppText variant="small" style={s.muted}>
+                  Restore a goal or delete it permanently
+                </AppText>
+              </View>
+              <StatusChip>{archived.length} archived</StatusChip>
+            </View>
+            {archived.map(archivedGoalCard)}
+          </>
+        ) : null}
+        {!loading && !active.length && !completed.length && !error ? (
           <Card>
             <AppText variant="h3">Create your first goal</AppText>
             <AppText style={s.muted}>
@@ -1711,6 +1803,9 @@ const useStyles = makeStyles((colors) => ({
   },
   completedStatusRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   completedStatusText: { color: colors.success },
+  archivedGoal: { gap: 14, opacity: 0.92 },
+  deleteGoalButton: { backgroundColor: colors.dangerSoft },
+  deleteGoalLabel: { color: colors.danger },
   iconButton: {
     width: 36,
     height: 36,

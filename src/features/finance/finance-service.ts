@@ -27,7 +27,7 @@ export async function loadFinance(): Promise<FinanceResult<{ wallets: Wallet[]; 
     // so they are loaded in full rather than as a "recent" slice.
     const [w, g, c, i, t] = await Promise.all([
       supabase.from('wallets').select(walletFields).eq('status', 'active').order('created_at'),
-      supabase.from('savings_goals').select(goalFields).neq('status', 'archived').order('created_at'),
+      supabase.from('savings_goals').select(goalFields).order('created_at'),
       supabase.from('goal_contributions').select(contributionFields).order('created_at', { ascending: false }),
       supabase.from('wallet_income').select(incomeFields).order('transaction_date', { ascending: false }).order('transaction_time', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }),
       supabase.from('wallet_transfers').select(transferFields).order('transaction_date', { ascending: false }).order('transaction_time', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }),
@@ -108,3 +108,21 @@ export async function moveGoalMoney(goalId: string, walletId: string, amountCent
   } catch (error) { return failure(error); }
 }
 export async function archiveGoal(id: string) { const { error } = await supabase.from('savings_goals').update({ status: 'archived' }).eq('id', id); return error ? failure(error) : { ok: true as const, data: { id } }; }
+export async function restoreGoal(id: string): Promise<FinanceResult<SavingsGoal>> {
+  try {
+    const existing = await supabase.from('savings_goals').select(goalFields).eq('id', id).single();
+    if (existing.error || !existing.data) return failure(existing.error);
+    const status = cents(existing.data.current_amount) >= cents(existing.data.target_amount) ? 'completed' : 'active';
+    const { data, error } = await supabase.from('savings_goals').update({ status }).eq('id', id).select(goalFields).single();
+    return error || !data ? failure(error) : { ok: true, data: mapGoal(data) };
+  } catch (error) { return failure(error); }
+}
+export async function deleteGoal(id: string): Promise<FinanceResult<{ id: string }>> {
+  try {
+    const { data: goal, error: readError } = await supabase.from('savings_goals').select('current_amount').eq('id', id).single();
+    if (readError || !goal) return failure(readError);
+    if (cents(goal.current_amount) > 0) return { ok: false, message: 'Withdraw the goal balance before deleting it.' };
+    const { error } = await supabase.from('savings_goals').delete().eq('id', id);
+    return error ? failure(error) : { ok: true, data: { id } };
+  } catch (error) { return failure(error); }
+}

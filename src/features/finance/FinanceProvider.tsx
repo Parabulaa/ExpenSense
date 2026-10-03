@@ -25,6 +25,8 @@ type Value = Snapshot & {
   saveGoal: (v: GoalInput) => Promise<FinanceResult<SavingsGoal>>;
   moveGoalMoney: (goalId: string, walletId: string, cents: number, direction: GoalContribution['direction']) => Promise<FinanceResult<{ id: string }>>;
   archiveGoal: (id: string) => Promise<FinanceResult<{ id: string }>>;
+  restoreGoal: (id: string) => Promise<FinanceResult<SavingsGoal>>;
+  deleteGoal: (id: string) => Promise<FinanceResult<{ id: string }>>;
 };
 const Context = createContext<Value | null>(null);
 const CACHE_NAME = 'finance';
@@ -138,9 +140,11 @@ export function FinanceProvider({ children }: PropsWithChildren) {
 
   const saveGoal = useCallback(async (v: GoalInput) => { const r = onlineOnly(await service.saveGoal(v)); if (r.ok) store(c => ({ ...c, goals: [r.data, ...c.goals.filter(x => x.id !== r.data.id)] })); return r; }, [store]);
   const moveGoalMoney = useCallback(async (goalId: string, walletId: string, n: number, direction: GoalContribution['direction']) => { const r = onlineOnly(await service.moveGoalMoney(goalId, walletId, n, direction)); if (r.ok) await refresh(); return r; }, [refresh]);
-  const archiveGoal = useCallback(async (id: string) => { const r = onlineOnly(await service.archiveGoal(id)); if (r.ok) store(c => ({ ...c, goals: c.goals.filter(x => x.id !== id) })); return r; }, [store]);
+  const archiveGoal = useCallback(async (id: string) => { const r = onlineOnly(await service.archiveGoal(id)); if (r.ok) store(c => ({ ...c, goals: c.goals.map(x => x.id === id ? { ...x, status: 'archived' } : x) })); return r; }, [store]);
+  const restoreGoal = useCallback(async (id: string) => { const r = onlineOnly(await service.restoreGoal(id)); if (r.ok) store(c => ({ ...c, goals: [r.data, ...c.goals.filter(x => x.id !== id)] })); return r; }, [store]);
+  const deleteGoal = useCallback(async (id: string) => { const r = onlineOnly(await service.deleteGoal(id)); if (r.ok) store(c => ({ ...c, goals: c.goals.filter(x => x.id !== id), goalContributions: c.goalContributions.filter(x => x.goalId !== id) })); return r; }, [store]);
 
-  const value = useMemo(() => ({ ...view, loading, error, refresh, revalidate, saveWallet, archiveWallet, deleteWallet, addIncome, deleteIncome, addTransfer, deleteTransfer, saveGoal, moveGoalMoney, archiveGoal }), [view, loading, error, refresh, revalidate, saveWallet, archiveWallet, deleteWallet, addIncome, deleteIncome, addTransfer, deleteTransfer, saveGoal, moveGoalMoney, archiveGoal]);
+  const value = useMemo(() => ({ ...view, loading, error, refresh, revalidate, saveWallet, archiveWallet, deleteWallet, addIncome, deleteIncome, addTransfer, deleteTransfer, saveGoal, moveGoalMoney, archiveGoal, restoreGoal, deleteGoal }), [view, loading, error, refresh, revalidate, saveWallet, archiveWallet, deleteWallet, addIncome, deleteIncome, addTransfer, deleteTransfer, saveGoal, moveGoalMoney, archiveGoal, restoreGoal, deleteGoal]);
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 export function useFinance() { const value = useContext(Context); if (!value) throw new Error('useFinance must be used within FinanceProvider'); return value; }
