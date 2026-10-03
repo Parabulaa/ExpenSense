@@ -5,9 +5,9 @@ import { OFFLINE_MESSAGE, uuid } from '@/lib/offline/network';
 import { applyOps, enqueue, pendingWalletDeltas, useOutbox } from '@/lib/offline/outbox';
 import * as service from './finance-service';
 import { defaultWalletFirst } from './wallet-presentation';
-import type { FinanceResult, GoalInput, IncomeEntry, IncomeInput, SavingsGoal, TransferInput, Wallet, WalletInput, WalletTransfer } from './types';
+import type { FinanceResult, GoalContribution, GoalInput, IncomeEntry, IncomeInput, SavingsGoal, TransferInput, Wallet, WalletInput, WalletTransfer } from './types';
 
-type Snapshot = { wallets: Wallet[]; goals: SavingsGoal[]; incomeEntries: IncomeEntry[]; transfers: WalletTransfer[] };
+type Snapshot = { wallets: Wallet[]; goals: SavingsGoal[]; goalContributions: GoalContribution[]; incomeEntries: IncomeEntry[]; transfers: WalletTransfer[] };
 type Value = Snapshot & {
   loading: boolean;
   error: string | null;
@@ -23,12 +23,12 @@ type Value = Snapshot & {
   addTransfer: (v: TransferInput) => Promise<FinanceResult<WalletTransfer>>;
   deleteTransfer: (id: string) => Promise<FinanceResult<{ id: string }>>;
   saveGoal: (v: GoalInput) => Promise<FinanceResult<SavingsGoal>>;
-  addToGoal: (g: SavingsGoal, cents: number) => Promise<FinanceResult<SavingsGoal>>;
+  moveGoalMoney: (goalId: string, walletId: string, cents: number, direction: GoalContribution['direction']) => Promise<FinanceResult<{ id: string }>>;
   archiveGoal: (id: string) => Promise<FinanceResult<{ id: string }>>;
 };
 const Context = createContext<Value | null>(null);
 const CACHE_NAME = 'finance';
-const EMPTY: Snapshot = { wallets: [], goals: [], incomeEntries: [], transfers: [] };
+const EMPTY: Snapshot = { wallets: [], goals: [], goalContributions: [], incomeEntries: [], transfers: [] };
 
 /** Wallet and goal settings need the server, so offline they say so instead of failing vaguely. */
 const onlineOnly = <T,>(result: FinanceResult<T>): FinanceResult<T> => (!result.ok && result.offline ? { ok: false, message: OFFLINE_MESSAGE, offline: true } : result);
@@ -57,7 +57,7 @@ export function FinanceProvider({ children }: PropsWithChildren) {
       loadedUserId.current = user.id;
       hasData.current = false;
       const cached = await readCache<Snapshot>(user.id, CACHE_NAME);
-      setServer(cached ?? EMPTY);
+      setServer(cached ? { ...cached, goalContributions: cached.goalContributions ?? [] } : EMPTY);
       if (cached) { hasData.current = true; setLoading(false); }
     }
     if (!hasData.current) setLoading(true);
@@ -82,6 +82,7 @@ export function FinanceProvider({ children }: PropsWithChildren) {
     return {
       wallets: defaultWalletFirst(server.wallets.map((wallet) => deltas[wallet.id] ? { ...wallet, balanceCents: wallet.balanceCents + deltas[wallet.id] } : wallet)),
       goals: server.goals,
+      goalContributions: server.goalContributions,
       incomeEntries: applyOps(server.incomeEntries, ops, 'income', (op) => op.kind === 'income.create' ? { ...op.entry, pending: true } : null),
       transfers: applyOps(server.transfers, ops, 'transfer', (op) => op.kind === 'transfer.create' ? { ...op.transfer, pending: true } : null),
     };
@@ -136,10 +137,10 @@ export function FinanceProvider({ children }: PropsWithChildren) {
   }, [refresh, view.transfers]);
 
   const saveGoal = useCallback(async (v: GoalInput) => { const r = onlineOnly(await service.saveGoal(v)); if (r.ok) store(c => ({ ...c, goals: [r.data, ...c.goals.filter(x => x.id !== r.data.id)] })); return r; }, [store]);
-  const addToGoal = useCallback(async (g: SavingsGoal, n: number) => { const r = onlineOnly(await service.addToGoal(g, n)); if (r.ok) store(c => ({ ...c, goals: c.goals.map(x => x.id === r.data.id ? r.data : x) })); return r; }, [store]);
+  const moveGoalMoney = useCallback(async (goalId: string, walletId: string, n: number, direction: GoalContribution['direction']) => { const r = onlineOnly(await service.moveGoalMoney(goalId, walletId, n, direction)); if (r.ok) await refresh(); return r; }, [refresh]);
   const archiveGoal = useCallback(async (id: string) => { const r = onlineOnly(await service.archiveGoal(id)); if (r.ok) store(c => ({ ...c, goals: c.goals.filter(x => x.id !== id) })); return r; }, [store]);
 
-  const value = useMemo(() => ({ ...view, loading, error, refresh, revalidate, saveWallet, archiveWallet, deleteWallet, addIncome, deleteIncome, addTransfer, deleteTransfer, saveGoal, addToGoal, archiveGoal }), [view, loading, error, refresh, revalidate, saveWallet, archiveWallet, deleteWallet, addIncome, deleteIncome, addTransfer, deleteTransfer, saveGoal, addToGoal, archiveGoal]);
+  const value = useMemo(() => ({ ...view, loading, error, refresh, revalidate, saveWallet, archiveWallet, deleteWallet, addIncome, deleteIncome, addTransfer, deleteTransfer, saveGoal, moveGoalMoney, archiveGoal }), [view, loading, error, refresh, revalidate, saveWallet, archiveWallet, deleteWallet, addIncome, deleteIncome, addTransfer, deleteTransfer, saveGoal, moveGoalMoney, archiveGoal]);
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 export function useFinance() { const value = useContext(Context); if (!value) throw new Error('useFinance must be used within FinanceProvider'); return value; }

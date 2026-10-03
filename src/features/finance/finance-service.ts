@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { normalizeTime } from '@/features/expenses/validation';
 import { isNetworkError } from '@/lib/offline/network';
-import type { FinanceResult, GoalInput, IncomeEntry, IncomeInput, SavingsGoal, TransferInput, Wallet, WalletInput, WalletTransfer, WalletType } from './types';
+import type { FinanceResult, GoalContribution, GoalInput, IncomeEntry, IncomeInput, SavingsGoal, TransferInput, Wallet, WalletInput, WalletTransfer, WalletType } from './types';
 import { defaultWalletFirst } from './wallet-presentation';
 
 const ERROR = "Couldn't update your financial tools. Check your connection and try again.";
@@ -11,26 +11,29 @@ const walletFields = 'id,name,type,current_balance,icon,color,is_default,status'
 const goalFields = 'id,name,target_amount,current_amount,target_date,icon,category,status';
 const incomeFields = 'id,wallet_id,amount,kind,source,transaction_date,transaction_time,notes,created_at';
 const transferFields = 'id,from_wallet_id,to_wallet_id,amount,fee,transaction_date,transaction_time,notes,created_at';
+const contributionFields = 'id,goal_id,wallet_id,direction,amount,goal_balance_after,created_at';
 const mapWallet = (r: any): Wallet => ({ id: r.id, name: r.name, type: r.type as WalletType, balanceCents: cents(r.current_balance), icon: r.icon, color: r.color, isDefault: r.is_default, status: r.status });
 const mapGoal = (r: any): SavingsGoal => ({ id: r.id, name: r.name, targetCents: cents(r.target_amount), currentCents: cents(r.current_amount), targetDate: r.target_date, icon: r.icon, category: r.category, status: r.status });
 const mapIncome = (r: any): IncomeEntry => ({ id: r.id, walletId: r.wallet_id, amountCents: cents(r.amount), kind: r.kind, source: r.source, transactionDate: r.transaction_date, transactionTime: normalizeTime(r.transaction_time), notes: r.notes, createdAt: r.created_at });
 const mapTransfer = (r: any): WalletTransfer => ({ id: r.id, fromWalletId: r.from_wallet_id, toWalletId: r.to_wallet_id, amountCents: cents(r.amount), feeCents: cents(r.fee), transactionDate: r.transaction_date, transactionTime: normalizeTime(r.transaction_time), notes: r.notes, createdAt: r.created_at });
+const mapContribution = (r: any): GoalContribution => ({ id: r.id, goalId: r.goal_id, walletId: r.wallet_id, direction: r.direction, amountCents: cents(r.amount), balanceAfterCents: cents(r.goal_balance_after), createdAt: r.created_at });
 // The locally stored session — no network round trip per save. Row-level security re-checks ownership.
 async function userId() { const { data } = await supabase.auth.getSession(); return data.session?.user.id ?? null; }
 const failure = (error: unknown) => ({ ok: false as const, message: ERROR, offline: isNetworkError(error) });
 
-export async function loadFinance(): Promise<FinanceResult<{ wallets: Wallet[]; goals: SavingsGoal[]; incomeEntries: IncomeEntry[]; transfers: WalletTransfer[] }>> {
+export async function loadFinance(): Promise<FinanceResult<{ wallets: Wallet[]; goals: SavingsGoal[]; goalContributions: GoalContribution[]; incomeEntries: IncomeEntry[]; transfers: WalletTransfer[] }>> {
   try {
     // Money-in and transfers are ledger rows every screen derives totals from,
     // so they are loaded in full rather than as a "recent" slice.
-    const [w, g, i, t] = await Promise.all([
+    const [w, g, c, i, t] = await Promise.all([
       supabase.from('wallets').select(walletFields).eq('status', 'active').order('created_at'),
-      supabase.from('savings_goals').select(goalFields).eq('status', 'active').order('created_at'),
+      supabase.from('savings_goals').select(goalFields).neq('status', 'archived').order('created_at'),
+      supabase.from('goal_contributions').select(contributionFields).order('created_at', { ascending: false }),
       supabase.from('wallet_income').select(incomeFields).order('transaction_date', { ascending: false }).order('transaction_time', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }),
       supabase.from('wallet_transfers').select(transferFields).order('transaction_date', { ascending: false }).order('transaction_time', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }),
     ]);
-    if (w.error || g.error || i.error || t.error) return failure(w.error ?? g.error ?? i.error ?? t.error);
-    return { ok: true, data: { wallets: defaultWalletFirst((w.data ?? []).map(mapWallet)), goals: (g.data ?? []).map(mapGoal), incomeEntries: (i.data ?? []).map(mapIncome), transfers: (t.data ?? []).map(mapTransfer) } };
+    if (w.error || g.error || c.error || i.error || t.error) return failure(w.error ?? g.error ?? c.error ?? i.error ?? t.error);
+    return { ok: true, data: { wallets: defaultWalletFirst((w.data ?? []).map(mapWallet)), goals: (g.data ?? []).map(mapGoal), goalContributions: (c.data ?? []).map(mapContribution), incomeEntries: (i.data ?? []).map(mapIncome), transfers: (t.data ?? []).map(mapTransfer) } };
   } catch (error) { return failure(error); }
 }
 
@@ -93,5 +96,15 @@ export async function saveGoal(input: GoalInput): Promise<FinanceResult<SavingsG
     return error || !data ? failure(error) : { ok: true, data: mapGoal(data) };
   } catch (error) { return failure(error); }
 }
-export async function addToGoal(goal: SavingsGoal, amountCents: number) { const { data, error } = await supabase.from('savings_goals').update({ current_amount: money(goal.currentCents + amountCents) }).eq('id', goal.id).select(goalFields).single(); return error || !data ? failure(error) : { ok: true as const, data: mapGoal(data) }; }
+export async function moveGoalMoney(goalId: string, walletId: string, amountCents: number, direction: GoalContribution['direction']): Promise<FinanceResult<{ id: string }>> {
+  try {
+    const { data, error } = await supabase.rpc('move_goal_money', { p_goal_id: goalId, p_wallet_id: walletId, p_amount: money(amountCents), p_direction: direction });
+    if (!error && data) return { ok: true, data: { id: String(data) } };
+    const detail = String(error?.message ?? '');
+    if (/insufficient wallet/i.test(detail)) return { ok: false, message: 'That wallet does not have enough available money.' };
+    if (/exceeds remaining/i.test(detail)) return { ok: false, message: 'Enter no more than the amount remaining for this goal.' };
+    if (/withdrawal exceeds/i.test(detail)) return { ok: false, message: 'You cannot withdraw more than the goal balance.' };
+    return failure(error);
+  } catch (error) { return failure(error); }
+}
 export async function archiveGoal(id: string) { const { error } = await supabase.from('savings_goals').update({ status: 'archived' }).eq('id', id); return error ? failure(error) : { ok: true as const, data: { id } }; }

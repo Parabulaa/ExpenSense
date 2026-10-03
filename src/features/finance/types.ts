@@ -5,7 +5,8 @@ export type IncomeKind = 'income' | 'cash_in';
 export type IncomeEntry = { id: string; walletId: string; amountCents: number; kind: IncomeKind; source: string; transactionDate: string; transactionTime: string | null; notes: string | null; createdAt: string; pending?: boolean };
 /** Source loses amount + fee, destination gains amount. Never spending, never income. */
 export type WalletTransfer = { id: string; fromWalletId: string; toWalletId: string; amountCents: number; feeCents: number; transactionDate: string; transactionTime: string | null; notes: string | null; createdAt: string; pending?: boolean };
-export type SavingsGoal = { id: string; name: string; targetCents: number; currentCents: number; targetDate: string | null; icon: string | null; category: string | null; status: 'active' | 'archived' };
+export type SavingsGoal = { id: string; name: string; targetCents: number; currentCents: number; targetDate: string | null; icon: string | null; category: string | null; status: 'active' | 'completed' | 'archived' };
+export type GoalContribution = { id: string; goalId: string; walletId: string; direction: 'contribution' | 'withdrawal'; amountCents: number; balanceAfterCents: number; createdAt: string };
 export type WalletInput = { id?: string; name: string; type: WalletType; balanceCents: number; color: string; isDefault: boolean };
 export type IncomeInput = { walletId: string; amountCents: number; kind: IncomeKind; source: string; transactionDate: string; transactionTime: string; notes?: string };
 export type TransferInput = { fromWalletId: string; toWalletId: string; amountCents: number; feeCents: number; transactionDate: string; transactionTime: string; notes?: string };

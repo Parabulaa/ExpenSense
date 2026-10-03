@@ -563,6 +563,7 @@ export function WalletScreen() {
   const compact = (cents: number) => formatCompactPeso(Math.abs(cents), { alwaysShowDecimals: false });
   const monthLabel = formatMonth(month);
   const walletTotalCents = wallets.reduce((sum, item) => sum + item.balanceCents, 0);
+  const activeGoals = goals.filter((item) => item.status === 'active');
   const savedCents = goals.reduce((sum, item) => sum + item.currentCents, 0);
   const secret = (value: string) => (balancesHidden ? HIDDEN_AMOUNT : value);
   const editingLabel = categories.find((item) => item.id === editingCategory)?.fullLabel ?? 'Category';
@@ -625,14 +626,14 @@ export function WalletScreen() {
         <View style={s.sectionHead}>
           <AppText variant="h2">Savings Goals</AppText>
           <PressableScale accessibilityRole="button" accessibilityLabel="Manage savings goals" onPress={() => router.push('/goals' as never)} style={s.sectionLink}>
-            <AppText variant="small" style={s.sectionLinkText}>Manage{goals.length ? ` (${goals.length})` : ''}</AppText>
+            <AppText variant="small" style={s.sectionLinkText}>Manage{activeGoals.length ? ` (${activeGoals.length})` : ''}</AppText>
             <AppIcon name="chevron-right" size={16} color={colors.forest} />
           </PressableScale>
         </View>
         <PressableScale accessibilityRole="button" accessibilityLabel="Open savings goals" onPress={() => router.push('/goals' as never)} style={s.goalsRow}>
           <View style={s.goalsIcon}><AppIcon name="target" size={22} /></View>
           <View style={s.budgetInfo}>
-            <AppText variant="h3">{goals.length ? `${goals.length} active goal${goals.length === 1 ? '' : 's'}` : 'No goals yet'}</AppText>
+            <AppText variant="h3">{activeGoals.length ? `${activeGoals.length} active goal${activeGoals.length === 1 ? '' : 's'}` : goals.length ? 'All goals completed' : 'No goals yet'}</AppText>
             <AppText variant="small" style={s.muted}>{goals.length ? `${secret(compact(savedCents))} saved so far` : 'Create your first savings goal'}</AppText>
           </View>
           <AppIcon name="chevron-right" size={20} color={colors.muted} />
