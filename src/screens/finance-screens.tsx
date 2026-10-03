@@ -1159,6 +1159,7 @@ export function GoalsScreen() {
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [walletPickerOpen, setWalletPickerOpen] = useState(false);
   const [dateDraft, setDateDraft] = useState(todayLocalDate());
+  const [archivePanelOpen, setArchivePanelOpen] = useState(false);
   const active = goals.filter((g) => g.status === "active");
   const completed = goals.filter((g) => g.status === "completed");
   const archived = goals.filter((g) => g.status === "archived");
@@ -1482,7 +1483,6 @@ export function GoalsScreen() {
             Target {money(g.targetCents)}
           </AppText>
         </View>
-        <StatusChip>Archived</StatusChip>
       </View>
       <View style={s.actions}>
         <PressableScale
@@ -1561,18 +1561,38 @@ export function GoalsScreen() {
           </>
         ) : null}
         {archived.length ? (
-          <>
-            <View style={s.completedHeading}>
+          <Card style={s.archivePanel}>
+            <PressableScale
+              accessibilityRole="button"
+              accessibilityLabel={`${archivePanelOpen ? "Close" : "Open"} archived goals`}
+              accessibilityState={{ expanded: archivePanelOpen }}
+              onPress={() => setArchivePanelOpen((open) => !open)}
+              style={s.archivePanelHeader}
+            >
+              <View style={s.archivePanelIcon}>
+                <AppIcon name="archive-outline" size={22} color={colors.forest} />
+              </View>
               <View style={s.grow}>
                 <AppText variant="h2">Archived Goals</AppText>
                 <AppText variant="small" style={s.muted}>
-                  Restore a goal or delete it permanently
+                  {archived.length} saved in your archive
                 </AppText>
               </View>
-              <StatusChip>{archived.length} archived</StatusChip>
-            </View>
-            {archived.map(archivedGoalCard)}
-          </>
+              <AppIcon
+                name={archivePanelOpen ? "chevron-up" : "chevron-down"}
+                size={22}
+                color={colors.muted}
+              />
+            </PressableScale>
+            {archivePanelOpen ? (
+              <View style={s.archivePanelBody}>
+                <AppText variant="small" style={s.muted}>
+                  Restore a goal or delete it permanently.
+                </AppText>
+                {archived.map(archivedGoalCard)}
+              </View>
+            ) : null}
+          </Card>
         ) : null}
         {!loading && !active.length && !completed.length && !error ? (
           <Card>
@@ -1804,6 +1824,28 @@ const useStyles = makeStyles((colors) => ({
   completedStatusRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   completedStatusText: { color: colors.success },
   archivedGoal: { gap: 14, opacity: 0.92 },
+  archivePanel: { gap: 0, padding: 0, overflow: "hidden" },
+  archivePanelHeader: {
+    minHeight: 76,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  archivePanelIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: colors.pale,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  archivePanelBody: {
+    gap: 12,
+    padding: spacing.lg,
+    paddingTop: 4,
+  },
   deleteGoalButton: { backgroundColor: colors.dangerSoft },
   deleteGoalLabel: { color: colors.danger },
   iconButton: {
