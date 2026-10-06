@@ -61,6 +61,10 @@ export function Calendar({
   ];
   // Pad the final row so the grid keeps a stable shape between months.
   while (cells.length % 7 !== 0) cells.push(null);
+  // Explicit week rows: percentage widths in a wrapping row can round past
+  // 100% on Android and push Saturday onto the next line.
+  const rows: (number | null)[][] = [];
+  for (let start = 0; start < cells.length; start += 7) rows.push(cells.slice(start, start + 7));
 
   const step = (delta: number) => {
     setVisible((current) => {
@@ -118,8 +122,10 @@ export function Calendar({
       </View>
 
       <View style={styles.grid}>
-        {cells.map((day, index) => {
-          if (day === null) return <View key={`blank-${index}`} style={styles.cell} />;
+        {rows.map((row, rowIndex) => (
+        <View key={`row-${rowIndex}`} style={styles.weekRow}>
+        {row.map((day, index) => {
+          if (day === null) return <View key={`blank-${rowIndex}-${index}`} style={styles.cell} />;
 
           const date = toLocalDate(visible.year, visible.month, day);
           const selected = date === value;
@@ -153,6 +159,8 @@ export function Calendar({
             </View>
           );
         })}
+        </View>
+        ))}
       </View>
     </View>
   );
@@ -179,9 +187,9 @@ const useStyles = makeStyles((colors) => ({
   monthLabel: { flex: 1, textAlign: 'center' },
   weekRow: { flexDirection: 'row' },
   weekday: { color: colors.muted, textAlign: 'center' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  grid: {},
   cell: {
-    width: `${100 / 7}%`,
+    flex: 1,
     aspectRatio: 1,
     alignItems: 'center',
     justifyContent: 'center',
