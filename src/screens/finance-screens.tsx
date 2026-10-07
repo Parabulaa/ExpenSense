@@ -1170,6 +1170,14 @@ export function GoalsScreen() {
     setTarget("");
     setDate("");
   };
+  // Budget setup sends new users here with ?new=1 to start their first goal.
+  const params = useLocalSearchParams<{ new?: string }>();
+  const openedFromParams = useRef(false);
+  useEffect(() => {
+    if (params.new !== "1" || openedFromParams.current) return;
+    openedFromParams.current = true;
+    openNew();
+  }, [params.new]);
   const openEdit = (g: SavingsGoal) => {
     setSelected(g);
     setMode("edit");

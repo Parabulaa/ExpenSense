@@ -527,7 +527,7 @@ export function CreateAccountScreen() {
 
     if (result.ok) {
       if (result.data.session) {
-        router.replace('/home');
+        router.replace('/budget-setup');
       } else {
         showDialog({
           title: authCopy.verifyEmail.title,

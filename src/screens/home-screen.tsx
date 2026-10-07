@@ -37,6 +37,7 @@ import {
 import { useDashboardCategories } from '@/features/dashboard/DashboardCategoriesProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useExpenses } from '@/features/expenses/ExpensesProvider';
+import { todayLocalDate } from '@/features/expenses/validation';
 import { useToast } from '@/components/common/toast';
 import { selectionFeedback, warningFeedback } from '@/lib/haptics';
 import { formatPeso, percentOf } from '@/lib/format';
@@ -408,6 +409,9 @@ export function HomeScreen() {
   // selected period ends in.
   const selectedMonthId = range.month;
   const savedBudget = budgets.find((item) => item.month === selectedMonthId);
+  // Prompt until this month has at least one category limit.
+  const currentMonthId = todayLocalDate().slice(0, 7);
+  const needsBudgetSetup = !budgetsLoading && !budgets.some((item) => item.month === currentMonthId && item.categoryBudgets.some((limit) => limit.amountCents > 0));
   const inRange = useCallback((date: string) => date >= range.start && date <= range.end, [range.end, range.start]);
   const periodExpenses = useMemo(() => expenses.filter((expense) => inRange(expense.transactionDate)), [expenses, inRange]);
   const periodIncomeCents = useMemo(
@@ -667,6 +671,21 @@ export function HomeScreen() {
             {loadError ? <AppText variant="small" style={styles.dataError}>Expense data could not be refreshed.</AppText> : null}
           </Card>
         </FadeSlideIn>
+
+        {needsBudgetSetup ? (
+          <FadeSlideIn index={2}>
+            <PressableScale accessibilityRole="button" accessibilityLabel="Set your budget" onPress={() => router.push('/budget-setup')}>
+              <Card style={styles.setupCard}>
+                <View style={styles.setupIcon}><AppIcon name="wallet-plus-outline" size={26} color={colors.deepForest} /></View>
+                <View style={{ flex: 1 }}>
+                  <AppText variant="h3">Set your budget</AppText>
+                  <AppText variant="small" style={styles.summaryMuted}>Give each category a limit so you can see what&apos;s left to spend.</AppText>
+                </View>
+                <AppIcon name="chevron-right" size={22} color={colors.deepForest} />
+              </Card>
+            </PressableScale>
+          </FadeSlideIn>
+        ) : null}
 
         <View style={styles.metricRow}>
           <MetricTile
@@ -996,6 +1015,8 @@ const useStyles = makeStyles((colors) => ({
     color: '#06120D',
   },
   summaryMuted: { color: colors.muted, fontSize: 15 },
+  setupCard: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 14 },
+  setupIcon: { width: 48, height: 48, borderRadius: 16, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' },
   sparkRow: {
     height: 72,
     minWidth: 104,
