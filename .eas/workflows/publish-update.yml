@@ -1,5 +1,9 @@
 name: Publish preview update
 
+on:
+  push:
+    branches: ['feature/mobile-app']
+
 jobs:
   publish_update:
     name: Publish update
@@ -8,4 +12,4 @@ jobs:
     params:
       channel: preview
       platform: all
-      message: Dark mode with system/light/dark choice in Appearance
+      # No message: EAS labels the update with the commit message.
