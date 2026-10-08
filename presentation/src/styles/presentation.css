@@ -1,0 +1,254 @@
+/* ============ Fonts (local, works offline) ============ */
+@font-face { font-family: 'Plus Jakarta Sans'; font-weight: 400; font-display: swap; src: url('/fonts/PlusJakartaSans_400Regular.ttf') format('truetype'); }
+@font-face { font-family: 'Plus Jakarta Sans'; font-weight: 500; font-display: swap; src: url('/fonts/PlusJakartaSans_500Medium.ttf') format('truetype'); }
+@font-face { font-family: 'Plus Jakarta Sans'; font-weight: 600; font-display: swap; src: url('/fonts/PlusJakartaSans_600SemiBold.ttf') format('truetype'); }
+@font-face { font-family: 'Plus Jakarta Sans'; font-weight: 700; font-display: swap; src: url('/fonts/PlusJakartaSans_700Bold.ttf') format('truetype'); }
+@font-face { font-family: 'Plus Jakarta Sans'; font-weight: 800; font-display: swap; src: url('/fonts/PlusJakartaSans_800ExtraBold.ttf') format('truetype'); }
+
+/* ============ Tokens (ExpenSense app palette) ============ */
+:root {
+  --deep-forest: #173D2B;
+  --secondary-green: #315F43;
+  --soft-green: #75926E;
+  --light-green: #B5C7A9;
+  --cream: #F5F2E8;
+  --surface: #FFFDF7;
+  --text: #15231B;
+  --border: rgba(23, 61, 43, 0.10);
+  --shadow: 0 10px 30px rgba(23, 61, 43, 0.08), 0 2px 6px rgba(23, 61, 43, 0.05);
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body, #root { width: 100%; height: 100%; }
+
+body {
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  color: var(--text);
+  background: #E9E5D8; /* letterbox tone */
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+button { font-family: inherit; }
+
+:focus-visible { outline: 3px solid var(--secondary-green); outline-offset: 3px; border-radius: 8px; }
+
+/* ============ Viewport + 1920x1080 stage ============ */
+.viewport {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #E9E5D8;
+}
+
+.stage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1920px;
+  height: 1080px;
+  transform: translate(-50%, -50%) scale(var(--stage-scale, 1));
+  transform-origin: center center;
+  overflow: hidden;
+  background: var(--cream);
+  box-shadow: 0 0 0 1px rgba(23, 61, 43, 0.06);
+}
+
+.print-deck { display: none; }
+
+/* ============ Slide base ============ */
+.slide {
+  position: absolute;
+  inset: 0;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  background: var(--cream);
+}
+
+.slide-inner {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  padding: 120px 150px 110px;
+  display: flex;
+  flex-direction: column;
+}
+
+.slide-brand {
+  position: absolute;
+  z-index: 2;
+  top: 52px;
+  left: 150px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--deep-forest);
+  letter-spacing: -0.01em;
+}
+.slide-brand img { width: 40px; height: 40px; mix-blend-mode: multiply; }
+.slide-brand .sense { color: #3FAE66; }
+
+.slide-number {
+  position: absolute;
+  z-index: 2;
+  top: 58px;
+  right: 150px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--soft-green);
+  letter-spacing: 0.12em;
+}
+
+/* ============ Typography ============ */
+.eyebrow {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--soft-green);
+  margin-bottom: 20px;
+}
+.h-hero { font-size: 104px; font-weight: 800; line-height: 1.02; letter-spacing: -0.035em; color: var(--deep-forest); }
+.h-1 { font-size: 72px; font-weight: 800; line-height: 1.06; letter-spacing: -0.03em; color: var(--deep-forest); }
+.body-lg { font-size: 28px; font-weight: 500; line-height: 1.5; color: var(--secondary-green); }
+.body { font-size: 24px; font-weight: 500; line-height: 1.5; color: var(--secondary-green); }
+.accent { color: #3FAE66; }
+
+/* ============ Surfaces ============ */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  box-shadow: var(--shadow);
+}
+.icon-tile {
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+  background: #E3EBDC;
+  color: var(--deep-forest);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.icon-tile.dark { background: var(--deep-forest); color: var(--cream); }
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 34px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--deep-forest);
+}
+.chip .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--soft-green); }
+
+/* ============ Organic shapes ============ */
+.shapes { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.shape {
+  position: absolute;
+  mix-blend-mode: multiply; /* removes the PNG's light background on cream */
+  animation: drift var(--dur, 14s) var(--ease) infinite alternate;
+  animation-delay: var(--delay, 0s);
+  will-change: transform;
+}
+.shape img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+@keyframes drift {
+  0% { transform: translate(0, 0) rotate(var(--rot, 0deg)); }
+  50% { transform: translate(10px, -8px) rotate(calc(var(--rot, 0deg) + 1.5deg)); }
+  100% { transform: translate(-10px, 8px) rotate(calc(var(--rot, 0deg) - 1.5deg)); }
+}
+
+/* ============ Controls ============ */
+.controls {
+  position: fixed;
+  z-index: 50;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(255, 253, 247, 0.92);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  transition: opacity 0.5s ease;
+}
+.controls.idle { opacity: 0.25; }
+.controls:hover, .controls:focus-within { opacity: 1; }
+
+.ctrl-btn {
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--deep-forest);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s var(--ease), background 0.2s ease;
+}
+.ctrl-btn:hover:not(:disabled) { background: #E3EBDC; transform: scale(1.04); }
+.ctrl-btn:disabled { opacity: 0.3; cursor: default; }
+.ctrl-divider { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
+.ctrl-count { font-size: 14px; font-weight: 700; color: var(--deep-forest); min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+.ctrl-count span { color: var(--soft-green); font-weight: 600; }
+
+.progress {
+  position: fixed;
+  z-index: 50;
+  left: 50%;
+  bottom: 30px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  transition: opacity 0.5s ease;
+}
+.progress.idle { opacity: 0.25; }
+.progress button {
+  width: 8px; height: 8px; border-radius: 999px; border: 0; padding: 0;
+  background: rgba(23, 61, 43, 0.2); cursor: pointer;
+  transition: width 0.4s var(--ease), background 0.3s ease;
+}
+.progress button.active { width: 26px; background: var(--deep-forest); }
+
+/* ============ Primary button ============ */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  padding: 22px 38px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--deep-forest);
+  color: var(--cream);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(23, 61, 43, 0.22);
+  transition: transform 0.25s var(--ease), box-shadow 0.25s ease;
+}
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(23, 61, 43, 0.28); }
+
+/* ============ Reduced motion ============ */
+@media (prefers-reduced-motion: reduce) {
+  .shape { animation: none; }
+  * { transition-duration: 0.01ms !important; }
+}

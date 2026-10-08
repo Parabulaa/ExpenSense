@@ -1,0 +1,35 @@
+{
+  "preconditions": [
+    "Signed in as demo.expensense@example.com on /home.",
+    "Light theme selected; current month is September 2026.",
+    "Seed data exactly matches demo-data.json and no Coffee Project PHP 372.00 receipt has been saved yet.",
+    "Camera permission granted, receipt printed, OCR preflight passed, network stable.",
+    "Transaction filters cleared, newest sort active, balances visible."
+  ],
+  "steps": [
+    { "order": 1, "timestamp": 0.0, "screen": "Home Dashboard", "action": "hold", "target": "full dashboard", "delay_before_ms": 0, "wait_after_ms": 4200 },
+    { "order": 2, "timestamp": 4.2, "screen": "Home Dashboard", "action": "tap", "target": "Scan bottom-navigation button", "delay_before_ms": 0, "wait_after_ms": 650 },
+    { "order": 3, "timestamp": 5.0, "screen": "Add Expense Sheet", "action": "hold", "target": "three expense options", "delay_before_ms": 0, "wait_after_ms": 1800 },
+    { "order": 4, "timestamp": 6.8, "screen": "Add Expense Sheet", "action": "tap", "target": "Scan Receipt", "delay_before_ms": 0, "wait_after_ms": 850 },
+    { "order": 5, "timestamp": 8.0, "screen": "Receipt Scanner", "action": "position", "target": "printed Coffee Project receipt fully inside scan frame", "delay_before_ms": 0, "wait_after_ms": 1600 },
+    { "order": 6, "timestamp": 10.0, "screen": "Receipt Scanner", "action": "tap", "target": "Capture receipt", "delay_before_ms": 200, "wait_after_ms": 1000 },
+    { "order": 7, "timestamp": 11.0, "screen": "Receipt Processing", "action": "wait", "target": "recognition step checklist", "delay_before_ms": 0, "wait_after_ms": 6000, "editing_note": "Trim idle frames; retain the actual step order." },
+    { "order": 8, "timestamp": 17.0, "screen": "Receipt Review", "action": "hold", "target": "receipt thumbnail, status chip and confidence", "delay_before_ms": 0, "wait_after_ms": 1700 },
+    { "order": 9, "timestamp": 18.7, "screen": "Receipt Review", "action": "scroll", "target": "items, subtotal, tax and total", "gesture": "one slow upward swipe of roughly 45% screen height", "delay_before_ms": 0, "wait_after_ms": 1600 },
+    { "order": 10, "timestamp": 21.0, "screen": "Receipt Review", "action": "verify", "target": "Merchant=Coffee Project, Category=Food, Wallet=Daily Wallet, Total=PHP 372.00", "delay_before_ms": 0, "wait_after_ms": 1300 },
+    { "order": 11, "timestamp": 22.5, "screen": "Receipt Review", "action": "scroll", "target": "After you confirm preview and Confirm & Save", "gesture": "slow upward swipe until preview and CTA are visible", "delay_before_ms": 0, "wait_after_ms": 900 },
+    { "order": 12, "timestamp": 24.0, "screen": "Receipt Review", "action": "tap", "target": "Confirm & Save", "delay_before_ms": 250, "wait_after_ms": 1600 },
+    { "order": 13, "timestamp": 26.0, "screen": "Transactions", "action": "hold", "target": "Coffee Project PHP 372.00 newest row and success toast", "delay_before_ms": 0, "wait_after_ms": 3600 },
+    { "order": 14, "timestamp": 30.0, "screen": "Transactions", "action": "tap", "target": "Wallet bottom-navigation tab", "delay_before_ms": 0, "wait_after_ms": 900 },
+    { "order": 15, "timestamp": 31.0, "screen": "Wallet", "action": "hold", "target": "total balance and Daily Wallet", "delay_before_ms": 0, "wait_after_ms": 2200 },
+    { "order": 16, "timestamp": 33.2, "screen": "Wallet", "action": "scroll", "target": "Food category budget row", "gesture": "slow upward swipe", "delay_before_ms": 0, "wait_after_ms": 1500 },
+    { "order": 17, "timestamp": 35.0, "screen": "Wallet", "action": "tap", "target": "Analytics bottom-navigation tab", "delay_before_ms": 0, "wait_after_ms": 900 },
+    { "order": 18, "timestamp": 36.0, "screen": "Analytics", "action": "hold", "target": "overview and animated expense-structure donut", "delay_before_ms": 0, "wait_after_ms": 3500 },
+    { "order": 19, "timestamp": 39.5, "screen": "Analytics", "action": "scroll", "target": "View Spending Insights", "gesture": "short upward swipe if link is below fold", "delay_before_ms": 0, "wait_after_ms": 500 },
+    { "order": 20, "timestamp": 40.2, "screen": "Analytics", "action": "tap", "target": "View Spending Insights", "delay_before_ms": 0, "wait_after_ms": 900 },
+    { "order": 21, "timestamp": 41.2, "screen": "Spending Insights", "action": "hold", "target": "Top Category and Recurring Expenses cards", "delay_before_ms": 0, "wait_after_ms": 4300 },
+    { "order": 22, "timestamp": 45.5, "screen": "Spending Insights", "action": "tap", "target": "Home bottom-navigation tab", "delay_before_ms": 0, "wait_after_ms": 900 },
+    { "order": 23, "timestamp": 46.5, "screen": "Home Dashboard", "action": "hold", "target": "updated monthly total and mascot insight", "delay_before_ms": 0, "wait_after_ms": 3500 }
+  ],
+  "editorial_mapping": "The recorder should capture clean source takes without racing. The final timestamps in demo-timeline.json are achieved in editing, especially for processing and review."
+}

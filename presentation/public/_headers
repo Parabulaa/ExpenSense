@@ -1,0 +1,14 @@
+# Cloudflare Pages headers
+
+# Let the browser range-request and cache the demo video (smooth seeking + faster repeat views)
+/assets/video/*
+  Cache-Control: public, max-age=31536000, immutable
+  Accept-Ranges: bytes
+
+# Long-cache the hashed build assets
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Local fonts
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable

@@ -1,0 +1,28 @@
+{
+  "name": "expensense-presentation",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "export:pdf": "node scripts/export-pdf.js",
+    "deploy": "npm run build && wrangler pages deploy dist --project-name=expensense-deck --branch=main --commit-dirty=true"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "framer-motion": "^11.3.0",
+    "lucide-react": "^0.424.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "typescript": "^5.5.3",
+    "vite": "^5.3.4",
+    "playwright": "^1.45.0",
+    "wrangler": "^3.78.0"
+  }
+}

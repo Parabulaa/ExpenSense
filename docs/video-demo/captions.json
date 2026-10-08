@@ -1,0 +1,14 @@
+{
+  "style": { "max_words": 7, "position": "upper or lower safe third outside critical app controls", "treatment": "Plus Jakarta Sans SemiBold, cream or deep-forest pill at 88-94% opacity", "animation": "120ms fade, no bounce" },
+  "captions": [
+    { "scene": "scene-01", "start": 0.8, "end": 4.2, "text": "Know where your money goes." },
+    { "scene": "scene-02", "start": 5.6, "end": 9.2, "text": "Add expenses your way." },
+    { "scene": "scene-03", "start": 11.0, "end": 15.2, "text": "Capture the whole receipt." },
+    { "scene": "scene-04", "start": 17.0, "end": 22.2, "text": "From photo to structured details." },
+    { "scene": "scene-05", "start": 24.0, "end": 32.5, "text": "Review before it counts." },
+    { "scene": "scene-06", "start": 35.0, "end": 39.4, "text": "Saved, categorized, traceable." },
+    { "scene": "scene-07", "start": 41.0, "end": 45.4, "text": "Balances stay in sync." },
+    { "scene": "scene-08", "start": 47.0, "end": 54.3, "text": "See patterns, not just totals." },
+    { "scene": "scene-09", "start": 55.2, "end": 58.0, "text": "Track smarter. Live better." }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "concept": "Follow one receipt from capture to verified record, then show how that single action updates the user's ledger, wallet context, and spending intelligence.",
+  "story_arc": ["problem", "action", "intelligence", "review", "result", "overview"],
+  "opening": {
+    "screen": "Home Dashboard",
+    "route": "/home",
+    "duration_seconds": 4,
+    "recommendation": "Open on a seeded, signed-in dashboard after its entry animations settle; introduce the brand with a small editorial ExpenSense title, not a long splash."
+  },
+  "scenes": [
+    { "order": 1, "name": "A clear starting point", "route": "/home", "value": "personal spending overview" },
+    { "order": 2, "name": "Choose receipt capture", "route": "/add-expense", "value": "fast expense entry choices" },
+    { "order": 3, "name": "Capture the receipt", "route": "/scanner", "value": "camera-based capture" },
+    { "order": 4, "name": "Read and review", "route": "/processing → /receipt-review", "value": "OCR with human verification" },
+    { "order": 5, "name": "Saved to the ledger", "route": "/transactions", "value": "traceable verified record" },
+    { "order": 6, "name": "See the financial effect", "route": "/wallet", "value": "wallet and budget awareness" },
+    { "order": 7, "name": "Understand the pattern", "route": "/analytics → /insights", "value": "category analytics and actionable insights" },
+    { "order": 8, "name": "Close on clarity", "route": "/home", "value": "updated dashboard and brand promise" }
+  ],
+  "ending": {
+    "screen": "Home Dashboard",
+    "route": "/home",
+    "duration_seconds": 3,
+    "recommendation": "Return to the updated monthly total and mascot insight, then fade in the ExpenSense wordmark and tagline for the final 1.5 seconds."
+  },
+  "fallback_flow": {
+    "when": "OCR cannot be made deterministic during preflight",
+    "sequence": ["/home", "/add-expense", "/manual-expense", "/transactions", "/wallet", "/analytics", "/insights", "/home"],
+    "disclosure": "Caption the action as manual entry; do not imply that OCR extracted the values."
+  },
+  "excluded": [
+    { "feature": "Onboarding/authentication", "reason": "Pre-authentication saves time and avoids credentials and email/network variability." },
+    { "feature": "Failure states", "reason": "Real and complete, but they weaken the hero path in a one-minute cut." },
+    { "feature": "Wallet management and savings-goal editing", "reason": "Form-heavy and outside the receipt-to-insight story." },
+    { "feature": "Category customization", "reason": "Supporting feature with low relevance to the central narrative." },
+    { "feature": "Offline budget assistant", "reason": "Strong optional feature but would crowd the 60-second flow." }
+  ]
+}

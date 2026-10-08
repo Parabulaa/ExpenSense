@@ -1,0 +1,119 @@
+{
+  "product": {
+    "name": "ExpenSense",
+    "description": "A mobile finance ledger that turns manual entries or receipt photos into categorized transactions, wallet changes, budgets, analytics, and spending insights.",
+    "tagline": "TRACK SMARTER. LIVE BETTER.",
+    "positioning": "Intelligent Ledger for Finance & Expense Tracking",
+    "logo": "assets/Branding/Wordmark_Primary.png",
+    "app_icon": "assets/Branding/Logo_Mark.png",
+    "mascot": "A green-capped pig character with neutral, scanning, success, confused, tip, and warning states.",
+    "personality": ["approachable", "calm", "helpful", "student-friendly", "financially responsible"],
+    "visual_style": ["organic", "soft fintech", "cream canvas", "forest-green accents", "rounded cards", "friendly mascot"]
+  },
+  "colors": {
+    "primary": [
+      { "hex": "#173D2B", "rgb": [23, 61, 43], "role": "deep forest; primary buttons, headings, navigation" },
+      { "hex": "#315F43", "rgb": [49, 95, 67], "role": "forest; secondary brand and icons" },
+      { "hex": "#2E8A4F", "rgb": [46, 138, 79], "role": "brand success accent and wordmark Sense" }
+    ],
+    "secondary": [
+      { "hex": "#75926E", "rgb": [117, 146, 110], "role": "soft green" },
+      { "hex": "#B5C7A9", "rgb": [181, 199, 169], "role": "light green borders and accents" },
+      { "hex": "#E8EEE3", "rgb": [232, 238, 227], "role": "pale controls and subtle fills" }
+    ],
+    "background": [
+      { "hex": "#F5F2E8", "rgb": [245, 242, 232], "role": "main light canvas and splash" },
+      { "hex": "#0F1813", "rgb": [15, 24, 19], "role": "dark-mode canvas" }
+    ],
+    "surface": [
+      { "hex": "#FFFDF7", "rgb": [255, 253, 247], "role": "cards, sheets, light surfaces" },
+      { "hex": "#18231D", "rgb": [24, 35, 29], "role": "dark-mode cards" }
+    ],
+    "text": [
+      { "hex": "#15231B", "rgb": [21, 35, 27], "role": "primary light-mode text" },
+      { "hex": "#536C74", "rgb": [83, 108, 116], "role": "muted text" },
+      { "hex": "#E6EEE4", "rgb": [230, 238, 228], "role": "primary dark-mode text" },
+      { "hex": "#9DB0A8", "rgb": [157, 176, 168], "role": "muted dark-mode text" }
+    ],
+    "semantic": [
+      { "hex": "#2E8A4F", "rgb": [46, 138, 79], "role": "success" },
+      { "hex": "#C98500", "rgb": [201, 133, 0], "role": "warning" },
+      { "hex": "#DE2B2B", "rgb": [222, 43, 43], "role": "danger/error" },
+      { "hex": "#D9DED6", "rgb": [217, 222, 214], "role": "divider/border" },
+      { "hex": "rgba(8, 20, 14, 0.68)", "role": "modal overlay" },
+      { "hex": "#145733", "rgb": [20, 87, 51], "role": "analytics slice 1" },
+      { "hex": "#367A50", "rgb": [54, 122, 80], "role": "analytics slice 2" },
+      { "hex": "#669568", "rgb": [102, 149, 104], "role": "analytics slice 3" },
+      { "hex": "#93B187", "rgb": [147, 177, 135], "role": "analytics slice 4" },
+      { "hex": "#C4D5B8", "rgb": [196, 213, 184], "role": "analytics slice 5" }
+    ]
+  },
+  "typography": {
+    "font_family": "Plus Jakarta Sans",
+    "weights": ["400 Regular", "500 Medium", "600 SemiBold", "700 Bold", "800 ExtraBold"],
+    "styles": [
+      { "name": "hero", "size": 32, "line_height": 37, "weight": 800 },
+      { "name": "title", "size": 26, "line_height": 31, "weight": 800 },
+      { "name": "h2", "size": 19, "line_height": 25, "weight": 700 },
+      { "name": "h3", "size": 15, "line_height": 20, "weight": 700 },
+      { "name": "body", "size": 14, "line_height": 20, "weight": 400 },
+      { "name": "subtitle", "size": 14, "line_height": 21, "weight": 400 },
+      { "name": "small", "size": 12, "line_height": 16, "weight": 400 },
+      { "name": "button", "size": 15, "line_height": 20, "weight": 700 }
+    ]
+  },
+  "layout": {
+    "screen_padding": 18,
+    "common_spacing": [4, 8, 12, 16, 24, 32, 48],
+    "border_radius": [10, 16, 22, 30, 999],
+    "max_mobile_width": 480,
+    "card_shadow": { "color": "#173D2B", "y": 6, "opacity": 0.08, "blur": 12, "elevation": 3 }
+  },
+  "components": [
+    "rounded translucent surface cards",
+    "54px primary buttons",
+    "52px outlined secondary buttons",
+    "rounded form fields",
+    "pill status chips",
+    "draggable bottom sheets",
+    "progress bars",
+    "wallet cards",
+    "category tiles",
+    "donut chart",
+    "mascot insight bubble"
+  ],
+  "navigation": {
+    "root_tabs": ["Home", "Transactions", "Scan", "Analytics", "Wallet"],
+    "root_order": ["/home", "/transactions", "/analytics", "/wallet"],
+    "tab_height": 82,
+    "scan_button": "66px circular raised center action",
+    "quick_menu": ["Settings", "Notifications", "FAQ"]
+  },
+  "iconography": {
+    "library": "MaterialCommunityIcons via @expo/vector-icons",
+    "style": "mostly outline icons, filled state for selected navigation and emphasized actions"
+  },
+  "motion": {
+    "press": "90ms scale-down and 140ms release",
+    "screen_entry": "380ms fade plus 10px upward travel, staggered by 60ms",
+    "stack_navigation": "260ms simple push with cross-fade",
+    "scanner_modal": "280ms slide from bottom",
+    "root_panel_swipe": "150ms exit plus 280ms cubic entry with opacity cross-fade",
+    "bottom_sheet": "spring/gesture driven; backdrop and sheet coordinated",
+    "progress_bar": "260ms delay then 900ms cubic fill",
+    "radial_menu": "42ms staggered spring actions; 125ms close",
+    "ambient": "independently timed organic-shape and mascot drift; reduced-motion aware",
+    "chart": "animated donut segment reveal"
+  },
+  "source": {
+    "files": [
+      "src/constants/theme.ts",
+      "src/components/common/ui.tsx",
+      "src/components/common/motion.tsx",
+      "src/components/navigation/bottom-navigation.tsx",
+      "src/components/navigation/floating-radial-menu.tsx",
+      "src/app/(app)/_layout.tsx",
+      "src/features/analytics/analytics.ts"
+    ]
+  }
+}

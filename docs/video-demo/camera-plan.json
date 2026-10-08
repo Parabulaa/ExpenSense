@@ -1,0 +1,16 @@
+{
+  "default_rule": "Keep the full device at 100% for navigation and gestures. Use only four subtle emphasis moves; every move must settle before the next interaction.",
+  "shots": [
+    { "shot": "01-home-open", "screen": "Home Dashboard", "camera_style": "slow zoom-in", "focus": "summary card", "start_scale": 1.0, "end_scale": 1.06, "duration_ms": 4000, "easing": "ease-out cubic", "reason": "Establish the overview without hiding navigation." },
+    { "shot": "02-add-sheet", "screen": "Add Expense Sheet", "camera_style": "static full-device", "focus": "three expense methods", "start_scale": 1.0, "end_scale": 1.0, "duration_ms": 5000, "easing": "none", "reason": "The sheet and Scan tab already create enough motion." },
+    { "shot": "03-scanner", "screen": "Receipt Scanner", "camera_style": "slow zoom-in", "focus": "receipt inside scan frame", "start_scale": 1.0, "end_scale": 1.08, "duration_ms": 4000, "easing": "ease-in-out", "reason": "Direct attention to framing while retaining the capture control." },
+    { "shot": "04-processing", "screen": "Receipt Processing", "camera_style": "static full-device", "focus": "step checklist", "start_scale": 1.0, "end_scale": 1.0, "duration_ms": 7000, "easing": "none", "reason": "UI state changes supply the motion." },
+    { "shot": "05-review-top", "screen": "Receipt Review", "camera_style": "subtle crop", "focus": "receipt, status, merchant and total", "start_scale": 1.0, "end_scale": 1.12, "duration_ms": 3500, "easing": "ease-out cubic", "reason": "OCR proof is the hero detail." },
+    { "shot": "05b-review-save", "screen": "Receipt Review", "camera_style": "return to full-device", "focus": "After you confirm and Confirm & Save", "start_scale": 1.12, "end_scale": 1.0, "duration_ms": 900, "easing": "ease-in-out", "reason": "Restore spatial context before the decisive tap." },
+    { "shot": "06-ledger", "screen": "Transactions", "camera_style": "slow zoom-in", "focus": "newest Coffee Project row", "start_scale": 1.0, "end_scale": 1.1, "duration_ms": 3000, "easing": "ease-out cubic", "reason": "Confirms the saved result." },
+    { "shot": "07-wallet", "screen": "Wallet", "camera_style": "static full-device", "focus": "wallet balance then Food budget", "start_scale": 1.0, "end_scale": 1.0, "duration_ms": 6000, "easing": "none", "reason": "The scroll itself guides attention." },
+    { "shot": "08-analytics", "screen": "Analytics", "camera_style": "slow zoom-in", "focus": "animated donut", "start_scale": 1.0, "end_scale": 1.08, "duration_ms": 3500, "easing": "ease-out cubic", "reason": "Highlights category structure." },
+    { "shot": "08b-insights", "screen": "Spending Insights", "camera_style": "static full-device", "focus": "Top Category and Recurring Expenses cards", "start_scale": 1.0, "end_scale": 1.0, "duration_ms": 4500, "easing": "none", "reason": "Cards are already large and readable." },
+    { "shot": "09-end", "screen": "Home Dashboard", "camera_style": "slow zoom-out", "focus": "full device and wordmark", "start_scale": 1.06, "end_scale": 1.0, "duration_ms": 2500, "easing": "ease-in-out", "reason": "Creates a calm branded finish." }
+  ]
+}

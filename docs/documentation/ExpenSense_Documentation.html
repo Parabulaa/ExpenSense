@@ -1,0 +1,322 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ExpenSense – System Documentation</title>
+<style>
+  @page { size: 8.5in 11in; margin: 1in; }
+  body { font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.45; color: #15231B; }
+  h1 { font-size: 20pt; color: #173D2B; margin: 0 0 6pt 0; }
+  h2 { font-size: 15pt; color: #173D2B; border-bottom: 1.5pt solid #B5C7A9; padding-bottom: 3pt; margin-top: 22pt; }
+  h3 { font-size: 12pt; color: #315F43; margin-top: 14pt; margin-bottom: 4pt; }
+  p { margin: 0 0 8pt 0; text-align: justify; }
+  ul, ol { margin-top: 0; margin-bottom: 8pt; }
+  li { margin-bottom: 3pt; }
+  table.data { border-collapse: collapse; width: 100%; margin-bottom: 10pt; }
+  table.data th { background: #173D2B; color: #FFFFFF; text-align: left; padding: 5pt 7pt; font-size: 10.5pt; border: 1pt solid #173D2B; }
+  table.data td { padding: 5pt 7pt; border: 1pt solid #B5C7A9; vertical-align: top; font-size: 10.5pt; }
+  table.figs { width: 100%; border-collapse: collapse; margin: 6pt 0 12pt 0; }
+  table.figs td { width: 50%; text-align: center; vertical-align: top; padding: 4pt; }
+  .caption { font-size: 9.5pt; font-style: italic; color: #315F43; text-align: center; margin-top: 3pt; }
+  .cover { text-align: center; }
+  .cover p { text-align: center; }
+  .note { background: #F5F2E8; border-left: 3pt solid #75926E; padding: 6pt 9pt; font-size: 10pt; }
+</style>
+</head>
+<body>
+
+<!-- ======================= COVER ======================= -->
+<div class="cover">
+  <p>&nbsp;</p><p>&nbsp;</p>
+  <p><img src="images/wordmark.png" width="300" height="300" alt="ExpenSense logo"></p>
+  <h1 style="text-align:center;">ExpenSense</h1>
+  <p style="font-size:13pt;"><b>Intelligent Finance &amp; Expense Tracking with Receipt Recognition</b></p>
+  <p style="font-size:12pt; color:#315F43;"><i>"Track Smarter. Live Better."</i></p>
+  <p>&nbsp;</p>
+  <p><b>System Documentation</b></p>
+  <p>&nbsp;</p>
+  <p><b>Developed by:</b></p>
+  <p>James Ryan Amba – Lead Developer<br>
+     Graco Aloba – Co-Developer &amp; QA<br>
+     Ellijan Esquivel – Co-Developer &amp; QA<br>
+     Jed Ortega – Co-Developer &amp; QA</p>
+  <p>&nbsp;</p>
+  <p>[Course Name] &nbsp;|&nbsp; [Section]<br>
+     Submitted to: [Instructor Name]<br>
+     [School Name]<br>
+     [Date of Submission]</p>
+</div>
+
+<br style="page-break-before: always; clear: both;">
+
+<!-- ======================= TOC ======================= -->
+<h2>Table of Contents</h2>
+<ol>
+  <li>Project Title and Group Members</li>
+  <li>System Overview and Objectives</li>
+  <li>Major System Features</li>
+  <li>System Requirements</li>
+  <li>How to Use the System (Step-by-Step)</li>
+  <li>Screenshots of Important Procedures and Features</li>
+  <li>Known Limitations</li>
+  <li>Member Contributions</li>
+</ol>
+
+<!-- ======================= 1 ======================= -->
+<h2>1. Project Title and Group Members</h2>
+<p><b>Project Title:</b> ExpenSense – Intelligent Finance &amp; Expense Tracking with Receipt Recognition</p>
+<table class="data">
+  <tr><th style="width:45%;">Name</th><th>Role</th></tr>
+  <tr><td>James Ryan Amba</td><td>Lead Developer</td></tr>
+  <tr><td>Graco Aloba</td><td>Co-Developer &amp; QA</td></tr>
+  <tr><td>Ellijan Esquivel</td><td>Co-Developer &amp; QA</td></tr>
+  <tr><td>Jed Ortega</td><td>Co-Developer &amp; QA</td></tr>
+</table>
+
+<!-- ======================= 2 ======================= -->
+<h2>2. System Overview and Objectives</h2>
+<h3>2.1 Background</h3>
+<p>Many students and young earners have a hard time answering one simple question: <i>"Where does my money go?"</i>
+Everyday expenses like food, transportation, school needs, and small daily purchases look small one at a time, but they add up quickly.
+Receipts are easily lost, and writing down every expense by hand is tedious, so most people stop tracking after a few days.</p>
+
+<h3>2.2 System Overview</h3>
+<p><b>ExpenSense</b> is a mobile application for Android and iOS that helps users record, organize, and understand their expenses.
+Instead of typing every detail, the user can simply take a photo of a receipt. The app reads the receipt, pulls out the important details
+(merchant, date, items, and total), and lets the user review and correct them before saving. Saved expenses are then reflected in the user's
+transactions, wallets, budgets, and analytics.</p>
+<p>The app was built using <b>React Native</b> with <b>Expo</b> and <b>TypeScript</b>. User accounts, data, and receipt images are stored using
+<b>Supabase</b> (authentication, PostgreSQL database, and private file storage). Receipt recognition (OCR) is handled by a Supabase Edge Function
+called <i>process-receipt</i>, and the results are checked and parsed inside the app.</p>
+
+<h3>2.3 Objectives</h3>
+<p><b>General Objective:</b> To develop a mobile application that makes everyday expense tracking faster, simpler, and more understandable for students and everyday spenders.</p>
+<p><b>Specific Objectives:</b></p>
+<ol>
+  <li>To allow users to record expenses by scanning or uploading a receipt, reducing manual typing.</li>
+  <li>To let users review and correct the recognized receipt details before saving, so the records stay accurate.</li>
+  <li>To provide manual expense entry for purchases that have no receipt.</li>
+  <li>To keep all money movement (expenses, income, cash-in, and transfers) in one searchable transaction history.</li>
+  <li>To help users manage wallets, monthly category budgets, and savings goals.</li>
+  <li>To present spending analytics and insights so users can see patterns, not just totals.</li>
+</ol>
+
+<!-- ======================= 3 ======================= -->
+<h2>3. Major System Features</h2>
+<table class="data">
+  <tr><th style="width:30%;">Feature</th><th>Description</th></tr>
+  <tr><td><b>Account &amp; Onboarding</b></td><td>Three-page introduction, account creation with email verification, sign in, forgot password, and password reset.</td></tr>
+  <tr><td><b>Home Dashboard</b></td><td>Personal greeting, mascot tip, total spending for the selected period (week/month/year), budget progress, income, remaining budget, and pinned category tiles.</td></tr>
+  <tr><td><b>Receipt Scanner</b></td><td>Capture a receipt with the camera (with flashlight) or upload an image from the gallery. The image is optimized and sent for recognition.</td></tr>
+  <tr><td><b>Receipt Processing &amp; Review</b></td><td>Shows the recognition steps, then a review screen with the detected merchant, date, items, totals, and a confidence label. The user can edit any field, choose the transaction type (expense, cash-in, or transfer), category, and wallet before confirming.</td></tr>
+  <tr><td><b>Manual Expense Entry</b></td><td>Enter amount, merchant, category, wallet, date and time, notes, and an optional photo.</td></tr>
+  <tr><td><b>Transactions</b></td><td>Unified history of expenses, income, cash-in, and transfers with search, filters, sorting, a spending calendar, details, editing, and deleting.</td></tr>
+  <tr><td><b>Wallets, Budgets &amp; Goals</b></td><td>Multiple wallets, total balance (with option to hide it), adding income, transfers between wallets, monthly category budgets, and savings goals.</td></tr>
+  <tr><td><b>Analytics &amp; Insights</b></td><td>Monthly income vs. expense, category breakdown (donut chart), spending trends, and insight cards such as top category, recurring merchants, unusual spending, and budget suggestions.</td></tr>
+  <tr><td><b>Categories</b></td><td>Default and custom categories with icons and colors; categories can be pinned to the dashboard or hidden.</td></tr>
+  <tr><td><b>Budget Assistant</b></td><td>A simple built-in assistant on the Home screen that answers a set of common spending questions using the selected month's data. It works offline.</td></tr>
+  <tr><td><b>Profile &amp; Settings</b></td><td>Account information, change password, notification preferences, light/dark/system theme, privacy information, help/FAQ, and about page.</td></tr>
+  <tr><td><b>Offline Support</b></td><td>Manual expenses created, edited, or deleted while offline are saved on the device and synced once the connection returns.</td></tr>
+</table>
+
+<!-- ======================= 4 ======================= -->
+<h2>4. System Requirements</h2>
+<h3>4.1 User (Mobile Device) Requirements</h3>
+<table class="data">
+  <tr><th style="width:30%;">Requirement</th><th>Specification</th></tr>
+  <tr><td>Device</td><td>Android or iOS smartphone</td></tr>
+  <tr><td>Operating System</td><td>Android 7.0 or later / iOS 16.4 or later</td></tr>
+  <tr><td>Camera</td><td>Rear camera (for scanning receipts)</td></tr>
+  <tr><td>Internet Connection</td><td>Required for sign in, receipt recognition, and syncing data</td></tr>
+  <tr><td>Permissions</td><td>Camera access (scanning) and photo library access (uploading receipts)</td></tr>
+  <tr><td>Account</td><td>A registered ExpenSense account with a valid email address</td></tr>
+</table>
+
+<h3>4.2 Development Requirements</h3>
+<table class="data">
+  <tr><th style="width:30%;">Requirement</th><th>Specification</th></tr>
+  <tr><td>Computer</td><td>Windows, macOS, or Linux</td></tr>
+  <tr><td>Runtime</td><td>Node.js 22.13 or later and npm</td></tr>
+  <tr><td>Framework</td><td>Expo SDK 57, React Native 0.86, React 19.2</td></tr>
+  <tr><td>Language</td><td>TypeScript</td></tr>
+  <tr><td>Backend</td><td>Supabase project (Auth, PostgreSQL, Storage, Edge Functions)</td></tr>
+  <tr><td>Tools</td><td>Code editor (VS Code / Kiro), Git, Expo CLI, EAS (for builds and updates)</td></tr>
+</table>
+
+<!-- ======================= 5 ======================= -->
+<h2>5. How to Use the System (Step-by-Step)</h2>
+
+<h3>5.1 Creating an Account and Signing In</h3>
+<ol>
+  <li>Open the ExpenSense app. The splash screen appears, followed by the onboarding pages.</li>
+  <li>Swipe through the onboarding pages and tap <b>Get Started</b>.</li>
+  <li>On <b>Create Account</b>, enter your name, email, password, and confirm the password, then tap <b>Create Account</b>.</li>
+  <li>Check your email and verify your account if asked.</li>
+  <li>Go back to <b>Sign In</b>, enter your email and password, and tap <b>Sign In</b>.</li>
+  <li>If you forget your password, tap <b>Forgot Password</b>, enter your email, and follow the reset link sent to you.</li>
+</ol>
+
+<h3>5.2 Viewing the Home Dashboard</h3>
+<ol>
+  <li>After signing in, the <b>Home</b> screen shows your total spending, budget progress, income, and remaining budget.</li>
+  <li>Use the period selector to switch between week, month, and year.</li>
+  <li>Tap the mascot's speech bubble to open the budget assistant and choose a suggested question.</li>
+  <li>Tap a category tile to see the spending and transactions for that category.</li>
+</ol>
+
+<h3>5.3 Adding an Expense by Scanning a Receipt</h3>
+<ol>
+  <li>Tap the green <b>Scan</b> button in the middle of the bottom navigation bar.</li>
+  <li>Choose <b>Scan Receipt</b> (camera) or <b>Upload Receipt</b> (gallery). Allow camera or photo access if asked.</li>
+  <li>Place the whole receipt inside the frame and tap the capture button. Use the flashlight button if it is dark.</li>
+  <li>Wait while the app processes the receipt. A checklist shows each step (preparing image, checking quality, reading receipt, checking structure, extracting details, checking totals).</li>
+  <li>On the <b>Receipt Review</b> screen, check the merchant, date, items, and total. Edit anything that is wrong.</li>
+  <li>Choose the transaction type, category, and wallet, and add notes if needed.</li>
+  <li>Tap <b>Confirm &amp; Save</b>. The expense is added to your transactions, and your wallet balance and budget are updated.</li>
+  <li>If recognition fails, you can <b>Retake Photo</b>, <b>Upload Another Image</b>, or <b>Fill In Details Myself</b>.</li>
+</ol>
+
+<h3>5.4 Adding an Expense Manually</h3>
+<ol>
+  <li>Tap <b>Scan</b>, then choose <b>Manual Entry</b>.</li>
+  <li>Enter the amount (or tap a quick amount chip) and the merchant name.</li>
+  <li>Select the category, wallet, date, and time. Optionally attach a photo and write notes.</li>
+  <li>Tap <b>Save Expense</b>. A message confirms that the expense was saved.</li>
+</ol>
+
+<h3>5.5 Managing Transactions</h3>
+<ol>
+  <li>Tap <b>Transactions</b> in the bottom navigation (or swipe from Home).</li>
+  <li>Use the search bar to find a merchant, or tap the filter button to filter by type, date, or category.</li>
+  <li>Open the calendar view to see spending per day.</li>
+  <li>Tap a transaction to view its details. From there, tap <b>Edit</b> to change it or <b>Delete</b> to remove it.</li>
+</ol>
+
+<h3>5.6 Managing Wallets, Budgets, and Goals</h3>
+<ol>
+  <li>Tap <b>Wallet</b> in the bottom navigation to see your total balance, wallets, goals, and category budgets.</li>
+  <li>Tap the eye icon to hide or show your balances.</li>
+  <li>Open <b>Manage Wallets</b> to add a wallet, add income or cash-in, or transfer money between wallets.</li>
+  <li>Set or change a monthly budget for each category to track how much is left.</li>
+  <li>Open <b>Goals</b> to create a savings goal and add money to it over time.</li>
+</ol>
+
+<h3>5.7 Viewing Analytics and Insights</h3>
+<ol>
+  <li>Tap <b>Analytics</b> in the bottom navigation.</li>
+  <li>View your income, expenses, and net total for the month, plus the category donut chart.</li>
+  <li>Switch to <b>Trends</b> to see how your spending changes over time.</li>
+  <li>Tap <b>View Spending Insights</b> to read cards about your top category, recurring merchants, unusual spending, and budget suggestions.</li>
+</ol>
+
+<h3>5.8 Categories, Profile, and Settings</h3>
+<ol>
+  <li>Open <b>Categories</b> to add a custom category, pin it to the dashboard, edit it, or hide it.</li>
+  <li>Open the quick menu and go to <b>Profile</b> to see your account and settings.</li>
+  <li>In settings you can edit your name, change your password, set notifications, choose light/dark theme, and read Help and Privacy information.</li>
+  <li>Tap <b>Log Out</b> to sign out of your account.</li>
+</ol>
+
+<!-- ======================= 6 ======================= -->
+<h2>6. Screenshots of Important Procedures and Features</h2>
+<p class="note">Note: The screenshots below show the ExpenSense interface design. Some labels may differ slightly from the latest build
+(for example, the fifth tab is now labeled <i>Wallet</i> instead of <i>Budget</i>).</p>
+
+<h3>6.1 Getting Started</h3>
+<table class="figs">
+  <tr>
+    <td><img src="images/01_OnboardingScreen.jpg" width="210" height="373" alt="Onboarding screen"><div class="caption">Figure 1. Onboarding Screen</div></td>
+    <td><img src="images/03_SignInScreen.jpg" width="210" height="373" alt="Sign in screen"><div class="caption">Figure 2. Sign In Screen</div></td>
+  </tr>
+  <tr>
+    <td><img src="images/04_CreateAccountScreen.jpg" width="210" height="373" alt="Create account screen"><div class="caption">Figure 3. Create Account Screen</div></td>
+    <td><img src="images/03A_ForgotPasswordScreen.jpg" width="210" height="373" alt="Forgot password screen"><div class="caption">Figure 4. Forgot Password Screen</div></td>
+  </tr>
+</table>
+
+<h3>6.2 Home Dashboard</h3>
+<table class="figs">
+  <tr>
+    <td><img src="images/05_HomeDashboardScreen.jpg" width="210" height="443" alt="Home dashboard"><div class="caption">Figure 5. Home Dashboard</div></td>
+    <td><img src="images/06_AddExpenseBottomSheet.jpg" width="210" height="373" alt="Add expense options"><div class="caption">Figure 6. Add Expense Options (Scan, Upload, Manual)</div></td>
+  </tr>
+</table>
+
+<h3>6.3 Receipt Scanning Procedure</h3>
+<table class="figs">
+  <tr>
+    <td><img src="images/06A_ReceiptScannerScreen.jpg" width="210" height="373" alt="Receipt scanner"><div class="caption">Figure 7. Step 1 – Capture the Receipt</div></td>
+    <td><img src="images/06B_ReceiptProcessingScreen.jpg" width="210" height="373" alt="Receipt processing"><div class="caption">Figure 8. Step 2 – Processing the Receipt</div></td>
+  </tr>
+  <tr>
+    <td><img src="images/06C_ReceiptReviewScreen.jpg" width="210" height="373" alt="Receipt review"><div class="caption">Figure 9. Step 3 – Review and Confirm</div></td>
+    <td><img src="images/06D_ReceiptRecognitionFailedScreen.jpg" width="210" height="373" alt="Recognition failed"><div class="caption">Figure 10. Recognition Failed (Recovery Options)</div></td>
+  </tr>
+</table>
+
+<h3>6.4 Manual Entry and Transactions</h3>
+<table class="figs">
+  <tr>
+    <td><img src="images/06E_ManualExpenseEntryScreen.jpg" width="210" height="373" alt="Manual expense entry"><div class="caption">Figure 11. Manual Expense Entry</div></td>
+    <td><img src="images/07_TransactionsScreen.jpg" width="210" height="373" alt="Transactions list"><div class="caption">Figure 12. Transactions List</div></td>
+  </tr>
+  <tr>
+    <td><img src="images/07A_TransactionDetailsScreen.jpg" width="210" height="373" alt="Transaction details"><div class="caption">Figure 13. Transaction Details</div></td>
+    <td><img src="images/08_BudgetOverviewScreen.jpg" width="210" height="373" alt="Wallet and budget"><div class="caption">Figure 14. Wallet &amp; Budget Overview</div></td>
+  </tr>
+</table>
+
+<h3>6.5 Analytics, Categories, and Settings</h3>
+<table class="figs">
+  <tr>
+    <td><img src="images/09_AnalyticsOverviewScreen.jpg" width="210" height="373" alt="Analytics overview"><div class="caption">Figure 15. Analytics Overview</div></td>
+    <td><img src="images/09A_SpendingInsightsScreen.jpg" width="210" height="373" alt="Spending insights"><div class="caption">Figure 16. Spending Insights</div></td>
+  </tr>
+  <tr>
+    <td><img src="images/10_CategoriesScreen.jpg" width="210" height="373" alt="Categories"><div class="caption">Figure 17. Categories</div></td>
+    <td><img src="images/11_ProfileSettingsScreen.jpg" width="210" height="373" alt="Profile and settings"><div class="caption">Figure 18. Profile &amp; Settings</div></td>
+  </tr>
+</table>
+
+<!-- ======================= 7 ======================= -->
+<h2>7. Known Limitations</h2>
+<ol>
+  <li><b>Internet is required for receipt scanning.</b> Receipt recognition runs on the server, so it does not work offline. Manual entry can be used instead.</li>
+  <li><b>Recognition depends on image quality.</b> Blurry, dark, crumpled, faded, or cut-off receipts may be read incorrectly or rejected. Low-resolution images are also rejected.</li>
+  <li><b>Recognized details must be reviewed.</b> The OCR is not 100% accurate, so the user should always check the details before tapping Confirm &amp; Save.</li>
+  <li><b>Screenshots are not accepted as receipts.</b> The app rejects images that look like screenshots instead of photos of real receipts.</li>
+  <li><b>Photos are not saved offline.</b> If a manual expense with an attached photo is saved while offline, the expense is saved but the photo is not.</li>
+  <li><b>Recognition speed depends on the network.</b> On a slow connection, processing a receipt may take longer.</li>
+  <li><b>The budget assistant is limited.</b> It only answers a fixed set of spending and budget questions and is not a general-purpose chatbot.</li>
+  <li><b>An account and email verification are required.</b> Users must sign up with a valid email before using the app.</li>
+</ol>
+
+<!-- ======================= 8 ======================= -->
+<h2>8. Member Contributions</h2>
+<table class="data">
+  <tr><th style="width:24%;">Member</th><th style="width:20%;">Role</th><th>Contributions</th></tr>
+  <tr>
+    <td>James Ryan Amba</td><td>Lead Developer</td>
+    <td>Planned the overall system and app structure; developed the main screens and navigation; set up the Supabase database, authentication, and storage; integrated the receipt recognition (OCR) flow; handled builds and deployment; led the team and reviewed all features.</td>
+  </tr>
+  <tr>
+    <td>Graco Aloba</td><td>Co-Developer &amp; QA</td>
+    <td>Helped develop app screens and features; tested the receipt scanning and manual entry flows; reported and helped fix bugs; assisted in preparing the documentation and presentation.</td>
+  </tr>
+  <tr>
+    <td>Ellijan Esquivel</td><td>Co-Developer &amp; QA</td>
+    <td>Helped develop app screens and features; tested transactions, wallets, budgets, and analytics; checked the app on different devices; assisted in preparing the documentation and presentation.</td>
+  </tr>
+  <tr>
+    <td>Jed Ortega</td><td>Co-Developer &amp; QA</td>
+    <td>Helped develop app screens and features; tested account sign-up, sign-in, password reset, and settings; wrote test cases and checked user flows; assisted in preparing the documentation and presentation.</td>
+  </tr>
+</table>
+
+<p>&nbsp;</p>
+<p style="text-align:center; color:#75926E;"><i>ExpenSense – Track Smarter. Live Better.</i></p>
+
+</body>
+</html>
+
+

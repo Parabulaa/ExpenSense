@@ -1,0 +1,68 @@
+{
+  "recording_date": "2026-09-29",
+  "locale": "en-PH",
+  "currency": "PHP",
+  "demo_user": { "display_name": "Mika Santos", "first_name": "Mika", "email": "demo.expensense@example.com" },
+  "wallets_before": [
+    { "id": "wallet-cash", "name": "Daily Wallet", "type": "cash", "balance_cents": 1250000, "is_default": true, "color": "#315F43" },
+    { "id": "wallet-bank", "name": "Savings", "type": "bank", "balance_cents": 2000000, "is_default": false, "color": "#3477B8" }
+  ],
+  "receipt_demo": {
+    "merchant": "Coffee Project",
+    "date": "2026-09-29",
+    "time": "14:30",
+    "category_id": "food",
+    "wallet_id": "wallet-cash",
+    "items": [
+      { "name": "Iced Latte", "quantity": 1, "line_total_cents": 16000 },
+      { "name": "Blueberry Muffin", "quantity": 1, "line_total_cents": 12000 },
+      { "name": "Bottled Water", "quantity": 1, "line_total_cents": 5000 }
+    ],
+    "subtotal_cents": 33000,
+    "tax_cents": 4200,
+    "total_cents": 37200,
+    "expected_confidence_note": "Do not script an exact percentage; OCR confidence is provider output. Preflight until merchant, date, items, and total are usable.",
+    "image_requirements": "Photograph a printed original receipt; do not use a screenshot because the parser rejects likely screenshots."
+  },
+  "seeded_current_month_expenses_before_receipt": [
+    { "merchant": "Jollibee", "category_id": "food", "amount_cents": 23000, "date": "2026-09-27", "wallet_id": "wallet-cash" },
+    { "merchant": "Grab", "category_id": "transport", "amount_cents": 17500, "date": "2026-09-26", "wallet_id": "wallet-cash" },
+    { "merchant": "Watsons", "category_id": "health", "amount_cents": 42000, "date": "2026-09-24", "wallet_id": "wallet-cash" },
+    { "merchant": "SM Supermarket", "category_id": "groceries", "amount_cents": 69000, "date": "2026-09-20", "wallet_id": "wallet-cash" },
+    { "merchant": "Coffee Project", "category_id": "food", "amount_cents": 28500, "date": "2026-09-15", "wallet_id": "wallet-cash" }
+  ],
+  "seeded_prior_month_expenses": [
+    { "merchant": "Jollibee", "category_id": "food", "amount_cents": 18000, "date": "2026-08-12" },
+    { "merchant": "Grab", "category_id": "transport", "amount_cents": 14000, "date": "2026-08-18" },
+    { "merchant": "National Book Store", "category_id": "school", "amount_cents": 30000, "date": "2026-08-23" }
+  ],
+  "income_entries": [
+    { "kind": "income", "source": "Allowance", "amount_cents": 1500000, "date": "2026-09-01", "wallet_id": "wallet-cash" }
+  ],
+  "category_budgets": [
+    { "category_id": "food", "limit_cents": 150000 },
+    { "category_id": "transport", "limit_cents": 100000 },
+    { "category_id": "health", "limit_cents": 100000 },
+    { "category_id": "groceries", "limit_cents": 200000 }
+  ],
+  "savings_goals": [
+    { "name": "Laptop Fund", "target_cents": 5000000, "current_cents": 1850000, "target_date": "2027-03-31" }
+  ],
+  "derived_totals": {
+    "expenses_before_receipt_cents": 180000,
+    "expenses_after_receipt_cents": 217200,
+    "food_before_receipt_cents": 51500,
+    "food_after_receipt_cents": 88700,
+    "food_budget_left_after_cents": 61300,
+    "daily_wallet_after_cents": 1212800,
+    "all_wallets_after_cents": 3212800,
+    "net_current_month_after_cents": 1282800
+  },
+  "consistency_notes": [
+    "The new receipt must appear as Coffee Project for PHP 372.00 in Transactions.",
+    "Daily Wallet falls from PHP 12,500.00 to PHP 12,128.00.",
+    "Current-month total spending rises from PHP 1,800.00 to PHP 2,172.00.",
+    "Food rises from PHP 515.00 to PHP 887.00 and becomes the top category.",
+    "A second Coffee Project transaction creates one recurring merchant insight."
+  ]
+}

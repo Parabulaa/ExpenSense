@@ -1,0 +1,109 @@
+{
+  "features": [
+    {
+      "id": "receipt-capture",
+      "name": "Receipt capture and recognition",
+      "description": "Capture a receipt with the rear camera or choose an image, optimize it, send it to the Supabase OCR function, and parse the result.",
+      "user_value": "Reduces repetitive typing while preserving a review step.",
+      "screens": ["/add-expense", "/scanner", "/processing", "/receipt-review", "/recognition-failed"],
+      "demo_priority": "hero",
+      "demo_duration_seconds": 24,
+      "required_state": ["signed-in user", "camera permission already granted", "online connection", "OCR function available", "clear original receipt", "at least one wallet"],
+      "interaction_sequence": ["Open Scan", "choose Scan Receipt", "capture", "wait for recognition", "review fields", "confirm and save"],
+      "demo_ready": true,
+      "caveat": "Network-dependent and non-deterministic unless the sample receipt is preflighted. Screenshots are intentionally rejected.",
+      "source": { "file": "src/screens/expense-screens.tsx", "lines": "47-77, 295-312, 347-450" }
+    },
+    {
+      "id": "manual-expense",
+      "name": "Manual expense entry",
+      "description": "Create a categorized expense with amount, merchant, wallet, date/time, optional photo, and notes.",
+      "user_value": "Provides a reliable fallback when no receipt is available.",
+      "screens": ["/add-expense", "/manual-expense", "/transactions"],
+      "demo_priority": "primary",
+      "demo_duration_seconds": 12,
+      "required_state": ["signed-in user", "category data", "optional wallet"],
+      "interaction_sequence": ["Open Scan", "choose Manual Entry", "enter fields", "save"],
+      "demo_ready": true,
+      "source": { "file": "src/screens/expense-screens.tsx", "lines": "98-196" }
+    },
+    {
+      "id": "dashboard",
+      "name": "Adaptive spending dashboard",
+      "description": "Shows greeting, mascot insight, selected period spending, budget progress, income, remaining budget, expense count, and customizable category tiles.",
+      "user_value": "Gives a fast, friendly overview of current finances.",
+      "screens": ["/home"],
+      "demo_priority": "hero",
+      "demo_duration_seconds": 7,
+      "required_state": ["seeded current-month expenses", "category budgets", "profile display name"],
+      "interaction_sequence": ["Land on Home", "allow entry animation", "optionally tap mascot for another insight"],
+      "demo_ready": true,
+      "source": { "file": "src/screens/home-screen.tsx", "lines": "368-828" }
+    },
+    {
+      "id": "ledger",
+      "name": "Transaction ledger",
+      "description": "Unified expense, income, cash-in, and transfer history with search, filters, calendar view, details, edit, and delete/revert actions.",
+      "user_value": "Keeps money movement searchable and auditable.",
+      "screens": ["/transactions", "/transaction/[id]", "/transaction/[id]/edit"],
+      "demo_priority": "primary",
+      "demo_duration_seconds": 6,
+      "required_state": ["seeded ledger entries"],
+      "interaction_sequence": ["Open Transactions", "show newly saved row", "optionally open details"],
+      "demo_ready": true,
+      "source": { "file": "src/screens/main-screens.tsx", "lines": "56-539" }
+    },
+    {
+      "id": "wallet-budget",
+      "name": "Wallets, category budgets, and savings goals",
+      "description": "Tracks wallet balances, income, transfers, category limits, and goal progress.",
+      "user_value": "Connects each expense to available money and monthly limits.",
+      "screens": ["/wallet", "/wallets", "/wallet-detail/[id]", "/goals"],
+      "demo_priority": "primary",
+      "demo_duration_seconds": 5,
+      "required_state": ["at least one wallet", "current-month category budgets", "optional goal"],
+      "interaction_sequence": ["Open Wallet", "show updated balance and budget progress"],
+      "demo_ready": true,
+      "source": { "file": "src/screens/main-screens.tsx", "lines": "540-744" }
+    },
+    {
+      "id": "analytics-insights",
+      "name": "Analytics and actionable insights",
+      "description": "Computes income-versus-expense overview, category structure, trends, recurring merchants, unusual spending, and budget recommendations from real records.",
+      "user_value": "Turns transaction history into understandable spending patterns.",
+      "screens": ["/analytics", "/insights"],
+      "demo_priority": "hero",
+      "demo_duration_seconds": 8,
+      "required_state": ["multiple current-month expenses", "at least three prior-month expenses for unusual-spending insight", "budget for recommendation state"],
+      "interaction_sequence": ["Open Analytics", "show donut", "open Spending Insights"],
+      "demo_ready": true,
+      "source": { "file": "src/screens/main-screens.tsx", "lines": "747-844" }
+    },
+    {
+      "id": "offline-assistant",
+      "name": "Offline budget assistant",
+      "description": "Answers a fixed class of budget and spending questions locally from selected-month data.",
+      "user_value": "Provides private, instant explanations without a network request.",
+      "screens": ["/home"],
+      "demo_priority": "optional",
+      "demo_duration_seconds": 5,
+      "required_state": ["seeded selected-month data"],
+      "interaction_sequence": ["Tap insight bubble", "tap a suggested question"],
+      "demo_ready": true,
+      "source": { "file": "src/screens/home-screen.tsx", "lines": "394-478, 812-827" }
+    },
+    {
+      "id": "auth-onboarding",
+      "name": "Onboarding and account access",
+      "description": "Three-page onboarding plus sign-up, sign-in, verification, password reset, and password recovery.",
+      "user_value": "Introduces the product and protects personal financial records.",
+      "screens": ["/onboarding", "/create-account", "/sign-in", "/forgot-password", "/create-new-password"],
+      "demo_priority": "optional",
+      "demo_duration_seconds": 4,
+      "required_state": ["signed-out session"],
+      "interaction_sequence": ["Swipe onboarding", "sign in"],
+      "demo_ready": true,
+      "source": { "file": "src/features/onboarding/OnboardingExperience.tsx", "lines": "47-75, 94-260" }
+    }
+  ]
+}

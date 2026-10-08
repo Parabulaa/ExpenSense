@@ -1,0 +1,113 @@
+{
+  "target_duration_seconds": 58,
+  "segments": [
+    {
+      "id": "scene-01", "start": 0, "end": 5, "duration": 5,
+      "screen": "Home Dashboard", "route": "/home",
+      "objective": "Establish ExpenSense and the user's financial overview.", "feature": "Dashboard",
+      "actions": ["Hold on the greeting, mascot insight, monthly total and category grid."],
+      "visual_focus": "Greeting, mascot, monthly total and budget progress.",
+      "camera": { "type": "slow_zoom_in", "start_scale": 1.0, "end_scale": 1.06, "target": "dashboard summary card" },
+      "caption": "Know where your money goes.",
+      "voiceover": "ExpenSense brings everyday spending, budgets, and insights into one clear view.",
+      "transition_in": "1-second wordmark dissolve over the live dashboard", "transition_out": "UI-driven tap",
+      "recording_notes": "Use seeded current-month data and let entry/progress animations settle before the Scan tap."
+    },
+    {
+      "id": "scene-02", "start": 5, "end": 10, "duration": 5,
+      "screen": "Add Expense Sheet", "route": "/add-expense",
+      "objective": "Show the three supported ways to record an expense.", "feature": "Expense capture choices",
+      "actions": ["Tap Scan tab", "pause on Scan Receipt, Upload Receipt and Manual Entry", "tap Scan Receipt"],
+      "visual_focus": "The three action rows, especially Scan Receipt.",
+      "camera": { "type": "static", "start_scale": 1.0, "end_scale": 1.0, "target": null },
+      "caption": "Add expenses your way.",
+      "voiceover": "Add an expense manually, upload a photo, or scan the receipt in the moment.",
+      "transition_in": "bottom-sheet UI motion", "transition_out": "scanner slide from bottom",
+      "recording_notes": "Preserve the full device so the central Scan tab remains spatially clear."
+    },
+    {
+      "id": "scene-03", "start": 10, "end": 16, "duration": 6,
+      "screen": "Receipt Scanner", "route": "/scanner",
+      "objective": "Capture a clear original receipt.", "feature": "Camera receipt capture",
+      "actions": ["Align printed receipt within frame", "tap Capture receipt"],
+      "visual_focus": "Receipt inside the mint scan frame and capture control.",
+      "camera": { "type": "slow_zoom_in", "start_scale": 1.0, "end_scale": 1.08, "target": "scan frame" },
+      "caption": "Capture the whole receipt.",
+      "voiceover": "Frame the full receipt, then capture it with one tap.",
+      "transition_in": "native modal slide", "transition_out": "match cut from receipt to processing mascot",
+      "recording_notes": "Permission must already be granted. Use a physical printed receipt; screenshot-like inputs are rejected by implementation."
+    },
+    {
+      "id": "scene-04", "start": 16, "end": 23, "duration": 7,
+      "screen": "Receipt Processing", "route": "/processing",
+      "objective": "Communicate the real recognition pipeline without lingering on network time.", "feature": "Image optimization and OCR",
+      "actions": ["Show steps changing from active to complete"],
+      "visual_focus": "Reading receipt title, mascot and step checklist.",
+      "camera": { "type": "static", "start_scale": 1.0, "end_scale": 1.0, "target": null },
+      "caption": "From photo to structured details.",
+      "voiceover": "ExpenSense checks image quality, reads the receipt, and verifies its structure and totals.",
+      "transition_in": "match cut", "transition_out": "clean cut once navigation reaches review",
+      "recording_notes": "Record the full wait separately; speed-ramp or trim pauses, but keep step order intact. Do not fabricate a success state."
+    },
+    {
+      "id": "scene-05", "start": 23, "end": 34, "duration": 11,
+      "screen": "Receipt Review", "route": "/receipt-review",
+      "objective": "Show reviewability, data confidence, and exact financial consequences before saving.", "feature": "Human-verified receipt review",
+      "actions": ["Pause on receipt thumbnail and Ready/Needs Review state", "scroll through merchant, items, totals and wallet", "pause on After you confirm", "tap Confirm & Save"],
+      "visual_focus": "Detected fields, item totals, category, wallet, and before/after preview.",
+      "camera": { "type": "subtle_crop", "start_scale": 1.0, "end_scale": 1.12, "target": "review card and total" },
+      "caption": "Review before it counts.",
+      "voiceover": "Before anything is saved, review the merchant, items, category, wallet, and totals—and see exactly what will change.",
+      "transition_in": "clean cut", "transition_out": "UI-driven save followed by route replacement",
+      "recording_notes": "Return to 100% scale before the save tap. Correct OCR mistakes before recording or make one deliberate correction on camera."
+    },
+    {
+      "id": "scene-06", "start": 34, "end": 40, "duration": 6,
+      "screen": "Transactions", "route": "/transactions",
+      "objective": "Prove the result was saved as a verified ledger entry.", "feature": "Transaction history",
+      "actions": ["Hold on the Coffee Project PHP 372.00 row and success toast", "optionally tap the row for a 1-second verified chip insert"],
+      "visual_focus": "Newest Coffee Project row and amount.",
+      "camera": { "type": "slow_zoom_in", "start_scale": 1.0, "end_scale": 1.1, "target": "newest transaction row" },
+      "caption": "Saved, categorized, traceable.",
+      "voiceover": "The purchase becomes a categorized transaction in the ledger, with its receipt source preserved.",
+      "transition_in": "UI route replacement", "transition_out": "bottom-tab tap or horizontal panel swipe",
+      "recording_notes": "Ensure sorting is Newest and filters are clear before the take."
+    },
+    {
+      "id": "scene-07", "start": 40, "end": 46, "duration": 6,
+      "screen": "Wallet", "route": "/wallet",
+      "objective": "Show the expense's effect on money and budget context.", "feature": "Wallets and budgets",
+      "actions": ["Tap Wallet", "hold on total balance and Food budget row"],
+      "visual_focus": "Daily Wallet balance and Food budget progress.",
+      "camera": { "type": "static", "start_scale": 1.0, "end_scale": 1.0, "target": null },
+      "caption": "Balances stay in sync.",
+      "voiceover": "Its wallet balance and category budget update from the same confirmed record.",
+      "transition_in": "root panel slide/fade", "transition_out": "bottom-tab tap",
+      "recording_notes": "Balances must be visible; do not toggle privacy mode."
+    },
+    {
+      "id": "scene-08", "start": 46, "end": 55, "duration": 9,
+      "screen": "Analytics and Spending Insights", "route": "/analytics → /insights",
+      "objective": "Turn the saved record into financial understanding.", "feature": "Analytics and insights",
+      "actions": ["Tap Analytics", "let donut animate", "tap View Spending Insights", "hold on Top Category and Recurring Expenses"],
+      "visual_focus": "Category donut, Food share, recurring Coffee Project insight.",
+      "camera": { "type": "slow_zoom_in", "start_scale": 1.0, "end_scale": 1.08, "target": "donut, then insight cards" },
+      "caption": "See patterns, not just totals.",
+      "voiceover": "Analytics reveal where spending is concentrated, while insights surface recurring merchants and budget pressure.",
+      "transition_in": "root panel slide/fade", "transition_out": "short cross dissolve",
+      "recording_notes": "Use the seeded records so Food is top and Coffee Project appears twice."
+    },
+    {
+      "id": "scene-09", "start": 55, "end": 58, "duration": 3,
+      "screen": "Home Dashboard / End Card", "route": "/home",
+      "objective": "Close on the updated product overview and brand.", "feature": "Updated dashboard",
+      "actions": ["Return Home", "hold updated total", "fade in wordmark and tagline"],
+      "visual_focus": "Updated monthly total, mascot insight and ExpenSense wordmark.",
+      "camera": { "type": "slow_zoom_out", "start_scale": 1.06, "end_scale": 1.0, "target": "full device" },
+      "caption": "Track smarter. Live better.",
+      "voiceover": "So every receipt becomes a clearer picture of your finances.",
+      "transition_in": "cross dissolve", "transition_out": "fade to cream",
+      "recording_notes": "Use the real wordmark asset; no additional product claim."
+    }
+  ]
+}
