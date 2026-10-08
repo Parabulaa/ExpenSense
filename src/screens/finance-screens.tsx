@@ -1353,19 +1353,22 @@ export function GoalsScreen() {
     return (
       <Card key={g.id} style={s.goal}>
         <View style={s.titleRow}>
+          <View style={s.goalBadge}>
+            <AppIcon name="flag-checkered" size={20} color={colors.deepForest} />
+          </View>
           <View style={s.grow}>
             <AppText variant="h3" numberOfLines={1}>
               {g.name}
             </AppText>
-            <AppText style={s.muted}>
-              {money(g.currentCents)} of {money(g.targetCents)}
-            </AppText>
+            {g.targetDate ? (
+              <View style={s.dueRow}>
+                <AppIcon name="calendar-blank-outline" size={14} color={colors.muted} />
+                <AppText variant="small" style={s.muted}>
+                  Due {formatExpenseDate(g.targetDate)}
+                </AppText>
+              </View>
+            ) : null}
           </View>
-          {g.status === "completed" ? (
-            <StatusChip>Completed</StatusChip>
-          ) : (
-            <AppText variant="h3">{pct}%</AppText>
-          )}
           <PressableScale
             accessibilityRole="button"
             accessibilityLabel={`Archive ${g.name}`}
@@ -1375,11 +1378,22 @@ export function GoalsScreen() {
             <AppIcon name="archive-outline" size={18} color={colors.muted} />
           </PressableScale>
         </View>
+        <View style={s.goalAmountRow}>
+          <View style={s.goalAmountCopy}>
+            <AppText variant="hero" numberOfLines={1} adjustsFontSizeToFit style={s.goalSaved}>
+              {money(g.currentCents)}
+            </AppText>
+            <AppText variant="small" style={s.muted}>
+              saved of {money(g.targetCents)}
+            </AppText>
+          </View>
+          {g.status === "completed" ? (
+            <StatusChip>Completed</StatusChip>
+          ) : (
+            <AppText variant="h2" style={s.goalPct}>{pct}%</AppText>
+          )}
+        </View>
         <ProgressBar value={pct} />
-        <AppText variant="small" style={s.muted}>
-          {money(remaining)} remaining
-          {g.targetDate ? ` · ${formatExpenseDate(g.targetDate)}` : ""}
-        </AppText>
         {g.status === "completed" ? (
           <View style={s.completedStatusRow}>
             <AppIcon name="check-circle" size={18} color={colors.success} />
@@ -1389,15 +1403,30 @@ export function GoalsScreen() {
                 : "Goal completed"}
             </AppText>
           </View>
-        ) : null}
-        {g.status === "active" && g.targetDate ? (
-          <AppText variant="small" style={s.muted}>
-            {money(needed)} per month needed
-            {projected
-              ? ` · projected ${formatExpenseDate(projected)}`
-              : " · add a contribution for a projection"}
-          </AppText>
-        ) : null}
+        ) : (
+          <>
+            <View style={s.goalStats}>
+              <View style={s.goalStat}>
+                <AppText variant="small" style={s.muted}>Left to save</AppText>
+                <AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit>{money(remaining)}</AppText>
+              </View>
+              {g.targetDate ? (
+                <View style={s.goalStat}>
+                  <AppText variant="small" style={s.muted}>Needed / month</AppText>
+                  <AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit>{money(needed)}</AppText>
+                </View>
+              ) : null}
+            </View>
+            <View style={s.goalHint}>
+              <AppIcon name={projected ? "trending-up" : "lightbulb-on-outline"} size={16} color={colors.forest} />
+              <AppText variant="small" style={s.goalHintText}>
+                {projected
+                  ? `At your pace you'll reach it by ${formatExpenseDate(projected)}.`
+                  : "Add a contribution to see when you'll reach it."}
+              </AppText>
+            </View>
+          </>
+        )}
         {rows.length ? (
           <View style={s.history}>
             <AppText variant="bodyMedium">Recent activity</AppText>
@@ -1811,6 +1840,16 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.pale,
   },
   goal: { gap: 14 },
+  goalBadge: { width: 40, height: 40, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: colors.pale },
+  dueRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
+  goalAmountRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 12 },
+  goalAmountCopy: { flex: 1, minWidth: 0 },
+  goalSaved: { fontSize: 30, lineHeight: 36 },
+  goalPct: { color: colors.success },
+  goalStats: { flexDirection: "row", gap: 10 },
+  goalStat: { flex: 1, minWidth: 0, gap: 2, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 14, backgroundColor: colors.pale },
+  goalHint: { flexDirection: "row", alignItems: "center", gap: 6 },
+  goalHintText: { flex: 1, color: colors.forest },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   smallButton: {
     flexGrow: 1,

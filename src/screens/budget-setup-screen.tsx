@@ -109,7 +109,7 @@ export function BudgetSetupScreen() {
               <PressableScale accessibilityRole="button" accessibilityLabel="Previous step" hitSlop={10} onPress={() => goTo((step - 1) as Step)} style={s.backButton}>
                 <AppIcon name="arrow-left" size={22} />
               </PressableScale>
-            ) : <View style={s.backButton} />}
+            ) : <Image accessibilityLabel="ExpenSense" source={assets.logoMark} contentFit="contain" style={s.logoMark} />}
             <View style={s.progressWrap}>
               <AppText variant="small" style={s.muted}>Step {step + 1} of {BUDGET_STEPS}</AppText>
               <StepProgress value={(step + 1) / BUDGET_STEPS} />
@@ -250,6 +250,7 @@ const useStyles = makeStyles((colors) => ({
   muted: { color: colors.muted },
   error: { color: colors.danger },
   topBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  logoMark: { width: 40, height: 40 },
   backButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.pale },
   progressWrap: { flex: 1, gap: 6 },
   progressTrack: { height: 8, borderRadius: radii.pill, backgroundColor: colors.pale, overflow: 'hidden' },

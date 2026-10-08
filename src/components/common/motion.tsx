@@ -1,9 +1,11 @@
 import type { PropsWithChildren } from 'react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, type PressableProps, type ViewStyle } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
+  FadeInLeft,
+  FadeInRight,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -75,23 +77,21 @@ export function SlideSwap({
   duration = 300,
 }: PropsWithChildren<{ index: number; style?: ViewStyle | ViewStyle[]; distance?: number; duration?: number }>) {
   const reduced = useReducedMotion();
-  const offset = useSharedValue(0);
-  const opacity = useSharedValue(1);
-  const previous = useRef(index);
+  // Direction of the last change, derived during render so the new content
+  // mounts already offset — no frame of it sitting in its final spot first.
+  const [last, setLast] = useState({ index, direction: 0 });
+  if (last.index !== index) setLast({ index, direction: index > last.index ? 1 : -1 });
+  const direction = last.index !== index ? (index > last.index ? 1 : -1) : last.direction;
 
-  useEffect(() => {
-    if (index === previous.current) return;
-    const direction = index > previous.current ? 1 : -1;
-    previous.current = index;
-    if (reduced) return;
-    offset.value = direction * distance;
-    opacity.value = 0;
-    offset.value = withTiming(0, { duration, easing: Easing.out(Easing.cubic) });
-    opacity.value = withTiming(1, { duration: duration * 0.8, easing: Easing.out(Easing.quad) });
-  }, [distance, duration, index, offset, opacity, reduced]);
+  const entering = reduced || direction === 0
+    ? undefined
+    : (direction > 0 ? FadeInRight : FadeInLeft)
+      .duration(duration)
+      .easing(Easing.out(Easing.cubic))
+      .withInitialValues({ opacity: 0, transform: [{ translateX: direction * distance }] });
 
-  const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value, transform: [{ translateX: offset.value }] }));
-  return <Animated.View style={[style, animatedStyle]}>{children}</Animated.View>;
+  // Keyed by index: each period mounts fresh with its entering animation.
+  return <Animated.View key={index} entering={entering} style={style}>{children}</Animated.View>;
 }
 
 // Screen-entry primitive. `delay` is explicit (ms) so a screen can script its
