@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, View } from 'react-native';
+import { Modal, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PressableScale } from '@/components/common/motion';
@@ -25,9 +25,9 @@ export function PhotoViewer({ uri, onClose }: { uri: string | null; onClose: () 
     <Modal visible={Boolean(uri)} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <View style={styles.viewer}>
         {uri ? <Image source={{ uri }} contentFit="contain" style={styles.viewerImage} /> : null}
-        <Pressable accessibilityRole="button" accessibilityLabel="Close photo" hitSlop={10} onPress={onClose} style={[styles.viewerClose, { top: insets.top + 12, backgroundColor: VIEWER_CONTROL }]}>
+        <PressableScale accessibilityRole="button" accessibilityLabel="Close photo" hitSlop={10} onPress={onClose} style={[styles.viewerClose, { top: insets.top + 12, backgroundColor: VIEWER_CONTROL }]}>
           <AppIcon name="close" size={24} color={colors.white} />
-        </Pressable>
+        </PressableScale>
       </View>
     </Modal>
   );

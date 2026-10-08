@@ -362,6 +362,7 @@ export function NotificationsScreen() {
                   key={threshold}
                   accessibilityRole="button"
                   accessibilityLabel={`Warn at ${threshold} percent`}
+                  selected={active}
                   accessibilityState={{ selected: active }}
                   disabled={!ready || !settings.budgetAlerts}
                   onPress={() => void persist({ budgetAlertThreshold: threshold })}

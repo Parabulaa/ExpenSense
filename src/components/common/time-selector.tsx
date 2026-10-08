@@ -39,7 +39,7 @@ export function TimeSelector({ value, onChange }: { value: string; onChange: (va
         {(['AM', 'PM'] as const).map((option) => {
           const active = (option === 'PM') === pm;
           return (
-            <PressableScale key={option} accessibilityRole="button" accessibilityState={{ selected: active }} onPress={() => setMeridiem(option === 'PM')} style={[styles.meridiemOption, active && styles.meridiemActive]}>
+            <PressableScale key={option} accessibilityRole="button" selected={active} accessibilityState={{ selected: active }} onPress={() => setMeridiem(option === 'PM')} style={[styles.meridiemOption, active && styles.meridiemActive]}>
               <AppText variant="small" style={active ? styles.meridiemActiveText : styles.meridiemText}>{option}</AppText>
             </PressableScale>
           );

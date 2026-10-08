@@ -17,7 +17,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { FadeSlideIn, PressableScale, useDrift } from '@/components/common/motion';
+import { FadeSlideIn, PressableScale, SlideSwap, useDrift } from '@/components/common/motion';
+import { SegmentedControl } from '@/components/common/segmented-control';
 import { DraggableBottomSheet } from '@/components/common/draggable-bottom-sheet';
 import { Screen } from '@/components/common/screen';
 import { AppIcon, AppText, Card, ProgressBar } from '@/components/common/ui';
@@ -350,15 +351,15 @@ function CategoryTile({
           </PressableScale>
 
           {editing && removable ? (
-            <Pressable
+            <PressableScale
               accessibilityRole="button"
               accessibilityLabel={`Remove ${category.fullLabel} from your dashboard`}
               hitSlop={8}
               onPress={onRemove}
-              style={({ pressed }) => [styles.removeCategory, pressed && { opacity: 0.7 }]}
+              style={[styles.removeCategory]}
             >
               <AppIcon name="close" size={13} color={colors.surface} />
-            </Pressable>
+            </PressableScale>
           ) : null}
         </View>
       </Animated.View>
@@ -580,15 +581,15 @@ export function HomeScreen() {
               the remaining width, which keeps it clear of the greeting above.
             */}
             <View style={[styles.insightArea, { height: mascotSize }]}>
-              <Pressable
+              <PressableScale
                 accessibilityRole="button"
                 accessibilityLabel={`${insight} Open offline budget assistant.`}
                 onPress={() => setAssistantOpen(true)}
-                style={({ pressed }) => [styles.insightBubble, pressed && { opacity: 0.82 }]}
+                style={[styles.insightBubble]}
               >
                 {insight ? <AppText style={styles.insightText}>{insight}</AppText> : <View style={styles.insightLoading}><Skeleton height={12} /><Skeleton width="70%" height={12} /></View>}
                 <View style={styles.bubbleTail} />
-              </Pressable>
+              </PressableScale>
 
               <Animated.View style={[styles.mascotWrap, { width: mascotSize, height: mascotSize }, mascotDrift]}>
                 <Pressable accessibilityRole="button" accessibilityLabel="Mascot. Tap for another insight." onPress={pokeMascot} style={styles.heroMascot}>
@@ -611,36 +612,29 @@ export function HomeScreen() {
           ]}
         >
           <Card style={[styles.summaryCard, { width: dashboardWidth }]}>
-            <View style={styles.periodSegments} accessibilityRole="tablist">
-              {dashboardPeriods.map((option) => {
-                const active = option === period;
-                return (
-                  <PressableScale
-                    key={option}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: active }}
-                    onPress={() => { if (!active) { selectionFeedback(); setPeriod(option); setOffset(0); } }}
-                    style={[styles.periodSegment, active && styles.periodSegmentActive]}
-                  >
-                    <AppText style={[styles.periodText, active && styles.periodTextActive]}>{option}</AppText>
-                  </PressableScale>
-                );
-              })}
-            </View>
+            <SegmentedControl
+              size="sm"
+              accessibilityLabel="Summary period"
+              options={dashboardPeriods.map((option) => ({ value: option, label: option }))}
+              value={period}
+              onChange={(option) => { setPeriod(option); setOffset(0); }}
+            />
 
             <View style={styles.selectorBar}>
               <PressableScale accessibilityRole="button" accessibilityLabel={`Previous ${period.toLowerCase()}`} hitSlop={6} onPress={() => { selectionFeedback(); setOffset((value) => value - 1); }} style={styles.arrowButton}>
                 <AppIcon name="chevron-left" size={22} color={colors.deepForest} />
               </PressableScale>
-              <AppText
-                variant="h2"
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                accessibilityLabel={`Showing ${range.label}`}
-                style={[styles.monthText, { fontSize: compact ? 17 : 20 }]}
-              >
-                {range.label}
-              </AppText>
+              <SlideSwap index={offset} style={styles.monthSlide}>
+                <AppText
+                  variant="h2"
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  accessibilityLabel={`Showing ${range.label}`}
+                  style={[styles.monthText, { fontSize: compact ? 17 : 20 }]}
+                >
+                  {range.label}
+                </AppText>
+              </SlideSwap>
               <PressableScale accessibilityRole="button" accessibilityLabel={`Next ${period.toLowerCase()}`} accessibilityState={{ disabled: offset >= 0 }} disabled={offset >= 0} hitSlop={6} onPress={() => { selectionFeedback(); setOffset((value) => Math.min(0, value + 1)); }} style={[styles.arrowButton, offset >= 0 && styles.arrowButtonDisabled]}>
                 <AppIcon name="chevron-right" size={22} color={offset >= 0 ? colors.muted : colors.deepForest} />
               </PressableScale>
@@ -648,7 +642,7 @@ export function HomeScreen() {
 
             <AppText variant="subtitle" style={styles.summaryLabel}>Total Spent</AppText>
 
-            <View style={styles.totalRow}>
+            <SlideSwap index={offset} style={styles.totalRow}>
               <View style={styles.totalCopy}>
                 {expensesLoading ? <Skeleton width={150} height={34} style={styles.totalSkeleton} /> : (
                   <AppText variant="hero" numberOfLines={1} adjustsFontSizeToFit style={styles.totalAmount}>
@@ -658,7 +652,7 @@ export function HomeScreen() {
                 {budgetsLoading ? <Skeleton width="80%" height={14} style={styles.captionSkeleton} /> : <AppText variant="subtitle" style={styles.summaryMuted}>{budgetCaption}</AppText>}
               </View>
               <SparkBars key={`${period}-${offset}`} bars={bars} />
-            </View>
+            </SlideSwap>
 
             {hasBudget && !budgetsLoading && !expensesLoading ? (
               <View style={styles.progressRow}>
@@ -966,6 +960,7 @@ const useStyles = makeStyles((colors) => ({
   },
   // The label takes the leftover width between the arrows and shrinks first,
   // so a long week range can never push an arrow off the card.
+  monthSlide: { flex: 1, minWidth: 0 },
   monthText: {
     flex: 1,
     minWidth: 0,
@@ -981,27 +976,6 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.pale,
   },
   arrowButtonDisabled: { opacity: 0.45 },
-  periodSegments: {
-    flexDirection: 'row',
-    gap: 4,
-    padding: 4,
-    borderRadius: radii.pill,
-    backgroundColor: colors.pale,
-  },
-  periodSegment: {
-    flex: 1,
-    minHeight: 34,
-    borderRadius: radii.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  periodSegmentActive: { backgroundColor: colors.deepForest },
-  periodText: {
-    color: colors.text,
-    fontFamily: 'JakartaMedium',
-    fontSize: 12,
-  },
-  periodTextActive: { color: colors.surface, fontFamily: 'JakartaSemiBold' },
   summaryLabel: { color: colors.muted, marginTop: 3 },
   totalRow: {
     flexDirection: 'row',

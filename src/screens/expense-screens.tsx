@@ -271,7 +271,7 @@ function CategoryPicker({ visible, selectedId, onClose, onSelect }: { visible: b
         {categories.map((category) => {
           const selected = category.id === selectedId;
           return (
-            <PressableScale key={category.id} accessibilityRole="button" accessibilityLabel={category.fullLabel} accessibilityState={{ selected }} onPress={() => onSelect(category.id)} style={[styles.categoryChoice, selected && styles.categoryChoiceSelected]}>
+            <PressableScale key={category.id} accessibilityRole="button" accessibilityLabel={category.fullLabel} selected={selected} accessibilityState={{ selected }} onPress={() => onSelect(category.id)} style={[styles.categoryChoice, selected && styles.categoryChoiceSelected]}>
               <View style={[styles.categoryChoiceIcon, selected && styles.categoryChoiceIconSelected]}><AppIcon name={category.icon} size={24} color={selected ? colors.surface : colors.deepForest} /></View>
               <AppText variant="small" style={styles.categoryChoiceLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{category.fullLabel}</AppText>
             </PressableScale>
@@ -293,7 +293,7 @@ export function WalletPicker({ visible, selectedId, title = 'Choose Wallet', exc
         {wallets.filter((wallet) => wallet.id !== excludeId).map((wallet) => {
           const selected = selectedId === wallet.id;
           return (
-            <PressableScale key={wallet.id} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => onSelect(wallet.id)} style={[styles.walletChoice, selected && styles.walletChoiceSelected]}>
+            <PressableScale key={wallet.id} accessibilityRole="button" selected={selected} accessibilityState={{ selected }} onPress={() => onSelect(wallet.id)} style={[styles.walletChoice, selected && styles.walletChoiceSelected]}>
               <View style={styles.walletChoiceCopy}>
                 <View style={[styles.walletColor, { backgroundColor: wallet.color ?? colors.forest }]} />
                 <View>
@@ -455,7 +455,7 @@ export function ReceiptReviewScreen() {
           {manual ? <StatusChip>Manual entry</StatusChip> : <StatusChip warning={draft.issues.length > 0}>{draft.issues.length ? 'Needs Review' : 'Ready'}</StatusChip>}
           <AppText style={styles.muted}>{manual ? 'Your photo is attached. Fill in the details below.' : `${draft.confidence}% recognition confidence`}</AppText>
           <AppText variant="small" style={styles.muted}>{pdf ? draft.image.fileName ?? 'Imported PDF' : 'Tap the photo to view it.'}</AppText>
-          <View style={styles.kindStack} accessibilityRole="radiogroup" accessibilityLabel="Transaction type">{RECEIPT_KINDS.map((option) => { const selected = kind === option.id; return <PressableScale key={option.id} accessibilityRole="radio" accessibilityState={{ selected }} onPress={() => { selectionFeedback(); updateDraft({ kind: option.id }); }} style={[styles.kindCompact, selected && styles.kindCompactSelected]}><AppIcon name={option.icon} size={17} color={selected ? colors.surface : colors.deepForest} /><AppText variant="small" numberOfLines={1} style={selected ? styles.kindTextSelected : styles.kindText}>{option.label}</AppText></PressableScale>; })}</View>
+          <View style={styles.kindStack} accessibilityRole="radiogroup" accessibilityLabel="Transaction type">{RECEIPT_KINDS.map((option) => { const selected = kind === option.id; return <PressableScale key={option.id} accessibilityRole="radio" selected={selected} accessibilityState={{ selected }} onPress={() => { selectionFeedback(); updateDraft({ kind: option.id }); }} style={[styles.kindCompact, selected && styles.kindCompactSelected]}><AppIcon name={option.icon} size={17} color={selected ? colors.surface : colors.deepForest} /><AppText variant="small" numberOfLines={1} style={selected ? styles.kindTextSelected : styles.kindText}>{option.label}</AppText></PressableScale>; })}</View>
         </View>
       </View>
       <AppText variant="small" style={styles.muted}>{manual ? 'Choose what this receipt is for.' : detectedLabel ? `Detected as ${detectedLabel} (${draft.detected.confidence}% sure) · ${draft.detected.signals.join(', ')}` : "We couldn't tell what kind of receipt this is. Choose one."}</AppText>

@@ -1,5 +1,5 @@
 import type { PropsWithChildren } from 'react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Pressable, type PressableProps, type ViewStyle } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -9,21 +9,34 @@ import Animated, {
   useSharedValue,
   withDelay,
   withRepeat,
+  withSequence,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-// Every interactive surface dips slightly on touch. One component so the
-// timing is identical across buttons, tiles, chips and nav items.
+// Every interactive surface dips on touch and springs back. One component so
+// the timing is identical across buttons, tiles, chips and nav items. Passing
+// `selected` adds a small pop whenever the item becomes the chosen one.
+const RELEASE_SPRING = { damping: 13, stiffness: 320, mass: 0.6 };
+
 export function PressableScale({
   children,
   style,
-  scaleTo = 0.98,
+  scaleTo = 0.95,
+  selected,
   ...props
-}: PropsWithChildren<PressableProps & { style?: ViewStyle | ViewStyle[]; scaleTo?: number }>) {
+}: PropsWithChildren<PressableProps & { style?: ViewStyle | ViewStyle[]; scaleTo?: number; selected?: boolean }>) {
   const scale = useSharedValue(1);
   const reduced = useReducedMotion();
+  const wasSelected = useRef(selected);
+
+  useEffect(() => {
+    if (selected === wasSelected.current) return;
+    wasSelected.current = selected;
+    if (selected && !reduced) scale.value = withSequence(withTiming(1.06, { duration: 110, easing: Easing.out(Easing.quad) }), withSpring(1, RELEASE_SPRING));
+  }, [reduced, scale, selected]);
 
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
@@ -39,7 +52,7 @@ export function PressableScale({
       }}
       onPressOut={(e) => {
         // eslint-disable-next-line react-hooks/immutability
-        if (!reduced) scale.value = withTiming(1, { duration: 140, easing: Easing.out(Easing.quad) });
+        if (!reduced) scale.value = withSpring(1, RELEASE_SPRING);
         props.onPressOut?.(e);
       }}
       style={[style, animatedStyle]}
@@ -47,6 +60,38 @@ export function PressableScale({
       {children}
     </AnimatedPressable>
   );
+}
+
+/**
+ * Slides its content in whenever `index` changes: from the right when the
+ * index grows (next month, next step), from the left when it shrinks. The
+ * caller swaps the content; this only animates its arrival.
+ */
+export function SlideSwap({
+  index,
+  children,
+  style,
+  distance = 44,
+  duration = 300,
+}: PropsWithChildren<{ index: number; style?: ViewStyle | ViewStyle[]; distance?: number; duration?: number }>) {
+  const reduced = useReducedMotion();
+  const offset = useSharedValue(0);
+  const opacity = useSharedValue(1);
+  const previous = useRef(index);
+
+  useEffect(() => {
+    if (index === previous.current) return;
+    const direction = index > previous.current ? 1 : -1;
+    previous.current = index;
+    if (reduced) return;
+    offset.value = direction * distance;
+    opacity.value = 0;
+    offset.value = withTiming(0, { duration, easing: Easing.out(Easing.cubic) });
+    opacity.value = withTiming(1, { duration: duration * 0.8, easing: Easing.out(Easing.quad) });
+  }, [distance, duration, index, offset, opacity, reduced]);
+
+  const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value, transform: [{ translateX: offset.value }] }));
+  return <Animated.View style={[style, animatedStyle]}>{children}</Animated.View>;
 }
 
 // Screen-entry primitive. `delay` is explicit (ms) so a screen can script its

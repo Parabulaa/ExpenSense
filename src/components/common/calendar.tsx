@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+
+import { PressableScale, SlideSwap } from '@/components/common/motion';
 
 import { AppIcon, AppText } from '@/components/common/ui';
 import { radii } from '@/constants/theme';
@@ -44,6 +46,7 @@ export function Calendar({
   }, [value]);
 
   const [visible, setVisible] = useState({ year, month });
+  const monthIndex = visible.year * 12 + visible.month;
 
   const monthLabel = useMemo(
     () =>
@@ -84,33 +87,31 @@ export function Calendar({
   return (
     <View style={styles.root}>
       <View style={styles.header}>
-        <Pressable
+        <PressableScale
           accessibilityRole="button"
           accessibilityLabel="Previous month"
           hitSlop={8}
           onPress={() => step(-1)}
-          style={({ pressed }) => [styles.navButton, pressed && styles.pressed]}
+          style={styles.navButton}
         >
           <AppIcon name="chevron-left" size={22} color={colors.deepForest} />
-        </Pressable>
+        </PressableScale>
 
-        <AppText variant="h3" style={styles.monthLabel}>{monthLabel}</AppText>
+        <SlideSwap index={monthIndex} style={styles.monthLabel}>
+          <AppText variant="h3" style={styles.monthLabelText}>{monthLabel}</AppText>
+        </SlideSwap>
 
-        <Pressable
+        <PressableScale
           accessibilityRole="button"
           accessibilityLabel="Next month"
           accessibilityState={{ disabled: !canGoForward }}
           disabled={!canGoForward}
           hitSlop={8}
           onPress={() => step(1)}
-          style={({ pressed }) => [
-            styles.navButton,
-            !canGoForward && styles.navButtonDisabled,
-            pressed && canGoForward && styles.pressed,
-          ]}
+          style={[styles.navButton, !canGoForward && styles.navButtonDisabled]}
         >
           <AppIcon name="chevron-right" size={22} color={canGoForward ? colors.deepForest : colors.lightGreen} />
-        </Pressable>
+        </PressableScale>
       </View>
 
       <View style={styles.weekRow}>
@@ -121,7 +122,7 @@ export function Calendar({
         ))}
       </View>
 
-      <View style={styles.grid}>
+      <SlideSwap index={monthIndex} distance={56} style={styles.grid}>
         {rows.map((row, rowIndex) => (
         <View key={`row-${rowIndex}`} style={styles.weekRow}>
         {row.map((day, index) => {
@@ -133,17 +134,15 @@ export function Calendar({
 
           return (
             <View key={date} style={styles.cell}>
-              <Pressable
+              <PressableScale
                 accessibilityRole="button"
                 accessibilityLabel={date}
                 accessibilityState={{ selected, disabled }}
                 disabled={disabled}
                 onPress={() => onSelect(date)}
-                style={({ pressed }) => [
-                  styles.day,
-                  selected && styles.daySelected,
-                  pressed && !disabled && !selected && styles.dayPressed,
-                ]}
+                scaleTo={0.88}
+                selected={selected}
+                style={[styles.day, selected && styles.daySelected]}
               >
                 <AppText
                   variant="bodyMedium"
@@ -155,13 +154,13 @@ export function Calendar({
                 >
                   {day}
                 </AppText>
-              </Pressable>
+              </PressableScale>
             </View>
           );
         })}
         </View>
         ))}
-      </View>
+      </SlideSwap>
     </View>
   );
 }
@@ -184,7 +183,8 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.pale,
   },
   navButtonDisabled: { backgroundColor: 'transparent' },
-  monthLabel: { flex: 1, textAlign: 'center' },
+  monthLabel: { flex: 1 },
+  monthLabelText: { textAlign: 'center' },
   weekRow: { flexDirection: 'row' },
   weekday: { color: colors.muted, textAlign: 'center' },
   grid: {},
@@ -205,9 +205,7 @@ const useStyles = makeStyles((colors) => ({
     justifyContent: 'center',
   },
   daySelected: { backgroundColor: colors.deepForest },
-  dayPressed: { backgroundColor: colors.pale },
   dayText: { color: colors.text },
   dayTextSelected: { color: colors.surface, fontFamily: 'JakartaBold' },
   dayTextDisabled: { color: '#B6C2BA' },
-  pressed: { opacity: 0.7 },
 }));

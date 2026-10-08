@@ -528,6 +528,7 @@ export function WalletsScreen() {
           {walletTypes.map((x) => (
             <PressableScale
               key={x.id}
+              selected={type === x.id}
               onPress={() => setType(x.id)}
               style={[s.chip, type === x.id && s.chipActive]}
             >
@@ -619,6 +620,7 @@ export function WalletsScreen() {
               {(["income", "cash_in"] as IncomeKind[]).map((kind) => (
                 <PressableScale
                   key={kind}
+                  selected={form.kind === kind}
                   onPress={() => updateForm({ kind })}
                   style={[s.chip, form.kind === kind && s.chipActive]}
                 >

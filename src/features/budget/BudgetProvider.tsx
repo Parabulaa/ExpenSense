@@ -6,6 +6,8 @@ import type { BudgetResult, CategoryBudget, MonthlyBudget } from './types';
 
 type BudgetContextValue = {
   budgets: MonthlyBudget[];
+  /** Whose budgets have been fetched at least once (null until then). */
+  loadedFor: string | null;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
@@ -22,11 +24,12 @@ export function BudgetProvider({ children }: PropsWithChildren) {
   const [budgets, setBudgets] = useState<MonthlyBudget[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const loadedUserId = useRef<string | null>(null);
   const lastFetched = useRef(0);
   const hasData = useRef(false);
   const refresh = useCallback(async () => {
-    if (!user) { loadedUserId.current = null; hasData.current = false; setBudgets([]); setError(null); setLoading(false); return; }
+    if (!user) { loadedUserId.current = null; hasData.current = false; setBudgets([]); setError(null); setLoading(false); setLoadedFor(null); return; }
     if (loadedUserId.current !== user.id) {
       loadedUserId.current = user.id;
       hasData.current = false;
@@ -39,6 +42,7 @@ export function BudgetProvider({ children }: PropsWithChildren) {
     if (result.ok) { setBudgets(result.data); writeCache(user.id, 'budgets', result.data); hasData.current = true; lastFetched.current = Date.now(); setError(null); }
     else if (!result.offline) setError(result.message);
     setLoading(false);
+    setLoadedFor(user.id);
   }, [user]);
   const revalidate = useCallback(async () => {
     if (Date.now() - lastFetched.current < STALE_AFTER_MS && loadedUserId.current === user?.id) return;
@@ -69,7 +73,7 @@ export function BudgetProvider({ children }: PropsWithChildren) {
     if (result.ok) setBudgets((current) => current.map((budget) => budget.id === budgetId ? { ...budget, categoryBudgets: budget.categoryBudgets.filter((item) => item.id !== id) } : budget));
     return result;
   }, []);
-  const value = useMemo(() => ({ budgets, loading, error, refresh, revalidate, saveCategoryBudget, removeCategoryBudget }), [budgets, error, loading, refresh, revalidate, removeCategoryBudget, saveCategoryBudget]);
+  const value = useMemo(() => ({ budgets, loadedFor, loading, error, refresh, revalidate, saveCategoryBudget, removeCategoryBudget }), [budgets, error, loadedFor, loading, refresh, revalidate, removeCategoryBudget, saveCategoryBudget]);
   return <BudgetContext.Provider value={value}>{children}</BudgetContext.Provider>;
 }
 

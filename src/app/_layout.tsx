@@ -123,6 +123,13 @@ function RootNavigation() {
         }}
       />
       <Stack.Screen
+        name="budget-setup"
+        options={{
+          // Setup is left through "Set later" or by finishing it, never by a swipe.
+          gestureEnabled: false,
+        }}
+      />
+      <Stack.Screen
         name="add-expense"
         options={{
           presentation: 'transparentModal',

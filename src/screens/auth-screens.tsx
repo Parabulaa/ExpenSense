@@ -5,7 +5,7 @@ import { ActivityIndicator, BackHandler, Platform, Pressable, View, useWindowDim
 import Animated, { Easing, FadeIn, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { Screen } from '@/components/common/screen';
 import { LiquidScene } from '@/components/common/liquid-scene';
-import { FadeSlideIn } from '@/components/common/motion';
+import { FadeSlideIn, PressableScale } from '@/components/common/motion';
 import { AppIcon, AppText, BackButton, Brand, Card, FormInput, PrimaryButton } from '@/components/common/ui';
 import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -132,7 +132,7 @@ function PasswordEye({ visible, toggle, disabled = false }: { visible: boolean; 
   const colors = useColors();
   const s = useStyles();
   return (
-    <Pressable
+    <PressableScale
       onPress={toggle}
       disabled={disabled}
       hitSlop={12}
@@ -142,7 +142,7 @@ function PasswordEye({ visible, toggle, disabled = false }: { visible: boolean; 
       style={s.eye}
     >
       <AppIcon name={visible ? 'eye-off-outline' : 'eye-outline'} size={22} color={colors.forest} />
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -151,16 +151,16 @@ function PasswordEye({ visible, toggle, disabled = false }: { visible: boolean; 
 function AuthSwitchLink({ prompt, action, onPress }: { prompt: string; action: string; onPress: () => void }) {
   const s = useStyles();
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={action}
       hitSlop={10}
-      style={({ pressed }) => [s.switchRow, pressed && { opacity: 0.7 }]}
+      style={[s.switchRow]}
     >
       {prompt ? <AppText style={s.muted}>{prompt} </AppText> : null}
       <AppText variant="bodyMedium" style={s.switchAction}>{action}</AppText>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -254,16 +254,16 @@ export function SignInScreen() {
             accessibilityLabel="Password"
             editable={!submitting}
           />
-          <Pressable
+          <PressableScale
             onPress={() => router.push('/forgot-password')}
             disabled={submitting}
             hitSlop={10}
             accessibilityRole="button"
             accessibilityLabel="Forgot password"
-            style={({ pressed }) => [s.forgotRow, pressed && { opacity: 0.7 }]}
+            style={[s.forgotRow]}
           >
             <AppText variant="small" style={s.link}>Forgot password?</AppText>
-          </Pressable>
+          </PressableScale>
         </View>
       </View>
       {dialogProps && <AuthDialog {...dialogProps} />}

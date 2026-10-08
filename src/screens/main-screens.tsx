@@ -1,10 +1,11 @@
 import { Image } from 'expo-image';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Keyboard, Pressable, TextInput, View } from 'react-native';
+import { ActivityIndicator, Keyboard, TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { DraggableBottomSheet } from '@/components/common/draggable-bottom-sheet';
-import { FadeSlideIn, PressableScale } from '@/components/common/motion';
+import { FadeSlideIn, PressableScale, SlideSwap } from '@/components/common/motion';
+import { SegmentedControl } from '@/components/common/segmented-control';
 import { Screen } from '@/components/common/screen';
 import { AmountChips } from '@/components/common/amount-chips';
 import { StoredAttachment } from '@/components/common/attachment';
@@ -212,12 +213,13 @@ function SpendingCalendar({ expenses, categories, month, selectedDate, onMonthCh
   monthExpenses.forEach((expense) => totals.set(expense.transactionDate, (totals.get(expense.transactionDate) ?? 0) + expense.amountCents));
   monthExpenses.forEach((expense) => { const day = categoryTotals.get(expense.transactionDate) ?? new Map<string, number>(); day.set(expense.categoryId, (day.get(expense.categoryId) ?? 0) + expense.amountCents); categoryTotals.set(expense.transactionDate, day); });
   const monthTotal = monthExpenses.reduce((sum, expense) => sum + expense.amountCents, 0);
+  const monthIndex = year * 12 + monthNumber;
   const selectedTotal = selectedDate ? totals.get(selectedDate) ?? 0 : 0;
 
   return <Card style={s.spendingCalendar}>
     <View style={s.calendarHeader}>
       <PressableScale accessibilityRole="button" accessibilityLabel="Previous spending month" onPress={() => onMonthChange(shiftMonth(month, -1))} style={s.calendarNav}><AppIcon name="chevron-left" size={21} /></PressableScale>
-      <View style={{ alignItems: 'center' }}><AppText variant="h2">{formatMonth(month)}</AppText><AppText variant="small" style={s.muted}>{monthExpenses.length} expense{monthExpenses.length === 1 ? '' : 's'}</AppText></View>
+      <SlideSwap index={monthIndex} style={{ alignItems: 'center' }}><AppText variant="h2">{formatMonth(month)}</AppText><AppText variant="small" style={s.muted}>{monthExpenses.length} expense{monthExpenses.length === 1 ? '' : 's'}</AppText></SlideSwap>
       <PressableScale accessibilityRole="button" accessibilityLabel="Next spending month" onPress={() => onMonthChange(shiftMonth(month, 1))} style={s.calendarNav}><AppIcon name="chevron-right" size={21} /></PressableScale>
     </View>
     <View style={s.calendarSummary}>
@@ -226,7 +228,7 @@ function SpendingCalendar({ expenses, categories, month, selectedDate, onMonthCh
       <View style={{ alignItems: 'flex-end' }}><AppText variant="small" style={s.muted}>{selectedDate ? 'Selected day' : 'Daily average'}</AppText><AppText variant="h3">{compactCurrency(selectedDate ? selectedTotal : totals.size ? Math.round(monthTotal / totals.size) : 0)}</AppText></View>
     </View>
     <View style={s.calendarWeek}>{CALENDAR_WEEKDAYS.map((label, index) => <View key={`${label}-${index}`} style={s.calendarCell}><AppText variant="small" style={s.calendarWeekday}>{label}</AppText></View>)}</View>
-    <View style={s.calendarGrid}>{cells.map((day, index) => {
+    <SlideSwap index={monthIndex} distance={56} style={s.calendarGrid}>{cells.map((day, index) => {
       if (!day) return <View key={`blank-${index}`} style={s.calendarCell} />;
       const date = `${month}-${String(day).padStart(2, '0')}`;
       const total = totals.get(date) ?? 0;
@@ -235,8 +237,8 @@ function SpendingCalendar({ expenses, categories, month, selectedDate, onMonthCh
       const category = categories.find(item => item.id === dominantId);
       const categoryColor = category?.color ?? CATEGORY_TONES[dominantId ?? '']?.foreground ?? colors.forest;
       const categoryLabel = category?.fullLabel ?? dominantId;
-      return <View key={date} style={s.calendarCell}><PressableScale scaleTo={0.92} accessibilityRole="button" accessibilityLabel={`${date}${total ? `, spent ${compactCurrency(total)}${categoryLabel ? `, mostly ${categoryLabel}` : ''}` : ', no spending'}`} accessibilityState={{ selected }} onPress={() => onSelectDate(selected ? null : date)} style={[s.calendarDay, total > 0 && s.calendarDayHasSpending, total > 0 && !selected && { backgroundColor: `${categoryColor}20`, borderColor: `${categoryColor}70` }, selected && s.calendarDaySelected]}><AppText variant="bodyMedium" style={selected ? s.calendarDaySelectedText : undefined}>{day}</AppText>{total > 0 ? <AppText numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[s.calendarAmount, !selected && { color: categoryColor }, selected && s.calendarDaySelectedText]}>{compactCurrency(total)}</AppText> : null}</PressableScale></View>;
-    })}</View>
+      return <View key={date} style={s.calendarCell}><PressableScale scaleTo={0.92} accessibilityRole="button" accessibilityLabel={`${date}${total ? `, spent ${compactCurrency(total)}${categoryLabel ? `, mostly ${categoryLabel}` : ''}` : ', no spending'}`} selected={selected} accessibilityState={{ selected }} onPress={() => onSelectDate(selected ? null : date)} style={[s.calendarDay, total > 0 && s.calendarDayHasSpending, total > 0 && !selected && { backgroundColor: `${categoryColor}20`, borderColor: `${categoryColor}70` }, selected && s.calendarDaySelected]}><AppText variant="bodyMedium" style={selected ? s.calendarDaySelectedText : undefined}>{day}</AppText>{total > 0 ? <AppText numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[s.calendarAmount, !selected && { color: categoryColor }, selected && s.calendarDaySelectedText]}>{compactCurrency(total)}</AppText> : null}</PressableScale></View>;
+    })}</SlideSwap>
   </Card>;
 }
 
@@ -276,7 +278,7 @@ function FilterSection({ title, children }: { title: string; children: React.Rea
 function FilterChip({ label, icon, selected, onPress }: { label: string; icon?: Parameters<typeof AppIcon>[0]['name']; selected: boolean; onPress: () => void }) {
   const colors = useColors();
   const s = useStyles();
-  return <PressableScale accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} style={[s.filterChip, selected && s.filterChipSelected]}>{icon ? <AppIcon name={icon} size={16} color={selected ? colors.surface : colors.deepForest} /> : null}<AppText variant="small" numberOfLines={1} style={selected ? s.filterChipTextSelected : s.filterChipText}>{label}</AppText></PressableScale>;
+  return <PressableScale accessibilityRole="button" selected={selected} accessibilityState={{ selected }} onPress={onPress} style={[s.filterChip, selected && s.filterChipSelected]}>{icon ? <AppIcon name={icon} size={16} color={selected ? colors.surface : colors.deepForest} /> : null}<AppText variant="small" numberOfLines={1} style={selected ? s.filterChipTextSelected : s.filterChipText}>{label}</AppText></PressableScale>;
 }
 
 type LedgerKind = 'expense' | 'income' | 'cash_in' | 'transfer';
@@ -331,7 +333,7 @@ function LedgerRow({ entry, onOpen }: { entry: LedgerEntry; onOpen: () => void }
   const sign = entry.kind === 'expense' ? '−' : incoming ? '+' : '';
   const clock = formatTime(entry.time);
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${entry.title}, ${entry.subtitle}`} onPress={onOpen} style={({ pressed }) => pressed && { opacity: 0.78 }}>
+    <PressableScale accessibilityRole="button" accessibilityLabel={`${entry.title}, ${entry.subtitle}`} onPress={onOpen} scaleTo={0.98}>
       <Card style={s.transaction}>
         <View style={[s.roundIcon, incoming && s.roundIconIncoming]}><AppIcon name={entry.icon} size={24} color={incoming ? colors.success : colors.deepForest} /></View>
         <View style={{ flex: 1, minWidth: 0 }}>
@@ -340,7 +342,7 @@ function LedgerRow({ entry, onOpen }: { entry: LedgerEntry; onOpen: () => void }
         </View>
         <AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={[s.transactionAmount, incoming && { color: colors.success }]}>{sign}{formatCompactPeso(entry.amountCents)}</AppText>
       </Card>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -768,10 +770,13 @@ export function AnalyticsScreen() {
       <View style={s.page}>
         <AppText variant="hero" numberOfLines={1}>Analytics</AppText>
         <PeriodStepper subject="analytics month" label={monthLabel} onPrevious={() => setMonth(shiftMonth(month, -1))} onNext={() => setMonth(shiftMonth(month, 1))} nextDisabled={month >= todayLocalDate().slice(0, 7)} />
-        <View style={s.segment}>
-          <PressableScale onPress={() => setMode('spending')} style={[s.segmentHalf, mode === 'spending' && s.segmentActive]}><AppText variant="h3" style={mode === 'spending' ? s.segmentActiveText : s.muted}>Spending</AppText></PressableScale>
-          <PressableScale onPress={() => setMode('trends')} style={[s.segmentHalf, mode === 'trends' && s.segmentActive]}><AppText variant="h3" style={mode === 'trends' ? s.segmentActiveText : s.muted}>Trends</AppText></PressableScale>
-        </View>
+        <SegmentedControl
+          shape="rounded"
+          accessibilityLabel="Analytics view"
+          options={[{ value: 'spending', label: 'Spending' }, { value: 'trends', label: 'Trends' }] as const}
+          value={mode}
+          onChange={setMode}
+        />
         {loading && expenses.length === 0 ? <Card style={s.analyticsLoading}><ActivityIndicator color={colors.deepForest} /><View style={s.analyticsSkeletonCircle} /><View style={s.skeletonLineWide} /></Card> : loadError ? <Card style={s.emptyCard}><AppText variant="h2">Couldn&apos;t load analytics.</AppText><AppText style={[s.muted, s.center]}>Check your connection and try again.</AppText><SecondaryButton title="Try Again" onPress={() => void refresh()} /></Card> : mode === 'spending' ? <Card style={s.analyticsCard}>{/* Overview and expense structure share one card: what came in, what went out, and where it went. */}<View style={s.overview}><AppText variant="h2">Overview</AppText><View style={s.rowBetween}><AppText>Income</AppText><AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit style={[s.overviewValue, { color: colors.success }]}>{formatPeso(monthIncomeCents)}</AppText></View><View style={s.rowBetween}><AppText>Expense</AppText><AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit style={[s.overviewValue, { color: colors.danger }]}>{formatPeso(analytics.totalCents)}</AppText></View><View style={s.divider} /><View style={s.rowBetween}><AppText variant="h3">Total</AppText><AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit style={s.overviewValue}>{monthIncomeCents - analytics.totalCents < 0 ? '−' : ''}{formatPeso(Math.abs(monthIncomeCents - analytics.totalCents))}</AppText></View></View><View style={s.divider} /><AppText variant="h2" style={s.structureTitle}>Expense Structure</AppText>{analytics.expenses.length === 0 ? <View style={s.structureEmpty}><AppText style={[s.muted, s.center]}>No spending in {monthLabel} yet.</AppText><PrimaryButton title="Add Expense" onPress={openAddExpense} /></View> : <View style={s.structureRow}><View style={s.structureChart}><DonutChart slices={analytics.categorySlices} refreshKey={month} minSize={120} maxSize={170}><AppText variant="h3" adjustsFontSizeToFit numberOfLines={1}>{compactCurrency(analytics.totalCents)}</AppText><AppText variant="small" style={s.muted}>Spent</AppText></DonutChart></View><View style={s.structureLegend}>{analytics.categorySlices.map((slice) => <View style={s.legend} key={slice.id}><View style={[s.legendDot, { backgroundColor: slice.color }]} /><AppText style={[s.muted, s.legendLabel]} numberOfLines={1}>{slice.label}</AppText><AppText style={[s.muted, s.legendValue]}>{formatPercent(slice.percentage)}</AppText></View>)}</View></View>}</Card> : analytics.expenses.length === 0 ? <Card style={s.emptyCard}><View style={s.emptyIcon}><AppIcon name="chart-donut" size={30} /></View><AppText variant="h2">No spending data yet</AppText><AppText style={[s.muted, s.center]}>Add expenses to start seeing your spending patterns.</AppText><PrimaryButton title="Add Expense" onPress={openAddExpense} /></Card> : <Card style={s.trendsCard}><View style={s.rowBetween}><View><AppText style={s.muted}>This month</AppText><AppText variant="title" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{compactCurrency(analytics.totalCents)}</AppText></View><View style={s.trendChange}><AppIcon name={change !== null && change > 0 ? 'trending-up' : 'trending-down'} size={20} color={change !== null && change > 0 ? colors.danger : colors.success} /><AppText variant="h3" style={{ color: change !== null && change > 0 ? colors.danger : colors.success }}>{change === null ? 'No comparison' : `${change > 0 ? '+' : ''}${change}%`}</AppText></View></View>{previous.totalCents === 0 || analytics.expenses.length < 2 ? <View style={s.trendEmpty}><AppText variant="h2">Not enough history yet</AppText><AppText style={[s.muted, s.center]}>Keep tracking expenses and your trends will appear here.</AppText></View> : <><View style={s.barChart}>{analytics.dailyTotals.map((item) => <View key={item.day} style={s.barColumn}><View style={[s.bar, { height: Math.max(8, Math.round((item.amountCents / maxDay) * 130)) }]} /><AppText variant="small" style={s.muted}>{item.day}</AppText></View>)}</View><View style={s.trendMetrics}><TrendMetric label={`${formatMonth(priorMonth)} total`} value={compactCurrency(previous.totalCents)} /><TrendMetric label="Daily average" value={compactCurrency(analytics.averageDailyCents)} /><TrendMetric label="Highest-spend day" value={analytics.highestDay ? `${monthLabel.split(' ')[0]} ${analytics.highestDay.day} · ${compactCurrency(analytics.highestDay.amountCents)}` : '—'} /></View></>}</Card>}
         {analytics.expenses.length > 0 ? <InsightsLink month={month} /> : null}
       </View>
@@ -942,11 +947,11 @@ export function CategoriesScreen() {
               <button> on web.
             */
             <Card key={category.id} style={s.categoryRow}>
-              <Pressable
+              <PressableScale
                 accessibilityRole="button"
                 accessibilityLabel={`Open ${category.fullLabel}`}
                 onPress={() => router.push({ pathname: '/category/[id]', params: { id: category.id } })}
-                style={({ pressed }) => [s.categoryMain, pressed && { opacity: 0.7 }]}
+                style={[s.categoryMain]}
               >
                 <View style={[s.categoryIcon, { backgroundColor: category.color ? `${category.color}22` : tint(CATEGORY_TONES[category.id]?.background ?? '#E1EBDD') }]}>
                   <AppIcon name={category.icon} color={ink(category.color ?? CATEGORY_TONES[category.id]?.foreground ?? colors.deepForest)} />
@@ -955,9 +960,9 @@ export function CategoriesScreen() {
                   {category.fullLabel}
                 </AppText>
                 <AppIcon name="chevron-right" color={colors.muted} />
-              </Pressable>
+              </PressableScale>
 
-              <Pressable
+              <PressableScale
                 accessibilityRole="button"
                 accessibilityLabel={
                   onDashboard
@@ -967,11 +972,12 @@ export function CategoriesScreen() {
                 accessibilityState={{ selected: onDashboard }}
                 hitSlop={6}
                 onPress={() => toggleDashboard(category.id, category.fullLabel)}
-                style={({ pressed }) => [
+                selected={onDashboard}
+                scaleTo={0.88}
+                style={[
                   s.dashboardToggle,
                   onDashboard && s.dashboardToggleOn,
                   !onDashboard && isFull && s.dashboardToggleBlocked,
-                  pressed && { opacity: 0.7 },
                 ]}
               >
                 <AppIcon
@@ -979,10 +985,10 @@ export function CategoriesScreen() {
                   size={17}
                   color={onDashboard ? colors.surface : isFull ? colors.muted : colors.deepForest}
                 />
-              </Pressable>
+              </PressableScale>
               {category.custom
-                ? <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${category.fullLabel}`} hitSlop={6} onPress={() => openEdit(category.id)} style={({ pressed }) => [s.categoryEdit, pressed && { opacity: 0.7 }]}><AppIcon name="pencil-outline" size={18} /></Pressable>
-                : <Pressable accessibilityRole="button" accessibilityLabel={`Hide ${category.fullLabel}`} hitSlop={6} onPress={() => setHideId(category.id)} style={({ pressed }) => [s.categoryEdit, pressed && { opacity: 0.7 }]}><AppIcon name="eye-off-outline" size={18} /></Pressable>}
+                ? <PressableScale accessibilityRole="button" accessibilityLabel={`Edit ${category.fullLabel}`} hitSlop={6} onPress={() => openEdit(category.id)} style={[s.categoryEdit]}><AppIcon name="pencil-outline" size={18} /></PressableScale>
+                : <PressableScale accessibilityRole="button" accessibilityLabel={`Hide ${category.fullLabel}`} hitSlop={6} onPress={() => setHideId(category.id)} style={[s.categoryEdit]}><AppIcon name="eye-off-outline" size={18} /></PressableScale>}
             </Card>
           );
         })}
@@ -1002,15 +1008,15 @@ export function CategoriesScreen() {
                 <View style={[s.categoryIcon, { backgroundColor: tint('#E6E8E2') }]}><AppIcon name={category.icon} color={colors.muted} /></View>
                 <AppText variant="h3" style={{ flex: 1, color: colors.muted }} numberOfLines={1}>{category.fullLabel}</AppText>
               </View>
-              <Pressable accessibilityRole="button" accessibilityLabel={`Show ${category.fullLabel} again`} hitSlop={6} onPress={() => void restore(category.id, category.fullLabel)} style={({ pressed }) => [s.categoryRestore, pressed && { opacity: 0.7 }]}>
+              <PressableScale accessibilityRole="button" accessibilityLabel={`Show ${category.fullLabel} again`} hitSlop={6} onPress={() => void restore(category.id, category.fullLabel)} style={[s.categoryRestore]}>
                 <AppIcon name="eye-outline" size={17} />
                 <AppText variant="small" style={s.sectionLinkText}>Show</AppText>
-              </Pressable>
+              </PressableScale>
             </Card>
           ))}
         </> : null}
       </View>
-      <DraggableBottomSheet visible={Boolean(editor)} disabled={saving} onClose={() => setEditor(null)}><AppText variant="h2">{editor?.id ? 'Edit Category' : 'Add Category'}</AppText><FormInput label="Category name" placeholder="e.g. Pets" value={name} onChangeText={(value) => { setName(value); setFormError(null); }} maxLength={40} error={formError ?? undefined} /><AppText variant="bodyMedium">Icon</AppText><View style={s.choiceRow}>{iconChoices.map((value) => <PressableScale key={value} accessibilityLabel={`Use ${value} icon`} accessibilityState={{ selected: icon === value }} onPress={() => setIcon(value)} style={[s.choiceCircle, icon === value && s.choiceCircleActive]}><AppIcon name={value} color={icon === value ? colors.surface : colors.deepForest} /></PressableScale>)}</View><AppText variant="bodyMedium">Color</AppText><View style={s.choiceRow}>{colorChoices.map((value) => <PressableScale key={value} accessibilityLabel={`Use color ${value}`} accessibilityState={{ selected: color === value }} onPress={() => setColor(value)} style={[s.colorChoice, { backgroundColor: value }, color === value && s.colorChoiceActive]}>{color === value ? <AppIcon name="check" size={17} color={colors.surface} /> : null}</PressableScale>)}</View><PrimaryButton title={saving ? 'Saving…' : editor?.id ? 'Save Changes' : 'Add Category'} disabled={saving} onPress={() => void saveCategory()} />{editor?.id ? <SecondaryButton title="Delete Category" disabled={saving} onPress={() => setDeleteId(editor.id ?? null)} /> : null}</DraggableBottomSheet>
+      <DraggableBottomSheet visible={Boolean(editor)} disabled={saving} onClose={() => setEditor(null)}><AppText variant="h2">{editor?.id ? 'Edit Category' : 'Add Category'}</AppText><FormInput label="Category name" placeholder="e.g. Pets" value={name} onChangeText={(value) => { setName(value); setFormError(null); }} maxLength={40} error={formError ?? undefined} /><AppText variant="bodyMedium">Icon</AppText><View style={s.choiceRow}>{iconChoices.map((value) => <PressableScale key={value} accessibilityLabel={`Use ${value} icon`} selected={icon === value} accessibilityState={{ selected: icon === value }} onPress={() => setIcon(value)} style={[s.choiceCircle, icon === value && s.choiceCircleActive]}><AppIcon name={value} color={icon === value ? colors.surface : colors.deepForest} /></PressableScale>)}</View><AppText variant="bodyMedium">Color</AppText><View style={s.choiceRow}>{colorChoices.map((value) => <PressableScale key={value} accessibilityLabel={`Use color ${value}`} selected={color === value} accessibilityState={{ selected: color === value }} onPress={() => setColor(value)} style={[s.colorChoice, { backgroundColor: value }, color === value && s.colorChoiceActive]}>{color === value ? <AppIcon name="check" size={17} color={colors.surface} /> : null}</PressableScale>)}</View><PrimaryButton title={saving ? 'Saving…' : editor?.id ? 'Save Changes' : 'Add Category'} disabled={saving} onPress={() => void saveCategory()} />{editor?.id ? <SecondaryButton title="Delete Category" disabled={saving} onPress={() => setDeleteId(editor.id ?? null)} /> : null}</DraggableBottomSheet>
       <AuthDialog visible={Boolean(hiding)} title={`Hide ${hiding?.fullLabel ?? 'category'}?`} message="It won't be offered for new expenses or budgets. Past transactions keep it, and you can show it again from Hidden Categories." primaryAction={{ label: 'Hide', destructive: true, loading: saving, onPress: () => void hide() }} secondaryAction={{ label: 'Cancel', onPress: () => setHideId(null) }} onRequestClose={() => setHideId(null)} />
       <AuthDialog visible={Boolean(deleting)} title={`Delete ${deleting?.fullLabel ?? 'category'}?`} message="This removes the category permanently. Existing transactions will keep their amounts, but the category cannot be restored." primaryAction={{ label: 'Delete', destructive: true, loading: saving, onPress: () => void removeCustom() }} secondaryAction={{ label: 'Cancel', onPress: () => setDeleteId(null) }} onRequestClose={() => setDeleteId(null)} />
     </Screen>
@@ -1320,10 +1326,6 @@ const useStyles = makeStyles((colors) => ({
   addMoneyRow: { flex: 1, minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: radii.md, backgroundColor: colors.pale },
   goalsRow: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: radii.md, backgroundColor: 'rgba(255,253,247,.96)', ...shadow },
   goalsIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' },
-  segment: { flexDirection: 'row', borderRadius: radii.md, backgroundColor: colors.pale, padding: 4 },
-  segmentActive: { flex: 1, height: 42, borderRadius: radii.sm, backgroundColor: colors.deepForest, alignItems: 'center', justifyContent: 'center' },
-  segmentActiveText: { color: colors.surface },
-  segmentHalf: { flex: 1, height: 42, borderRadius: radii.sm, alignItems: 'center', justifyContent: 'center' },
   donut: { width: 200, height: 200, borderRadius: 100, borderWidth: 18, borderColor: colors.deepForest, alignItems: 'center', justifyContent: 'center', marginVertical: 12 },
   donutInner: { alignItems: 'center' },
   analyticsCard: { alignItems: 'center', paddingVertical: 22 },

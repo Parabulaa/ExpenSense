@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
-import { ActivityIndicator, Pressable, Text, type TextProps, TextInput, type TextInputProps, View } from 'react-native';
+import { ActivityIndicator, Text, type TextProps, TextInput, type TextInputProps, View } from 'react-native';
 import { assets, radii, shadow, spacing, type } from '@/constants/theme';
 import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 import { PressableScale } from './motion';
@@ -60,7 +60,7 @@ export function PrimaryButton({ title, onPress, icon, danger = false, loading = 
   );
 }
 export function SecondaryButton({ title, onPress, icon, disabled = false }: { title: string; onPress?: () => void; icon?: keyof typeof MaterialCommunityIcons.glyphMap; disabled?: boolean }) {
-  const styles = useStyles(); return <Pressable accessibilityRole="button" accessibilityLabel={title} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.secondary, disabled && styles.disabled, pressed && !disabled && { opacity: .75 }]}>{icon && <AppIcon name={icon} />}<AppText variant="button">{title}</AppText></Pressable>; }
+  const styles = useStyles(); return <PressableScale accessibilityRole="button" accessibilityLabel={title} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={[styles.secondary, disabled && styles.disabled] as any}>{icon && <AppIcon name={icon} />}<AppText variant="button">{title}</AppText></PressableScale>; }
 export function BackButton({ onPress }: { onPress?: () => void }) {
   const styles = useStyles(); const goBack = () => router.canGoBack() ? router.back() : router.replace('/'); return <PressableScale accessibilityLabel="Go back" hitSlop={12} scaleTo={0.97} onPress={onPress ?? goBack} style={styles.back}><AppIcon name="arrow-left" size={25} /></PressableScale>; }
 export function FormInput({ icon, secure, right, style, inputStyle, error, label, hint, onFocus, onBlur, ...props }: Omit<TextInputProps, 'style'> & { icon?: keyof typeof MaterialCommunityIcons.glyphMap; secure?: boolean; right?: ReactNode; style?: any; inputStyle?: TextInputProps['style']; error?: string | null; label?: string; hint?: string }) {
