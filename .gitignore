@@ -46,3 +46,9 @@ example
 
 # Supabase CLI local project metadata
 supabase/.temp/
+
+# Videos are kept out of the repo
+*.mp4
+*.mov
+*.webm
+*.m4v
