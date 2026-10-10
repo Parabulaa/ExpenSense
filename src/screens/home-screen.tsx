@@ -649,7 +649,7 @@ export function HomeScreen() {
                     {formatCents(spentCents)}
                   </AppText>
                 )}
-                {budgetsLoading ? <Skeleton width="80%" height={14} style={styles.captionSkeleton} /> : <AppText variant="subtitle" style={styles.summaryMuted}>{budgetCaption}</AppText>}
+                {budgetsLoading ? <Skeleton width="80%" height={14} style={styles.captionSkeleton} /> : <AppText variant="subtitle" numberOfLines={2} style={styles.summaryMuted}>{budgetCaption}</AppText>}
               </View>
               <SparkBars key={`${period}-${offset}`} bars={bars} />
             </SlideSwap>
@@ -988,7 +988,8 @@ const useStyles = makeStyles((colors) => ({
     lineHeight: 40,
     color: '#06120D',
   },
-  summaryMuted: { color: colors.muted, fontSize: 15 },
+  // Always reserves two lines so switching periods never resizes the card.
+  summaryMuted: { color: colors.muted, fontSize: 15, lineHeight: 21, height: 42 },
   setupCard: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 14 },
   setupIcon: { width: 48, height: 48, borderRadius: 16, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' },
   sparkRow: {
@@ -1009,7 +1010,7 @@ const useStyles = makeStyles((colors) => ({
   },
   insightLoading: { gap: 7, paddingVertical: 3 },
   totalSkeleton: { marginVertical: 6 },
-  captionSkeleton: { marginTop: 4 },
+  captionSkeleton: { marginTop: 4, marginBottom: 24 },
   usageText: { color: colors.deepForest, minWidth: 80, textAlign: 'right' },
   dataError: { color: colors.danger },
 
