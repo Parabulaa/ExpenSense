@@ -25,10 +25,26 @@ import { useAuthDialog } from '@/features/auth/hooks/useAuthDialog';
 export function SplashScreen() {
   const s = useStyles();
   const { session } = useAuth();
+  const linkingUrl = Linking.useLinkingURL();
+  // If Supabase rejects the reset link's redirect, it falls back to the site
+  // root with the reset session still in the URL. Hand that link to the reset
+  // screen instead of letting the splash carry on to onboarding.
+  const url = Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.href : linkingUrl;
+  const isRecoveryLink = Boolean(url && /[?#&]type=recovery(&|$)/.test(url));
   useEffect(() => {
+    if (!isRecoveryLink) return;
+    if (Platform.OS === 'web') {
+      // A full replace keeps the #fragment, which router navigation drops.
+      window.location.replace(`/create-new-password${window.location.search}${window.location.hash}`);
+    } else {
+      router.replace('/create-new-password');
+    }
+  }, [isRecoveryLink]);
+  useEffect(() => {
+    if (isRecoveryLink) return;
     const id = setTimeout(() => router.replace(session ? '/home' : '/onboarding'), 3200);
     return () => clearTimeout(id);
-  }, [session]);
+  }, [isRecoveryLink, session]);
   return <Screen scroll={false} background={false}><LiquidScene scene="splash"/><Animated.View entering={FadeIn.duration(500)} style={s.splash}><View style={s.splashCopy}><Brand /><AppText variant="hero" style={s.center}>Smarter habits.{`\n`}<AppText variant="hero" style={s.green}>Brighter tomorrows.</AppText></AppText><AppText variant="h3" style={[s.center,s.muted]}>Take control of your spending{`\n`}one receipt at a time.</AppText></View><View style={s.splashLoading}><SplashLoadingDots /><AppText variant="bodyMedium" style={s.green}>Loading your brighter tomorrow...</AppText></View></Animated.View></Screen>;
 }
 
