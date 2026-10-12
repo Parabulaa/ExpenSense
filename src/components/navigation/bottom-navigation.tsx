@@ -71,9 +71,10 @@ export function BottomNavigation() {
               ]}
             >
               {isScan ? (
-                <View style={styles.scanButton}>
+                // The tour spotlights the raised circle, not the whole tab slot.
+                <TourTarget id="nav-scan" style={styles.scanButton}>
                   <AppIcon name={item.icon} size={30} color={colors.surface} />
-                </View>
+                </TourTarget>
               ) : (
                 <AppIcon
                   name={item.icon}
@@ -90,7 +91,7 @@ export function BottomNavigation() {
               </AppText>
             </PressableScale>
           );
-          return 'tour' in item ? <TourTarget key={item.label} id={item.tour}>{button}</TourTarget> : button;
+          return 'tour' in item && !isScan ? <TourTarget key={item.label} id={item.tour}>{button}</TourTarget> : button;
         })}
       </View>
     </View>

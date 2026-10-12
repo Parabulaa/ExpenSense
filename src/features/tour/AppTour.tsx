@@ -222,12 +222,31 @@ function TourOverlay({
     onNext();
   };
 
-  const spot = hole && {
-    x: hole.x - SPOTLIGHT_PADDING,
-    y: hole.y - SPOTLIGHT_PADDING,
-    width: hole.width + SPOTLIGHT_PADDING * 2,
-    height: hole.height + SPOTLIGHT_PADDING * 2,
-  };
+  // Buttons get a circle centred on them; the wide summary card keeps a
+  // rounded rectangle, since a circle around it would cover half the screen.
+  const round = current.target !== 'summary';
+  let spot: (Rect & { radius: number }) | null = null;
+  if (hole && round) {
+    const diameter = Math.max(hole.width, hole.height) + SPOTLIGHT_PADDING * 2;
+    spot = {
+      x: hole.x + hole.width / 2 - diameter / 2,
+      y: hole.y + hole.height / 2 - diameter / 2,
+      width: diameter,
+      height: diameter,
+      radius: diameter / 2,
+    };
+  } else if (hole) {
+    spot = {
+      x: hole.x - SPOTLIGHT_PADDING,
+      y: hole.y - SPOTLIGHT_PADDING,
+      width: hole.width + SPOTLIGHT_PADDING * 2,
+      height: hole.height + SPOTLIGHT_PADDING * 2,
+      radius: radii.lg + SPOTLIGHT_PADDING,
+    };
+  }
+  // The dim layer is one view whose huge border surrounds the spotlight, so
+  // its inner edge follows the spotlight's rounded shape exactly.
+  const dimBorder = Math.max(window.width, window.height) * 2;
 
   const cardWidth = Math.min(window.width - SCREEN_MARGIN * 2, CARD_MAX_WIDTH);
   const cardLeft = (window.width - cardWidth) / 2;
@@ -249,15 +268,25 @@ function TourOverlay({
       <View style={styles.root} accessibilityViewIsModal>
         {spot ? (
           <>
-            <View style={[styles.dim, { left: 0, right: 0, top: 0, height: Math.max(0, spot.y) }]} />
-            <View style={[styles.dim, { left: 0, right: 0, top: spot.y + spot.height, bottom: 0 }]} />
-            <View style={[styles.dim, { left: 0, width: Math.max(0, spot.x), top: spot.y, height: spot.height }]} />
-            <View style={[styles.dim, { left: spot.x + spot.width, right: 0, top: spot.y, height: spot.height }]} />
+            <View
+              pointerEvents="none"
+              style={[
+                styles.dimFrame,
+                {
+                  left: spot.x - dimBorder,
+                  top: spot.y - dimBorder,
+                  width: spot.width + dimBorder * 2,
+                  height: spot.height + dimBorder * 2,
+                  borderWidth: dimBorder,
+                  borderRadius: spot.radius + dimBorder,
+                },
+              ]}
+            />
             <Animated.View
               key={`ring-${step}`}
               entering={entering}
               pointerEvents="none"
-              style={[styles.ring, { left: spot.x, top: spot.y, width: spot.width, height: spot.height }]}
+              style={[styles.ring, { left: spot.x, top: spot.y, width: spot.width, height: spot.height, borderRadius: spot.radius }]}
             />
           </>
         ) : (
@@ -317,9 +346,9 @@ const useStyles = makeStyles((colors) => ({
   root: { flex: 1 },
   fill: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   dim: { position: 'absolute', backgroundColor: 'rgba(10, 22, 15, 0.62)' },
+  dimFrame: { position: 'absolute', borderColor: 'rgba(10, 22, 15, 0.62)' },
   ring: {
     position: 'absolute',
-    borderRadius: radii.lg,
     borderWidth: 2.5,
     borderColor: colors.lightGreen,
   },
