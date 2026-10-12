@@ -561,7 +561,7 @@ const useStyles = makeStyles((colors) => ({
   optionTitleMuted: { color: colors.muted },
   comingSoonPill: { minWidth: 45, height: 26, paddingHorizontal: 8, borderRadius: 13, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' },
   comingSoonText: { color: colors.forest, fontFamily: 'JakartaBold' },
-  scanQuota: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', paddingVertical: 7, paddingHorizontal: 12, borderRadius: radii.pill, backgroundColor: colors.pale },
+  scanQuota: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'center', paddingVertical: 7, paddingHorizontal: 12, borderRadius: radii.pill, backgroundColor: colors.pale },
   scanQuotaLow: { backgroundColor: colors.warningSoft },
   scanQuotaText: { color: colors.text, fontFamily: 'JakartaSemiBold', flexShrink: 1 },
   formPage: { paddingTop: spacing.md, gap: 22 }, formHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 }, headerCopy: { flex: 1, minWidth: 0, paddingTop: 2, gap: 3 }, amountBlock: { gap: 9 },
