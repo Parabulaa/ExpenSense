@@ -17,6 +17,7 @@ import { AppIcon, AppText } from '@/components/common/ui';
 import { radii, shadow } from '@/constants/theme';
 import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 import { useNotifications } from '@/features/notifications/NotificationsProvider';
+import { TourTarget } from '@/features/tour/AppTour';
 import { selectionFeedback } from '@/lib/haptics';
 
 type IconName = Parameters<typeof AppIcon>[0]['name'];
@@ -83,16 +84,18 @@ export function FloatingRadialMenu() {
           />
         ))}
 
-        <PressableScale
-          accessibilityRole="button"
-          accessibilityLabel={open ? 'Close quick menu' : 'Open quick menu'}
-          accessibilityState={{ expanded: open }}
-          onPress={() => setOpen((current) => !current)}
-          scaleTo={0.93}
-          style={[styles.trigger, open && styles.triggerOpen]}
-        >
-          <AppIcon name={open ? 'close' : 'dots-grid'} size={24} color={open ? colors.surface : colors.deepForest} />
-        </PressableScale>
+        <TourTarget id="quick-menu" style={styles.triggerSlot}>
+          <PressableScale
+            accessibilityRole="button"
+            accessibilityLabel={open ? 'Close quick menu' : 'Open quick menu'}
+            accessibilityState={{ expanded: open }}
+            onPress={() => setOpen((current) => !current)}
+            scaleTo={0.93}
+            style={[styles.trigger, open && styles.triggerOpen]}
+          >
+            <AppIcon name={open ? 'close' : 'dots-grid'} size={24} color={open ? colors.surface : colors.deepForest} />
+          </PressableScale>
+        </TourTarget>
       </View>
     </View>
   );
@@ -157,10 +160,16 @@ const useStyles = makeStyles((colors) => ({
     height: 144,
     zIndex: 40,
   },
-  trigger: {
+  // Positions the trigger and gives the app tour a box to spotlight.
+  triggerSlot: {
     position: 'absolute',
     right: 4,
     top: 2,
+    width: 54,
+    height: 54,
+    zIndex: 2,
+  },
+  trigger: {
     width: 54,
     height: 54,
     borderRadius: 27,

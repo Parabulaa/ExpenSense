@@ -24,6 +24,7 @@ import { todayLocalDate } from '@/features/expenses/validation';
 import { useProfile } from '@/features/profile/ProfileProvider';
 import { MAX_FULL_NAME_LENGTH, validateProfileName } from '@/features/profile/validation';
 import { useSettings, type BudgetAlertThreshold, type ThemeMode } from '@/features/settings/SettingsProvider';
+import { useAppTour } from '@/features/tour/AppTour';
 import { selectionFeedback } from '@/lib/haptics';
 
 /** Shared chrome for every settings sub-page: back arrow, title, subtitle. */
@@ -583,8 +584,13 @@ function FaqItem({ question, answer, index }: { question: string; answer: string
 export function HelpSupportScreen() {
   const colors = useColors();
   const s = useStyles();
+  const { replay } = useAppTour();
   return (
     <SettingsPage title="Help & Support" subtitle="Answers to the most common questions.">
+      <FadeSlideIn index={0}>
+        <PrimaryButton title="Replay app tour" icon="compass-outline" onPress={replay} />
+      </FadeSlideIn>
+
       {FAQ.map((item, index) => (
         <FaqItem key={item.question} question={item.question} answer={item.answer} index={index + 1} />
       ))}

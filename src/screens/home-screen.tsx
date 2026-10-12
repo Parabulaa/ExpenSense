@@ -37,6 +37,7 @@ import {
 } from '@/features/dashboard/dashboard-data';
 import { useDashboardCategories } from '@/features/dashboard/DashboardCategoriesProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { TourTarget } from '@/features/tour/AppTour';
 import { useExpenses } from '@/features/expenses/ExpensesProvider';
 import { todayLocalDate } from '@/features/expenses/validation';
 import { useToast } from '@/components/common/toast';
@@ -611,6 +612,7 @@ export function HomeScreen() {
             { width: dashboardWidth, marginTop: -(PAGE_GAP + summaryOverlap) },
           ]}
         >
+          <TourTarget id="summary">
           <Card style={[styles.summaryCard, { width: dashboardWidth }]}>
             <SegmentedControl
               size="sm"
@@ -664,6 +666,7 @@ export function HomeScreen() {
             ) : null}
             {loadError ? <AppText variant="small" style={styles.dataError}>Expense data could not be refreshed.</AppText> : null}
           </Card>
+          </TourTarget>
         </FadeSlideIn>
 
         {needsBudgetSetup ? (

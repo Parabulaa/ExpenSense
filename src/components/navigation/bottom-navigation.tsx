@@ -6,13 +6,14 @@ import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 import { AppIcon, AppText } from '@/components/common/ui';
 import { PressableScale } from '@/components/common/motion';
 import { useAddExpenseOverlay } from '@/features/expenses/AddExpenseOverlayProvider';
+import { TourTarget } from '@/features/tour/AppTour';
 
 const items = [
   { label: 'Home', icon: 'home', path: '/home' },
-  { label: 'Transactions', icon: 'receipt-text-outline', path: '/transactions' },
-  { label: 'Scan', icon: 'line-scan', path: '/add-expense', scan: true },
-  { label: 'Analytics', icon: 'chart-bar', path: '/analytics' },
-  { label: 'Wallet', icon: 'wallet-outline', path: '/wallet' },
+  { label: 'Transactions', icon: 'receipt-text-outline', path: '/transactions', tour: 'nav-transactions' },
+  { label: 'Scan', icon: 'line-scan', path: '/add-expense', scan: true, tour: 'nav-scan' },
+  { label: 'Analytics', icon: 'chart-bar', path: '/analytics', tour: 'nav-analytics' },
+  { label: 'Wallet', icon: 'wallet-outline', path: '/wallet', tour: 'nav-wallet' },
 ] as const;
 
 /** Height of the floating bar itself, excluding the safe-area gutter below it. */
@@ -49,7 +50,7 @@ export function BottomNavigation() {
         {items.map(item => {
           const active = pathname === item.path || (item.label === 'Home' && pathname === '/categories') || (item.label === 'Analytics' && pathname === '/insights') || (item.label === 'Wallet' && (pathname === '/wallets' || pathname === '/goals'));
           const isScan = 'scan' in item && item.scan;
-          return (
+          const button = (
             <PressableScale
               key={item.label}
               accessibilityRole="button"
@@ -89,6 +90,7 @@ export function BottomNavigation() {
               </AppText>
             </PressableScale>
           );
+          return 'tour' in item ? <TourTarget key={item.label} id={item.tour}>{button}</TourTarget> : button;
         })}
       </View>
     </View>
