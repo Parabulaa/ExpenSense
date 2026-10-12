@@ -11,7 +11,19 @@ import {
   useState,
 } from 'react';
 import { Modal, Pressable, useWindowDimensions, View, type StyleProp, type ViewStyle } from 'react-native';
-import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  FadeInDown,
+  FadeOut,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
+
+import { useDrift } from '@/components/common/motion';
 
 import { AppText, PrimaryButton } from '@/components/common/ui';
 import { assets, radii, shadow } from '@/constants/theme';
@@ -205,6 +217,7 @@ function TourOverlay({
   const reducedMotion = useReducedMotion();
   const current = STEPS[step];
   const [cardHeight, setCardHeight] = useState(0);
+  const mascotBob = useDrift({ x: 0, y: 6, rotate: 5, scale: 0.04, duration: 1300 });
 
   // Re-measured per step and on resize/rotation, so the spotlight always sits
   // on the real control rather than on a hard-coded position. A result only
@@ -250,9 +263,6 @@ function TourOverlay({
       radius: radii.lg + SPOTLIGHT_PADDING,
     };
   }
-  // The dim layer is one view whose huge border surrounds the spotlight, so
-  // its inner edge follows the spotlight's rounded shape exactly.
-  const dimBorder = Math.max(window.width, window.height) * 2;
 
   const cardWidth = Math.min(window.width - SCREEN_MARGIN * 2, CARD_MAX_WIDTH);
   const cardLeft = (window.width - cardWidth) / 2;
@@ -266,38 +276,13 @@ function TourOverlay({
   }
 
   const isLast = step === STEPS.length - 1;
-  const entering = reducedMotion ? undefined : FadeIn.duration(200);
+  const entering = reducedMotion ? undefined : FadeInDown.duration(280).easing(Easing.out(Easing.cubic));
   const exiting = reducedMotion ? undefined : FadeOut.duration(120);
 
   return (
     <Modal transparent visible animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={onSkip}>
       <View style={styles.root} accessibilityViewIsModal>
-        {spot ? (
-          <>
-            <View
-              pointerEvents="none"
-              style={[
-                styles.dimFrame,
-                {
-                  left: spot.x - dimBorder,
-                  top: spot.y - dimBorder,
-                  width: spot.width + dimBorder * 2,
-                  height: spot.height + dimBorder * 2,
-                  borderWidth: dimBorder,
-                  borderRadius: spot.radius + dimBorder,
-                },
-              ]}
-            />
-            <Animated.View
-              key={`ring-${step}`}
-              entering={entering}
-              pointerEvents="none"
-              style={[styles.ring, { left: spot.x, top: spot.y, width: spot.width, height: spot.height, borderRadius: spot.radius }]}
-            />
-          </>
-        ) : (
-          <View style={[styles.dim, styles.fill]} />
-        )}
+        <Spotlight spot={spot} />
 
         {/* Swallows taps so the app underneath can't be used mid-tour. */}
         <Pressable style={styles.fill} accessible={false} onPress={() => undefined} />
@@ -311,7 +296,9 @@ function TourOverlay({
             style={[styles.card, { width: cardWidth, left: cardLeft, top: cardTop, opacity: cardHeight ? 1 : 0 }]}
           >
             <View style={styles.header}>
-              <Image source={current.mascot} contentFit="contain" style={styles.mascot} />
+              <Animated.View style={mascotBob}>
+                <Image source={current.mascot} contentFit="contain" style={styles.mascot} />
+              </Animated.View>
               <View style={styles.headerText}>
                 <AppText variant="small" style={styles.counter}>
                   Step {step + 1} of {STEPS.length}
@@ -345,6 +332,95 @@ function TourOverlay({
         ) : null}
       </View>
     </Modal>
+  );
+}
+
+const SPOT_MOVE_MS = 420;
+const PULSE_MS = 1500;
+/** How far, in px, the pulse ripples out past the spotlight edge. */
+const PULSE_GROWTH = 18;
+
+/**
+ * The dimmed screen with a hole over the current control. The hole glides
+ * between steps, and grows out of the screen centre on the first one, instead
+ * of jumping; a soft ring ripples outward to draw the eye to it.
+ */
+function Spotlight({ spot }: { spot: (Rect & { radius: number }) | null }) {
+  const styles = useStyles();
+  const window = useWindowDimensions();
+  const reduced = useReducedMotion();
+  // No target collapses the hole to a point at the centre, fully dimming the
+  // screen while still giving the next step somewhere to grow from.
+  const target = spot ?? { x: window.width / 2, y: window.height / 2, width: 0, height: 0, radius: 0 };
+  // The dim layer is one view whose huge border surrounds the hole, so its
+  // inner edge follows the hole's rounded shape exactly.
+  const border = Math.max(window.width, window.height) * 2;
+
+  const x = useSharedValue(window.width / 2);
+  const y = useSharedValue(window.height / 2);
+  const width = useSharedValue(0);
+  const height = useSharedValue(0);
+  const radius = useSharedValue(0);
+  const visible = useSharedValue(0);
+  const pulse = useSharedValue(0);
+
+  useEffect(() => {
+    const move = (value: typeof x, to: number) => {
+      value.value = reduced ? to : withTiming(to, { duration: SPOT_MOVE_MS, easing: Easing.inOut(Easing.cubic) });
+    };
+    move(x, target.x);
+    move(y, target.y);
+    move(width, target.width);
+    move(height, target.height);
+    move(radius, target.radius);
+    move(visible, spot ? 1 : 0);
+  }, [height, radius, reduced, spot, target.height, target.radius, target.width, target.x, target.y, visible, width, x, y]);
+
+  useEffect(() => {
+    if (reduced) {
+      pulse.value = 0;
+      return;
+    }
+    pulse.value = withRepeat(withTiming(1, { duration: PULSE_MS, easing: Easing.out(Easing.quad) }), -1, false);
+    return () => cancelAnimation(pulse);
+  }, [pulse, reduced]);
+
+  const dimStyle = useAnimatedStyle(() => ({
+    left: x.value - border,
+    top: y.value - border,
+    width: width.value + border * 2,
+    height: height.value + border * 2,
+    borderRadius: radius.value + border,
+  }));
+  const ringStyle = useAnimatedStyle(() => ({
+    left: x.value,
+    top: y.value,
+    width: width.value,
+    height: height.value,
+    borderRadius: radius.value,
+    opacity: visible.value,
+  }));
+  // Scaled per axis so the ripple grows the same distance on every side,
+  // whether the hole is a small circle or the wide summary card.
+  const pulseStyle = useAnimatedStyle(() => ({
+    left: x.value,
+    top: y.value,
+    width: width.value,
+    height: height.value,
+    borderRadius: radius.value,
+    opacity: visible.value * (1 - pulse.value) * 0.9,
+    transform: [
+      { scaleX: 1 + (pulse.value * PULSE_GROWTH * 2) / Math.max(width.value, 1) },
+      { scaleY: 1 + (pulse.value * PULSE_GROWTH * 2) / Math.max(height.value, 1) },
+    ],
+  }));
+
+  return (
+    <>
+      <Animated.View pointerEvents="none" style={[styles.dimFrame, { borderWidth: border }, dimStyle]} />
+      <Animated.View pointerEvents="none" style={[styles.ring, pulseStyle]} />
+      <Animated.View pointerEvents="none" style={[styles.ring, ringStyle]} />
+    </>
   );
 }
 
