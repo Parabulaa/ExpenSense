@@ -226,7 +226,7 @@ export function ChangePasswordScreen() {
           <FormInput
             label="Confirm new password"
             accessibilityLabel="Confirm new password"
-            placeholder="Re-enter the new password"
+            placeholder="Re-enter password"
             value={confirm}
             onChangeText={(value) => { setConfirm(value); setConfirmError(null); }}
             secure={!show}

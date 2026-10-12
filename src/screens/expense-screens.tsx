@@ -20,6 +20,7 @@ import { useExpenses } from '@/features/expenses/ExpensesProvider';
 import { useFinance } from '@/features/finance/FinanceProvider';
 import type { ExpenseFormErrors, ExpenseFormValues } from '@/features/expenses/types';
 import { useReceipt } from '@/features/receipts/ReceiptProvider';
+import { RECEIPT_SCAN_LIMIT } from '@/features/receipts/receipt-service';
 import { addedVatCents, includedVatCents } from '@/features/receipts/receipt-parser';
 import { formatDateTime, isFutureDateTime, isValidLocalDate, isValidLocalTime, MAX_MERCHANT_LENGTH, MAX_NOTES_LENGTH, normalizeAmountInput, nowLocalTime, todayLocalDate, validateExpenseForm } from '@/features/expenses/validation';
 import { TimeSelector } from '@/components/common/time-selector';
@@ -71,7 +72,12 @@ export function AddExpenseScreen() {
 export function AddExpenseSheet({ visible, onClose, onNavigate }: { visible: boolean; onClose: () => void; onNavigate?: (route: '/scanner' | '/manual-expense' | '/processing') => void }) {
   const styles = useStyles();
   const leafDrift = useDrift({ x: 24, y: 20, rotate: 9, scale: 0.08, duration: 2400, baseRotate: 28 });
-  const { setSource } = useReceipt();
+  const colors = useColors();
+  const { setSource, scansRemaining, refreshScansRemaining } = useReceipt();
+  // Rechecked each time the sheet opens, so the count is current after a scan.
+  useEffect(() => { if (visible) void refreshScansRemaining(); }, [refreshScansRemaining, visible]);
+  const outOfScans = scansRemaining === 0;
+  const scanBadge = outOfScans ? 'Used up' : undefined;
   const { showToast } = useToast();
   const navigate = (route: '/scanner' | '/manual-expense' | '/processing') => onNavigate ? onNavigate(route) : router.push(route);
   // Close the sheet before a system picker opens: on Android the transparent
@@ -104,9 +110,19 @@ export function AddExpenseSheet({ visible, onClose, onNavigate }: { visible: boo
           </PressableScale>
         </View>
         <View style={styles.sheetContent}>
-          <ExpenseOption icon="line-scan" title="Scan Receipt" description="Use your camera" onPress={() => navigate('/scanner')} />
-          <ExpenseOption icon="image-outline" title="Upload Receipt" description="Choose from gallery" onPress={() => closeThen(upload)} />
-          <ExpenseOption icon="file-document-outline" title="Import Online Receipt" description="Screenshot, image, or PDF" onPress={() => closeThen(importOnline)} />
+          {scansRemaining !== null ? (
+            <View accessibilityRole="text" style={[styles.scanQuota, scansRemaining <= 3 && styles.scanQuotaLow]}>
+              <AppIcon name="line-scan" size={18} color={scansRemaining <= 3 ? colors.warning : colors.forest} />
+              <AppText variant="small" style={styles.scanQuotaText}>
+                {outOfScans
+                  ? `You've used all ${RECEIPT_SCAN_LIMIT} receipt scans. Manual entry still works.`
+                  : `${scansRemaining} of ${RECEIPT_SCAN_LIMIT} receipt scans left`}
+              </AppText>
+            </View>
+          ) : null}
+          <ExpenseOption icon="line-scan" title="Scan Receipt" description="Use your camera" disabled={outOfScans} disabledLabel={scanBadge} onPress={() => navigate('/scanner')} />
+          <ExpenseOption icon="image-outline" title="Upload Receipt" description="Choose from gallery" disabled={outOfScans} disabledLabel={scanBadge} onPress={() => closeThen(upload)} />
+          <ExpenseOption icon="file-document-outline" title="Import Online Receipt" description="Screenshot, image, or PDF" disabled={outOfScans} disabledLabel={scanBadge} onPress={() => closeThen(importOnline)} />
           <ExpenseOption icon="file-document-edit-outline" title="Manual Entry" description="Enter details manually" onPress={() => navigate('/manual-expense')} />
         </View>
         <View style={styles.sheetContent}><SecondaryButton title="Cancel" onPress={dismiss} /></View>
@@ -114,7 +130,7 @@ export function AddExpenseSheet({ visible, onClose, onNavigate }: { visible: boo
   );
 }
 
-function ExpenseOption({ icon, title, description, disabled = false, onPress }: { icon: Parameters<typeof AppIcon>[0]['name']; title: string; description: string; disabled?: boolean; onPress?: () => void }) {
+function ExpenseOption({ icon, title, description, disabled = false, disabledLabel = 'Soon', onPress }: { icon: Parameters<typeof AppIcon>[0]['name']; title: string; description: string; disabled?: boolean; disabledLabel?: string; onPress?: () => void }) {
   const colors = useColors();
   const styles = useStyles();
   return (
@@ -126,7 +142,7 @@ function ExpenseOption({ icon, title, description, disabled = false, onPress }: 
         <AppText variant="h3" style={disabled ? styles.optionTitleMuted : undefined}>{title}</AppText>
         <AppText style={styles.muted}>{description}</AppText>
       </View>
-      {disabled ? <View style={styles.comingSoonPill}><AppText variant="small" style={styles.comingSoonText}>Soon</AppText></View> : <AppIcon name="chevron-right" color={colors.muted} />}
+      {disabled ? <View style={styles.comingSoonPill}><AppText variant="small" style={styles.comingSoonText}>{disabledLabel}</AppText></View> : <AppIcon name="chevron-right" color={colors.muted} />}
     </PressableScale>
   );
 }
@@ -545,6 +561,9 @@ const useStyles = makeStyles((colors) => ({
   optionTitleMuted: { color: colors.muted },
   comingSoonPill: { minWidth: 45, height: 26, paddingHorizontal: 8, borderRadius: 13, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' },
   comingSoonText: { color: colors.forest, fontFamily: 'JakartaBold' },
+  scanQuota: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', paddingVertical: 7, paddingHorizontal: 12, borderRadius: radii.pill, backgroundColor: colors.pale },
+  scanQuotaLow: { backgroundColor: colors.warningSoft },
+  scanQuotaText: { color: colors.text, fontFamily: 'JakartaSemiBold', flexShrink: 1 },
   formPage: { paddingTop: spacing.md, gap: 22 }, formHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 }, headerCopy: { flex: 1, minWidth: 0, paddingTop: 2, gap: 3 }, amountBlock: { gap: 9 },
   amountInput: { minHeight: 78, borderRadius: radii.lg, backgroundColor: 'rgba(255,253,247,.96)' }, amountInputText: { height: 78, fontFamily: 'JakartaExtraBold', fontSize: 28, color: colors.deepForest }, formFields: { gap: 18 },
   quickAmounts: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

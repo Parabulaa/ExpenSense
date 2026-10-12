@@ -1,8 +1,9 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type PropsWithChildren } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
 import { assessReceiptStructure, parseReceipt } from './receipt-parser';
+import { useAuth } from '@/features/auth/AuthProvider';
 import { nowLocalTime, todayLocalDate } from '@/features/expenses/validation';
 import { uuid } from '@/lib/offline/network';
-import { optimizeReceipt, recognizeReceipt, saveReceiptTransaction } from './receipt-service';
+import { getScansRemaining, optimizeReceipt, recognizeReceipt, saveReceiptTransaction } from './receipt-service';
 import type { ReceiptDraft, ReceiptFailureKind, ReceiptImage, ReceiptProgress } from './types';
 
 type ContextValue = {
@@ -12,6 +13,9 @@ type ContextValue = {
   save: () => ReturnType<typeof saveReceiptTransaction>; reset: () => void;
   /** Keeps the photo but lets the user type the details when it could not be read. */
   startManualDraft: () => boolean;
+  /** Receipt scans left on this account; null until known or while offline. */
+  scansRemaining: number | null;
+  refreshScansRemaining: () => Promise<void>;
 };
 const ReceiptContext = createContext<ContextValue | null>(null);
 const steps: ReceiptProgress[] = ['Preparing image', 'Checking image quality', 'Reading receipt', 'Checking receipt structure', 'Extracting details', 'Checking totals'];
@@ -21,6 +25,25 @@ export function ReceiptProvider({ children }: PropsWithChildren) {
   const [progress, setProgress] = useState<ReceiptProgress | null>(null); const [completed, setCompleted] = useState<ReceiptProgress[]>([]);
   const [failure, setFailure] = useState<ReceiptFailureKind | null>(null); const [failureMessage, setFailureMessage] = useState<string | null>(null); const [saving, setSaving] = useState(false);
   const processing = useRef(false);
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const [scans, setScans] = useState<{ userId: string; remaining: number | null } | null>(null);
+  const scansRemaining = scans && scans.userId === userId ? scans.remaining : null;
+  const refreshScansRemaining = useCallback(async () => {
+    if (!userId) return;
+    const remaining = await getScansRemaining();
+    setScans({ userId, remaining });
+  }, [userId]);
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    void getScansRemaining().then((remaining) => {
+      if (!cancelled) setScans({ userId, remaining });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
   const reset = useCallback(() => { setSourceState(null); setDraft(null); setProgress(null); setCompleted([]); setFailure(null); setFailureMessage(null); processing.current = false; }, []);
   const setSource = useCallback((image: ReceiptImage) => { reset(); setSourceState(image); }, [reset]);
   const startManualDraft = useCallback(() => {
@@ -37,7 +60,7 @@ export function ReceiptProvider({ children }: PropsWithChildren) {
     try {
       setProgress(steps[0]); const optimized = await optimizeReceipt(source); setCompleted([steps[0]]);
       setProgress(steps[1]); if (Math.min(optimized.width, optimized.height) < 500) throw Object.assign(new Error('The image is too small. Try a clearer, closer photo.'), { kind: 'quality' }); setCompleted(steps.slice(0, 2));
-      setProgress(steps[2]); const ocr = await recognizeReceipt(optimized); setCompleted(steps.slice(0, 3));
+      setProgress(steps[2]); const ocr = await recognizeReceipt(optimized).finally(() => void refreshScansRemaining()); setCompleted(steps.slice(0, 3));
       setProgress(steps[3]); const structure = assessReceiptStructure(ocr.rawText); if (structure < 4) throw Object.assign(new Error("We couldn't find enough receipt details in this image."), { kind: 'not-receipt' }); setCompleted(steps.slice(0, 4));
       setProgress(steps[4]); const parsed = parseReceipt(ocr.rawText, optimized, ocr.confidence); setCompleted(steps.slice(0, 5));
       setProgress(steps[5]); if (!parsed.totalCents) throw Object.assign(new Error("We couldn't find an amount on this receipt."), { kind: 'not-receipt' }); setDraft(parsed); setCompleted(steps); setProgress(null); processing.current = false; return 'review';
@@ -45,7 +68,7 @@ export function ReceiptProvider({ children }: PropsWithChildren) {
       const item = error as Error & { kind?: ReceiptFailureKind }; const kind = item.kind ?? (/network|fetch|function/i.test(item.message) ? 'network' : 'provider');
       setFailure(kind); setFailureMessage(item.message); setProgress(null); processing.current = false; return 'failed';
     }
-  }, [draft, source]);
+  }, [draft, refreshScansRemaining, source]);
   const updateDraft = useCallback((patch: Partial<ReceiptDraft>) => setDraft((current) => current ? { ...current, ...patch } : current), []);
   // A ref, not state, guards against a double tap saving before `saving` renders.
   const saveInFlight = useRef(false);
@@ -57,7 +80,7 @@ export function ReceiptProvider({ children }: PropsWithChildren) {
     saveInFlight.current = false; setSaving(false);
     return result;
   }, [draft]);
-  const value = useMemo(() => ({ source, draft, progress, completed, failure, failureMessage, saving, setSource, process, updateDraft, save, reset , startManualDraft }), [source, draft, progress, completed, failure, failureMessage, saving, setSource, process, updateDraft, save, reset, startManualDraft]);
+  const value = useMemo(() => ({ source, draft, progress, completed, failure, failureMessage, saving, setSource, process, updateDraft, save, reset , startManualDraft, scansRemaining, refreshScansRemaining }), [source, draft, progress, completed, failure, failureMessage, saving, setSource, process, updateDraft, save, reset, startManualDraft, scansRemaining, refreshScansRemaining]);
   return <ReceiptContext.Provider value={value}>{children}</ReceiptContext.Provider>;
 }
 export function useReceipt() { const value = useContext(ReceiptContext); if (!value) throw new Error('useReceipt must be used within ReceiptProvider'); return value; }

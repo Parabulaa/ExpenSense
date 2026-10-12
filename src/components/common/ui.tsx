@@ -78,6 +78,9 @@ export function FormInput({ icon, secure, right, style, inputStyle, error, label
         {icon && <View style={styles.inputIcon}><AppIcon name={icon} size={23} color={error ? colors.danger : focused ? colors.deepForest : colors.forest} /></View>}
         <TextInput
           placeholderTextColor="#849096"
+          // Keeps long placeholders on one line; Android otherwise wraps them
+          // inside the fixed-height field and clips the second line.
+          numberOfLines={props.multiline ? undefined : 1}
           secureTextEntry={secure}
           style={[styles.input, inputStyle]}
           onFocus={(e) => { setFocused(true); onFocus?.(e); }}

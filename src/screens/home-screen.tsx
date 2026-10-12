@@ -372,9 +372,19 @@ export function HomeScreen() {
   const colors = useColors();
   const styles = useStyles();
   const { user } = useAuth();
-  const { expenses, loading: expensesLoading, loadError, revalidate: revalidateExpenses } = useExpenses();
-  const { budgets, loading: budgetsLoading, revalidate: revalidateBudgets } = useBudgets();
-  const { incomeEntries, loading: financeLoading, revalidate: revalidateFinance } = useFinance();
+  const { expenses, loading: expensesLoading, loadError, revalidate: revalidateExpenses, refresh: refreshExpenses } = useExpenses();
+  const { budgets, loading: budgetsLoading, revalidate: revalidateBudgets, refresh: refreshBudgets } = useBudgets();
+  const { incomeEntries, loading: financeLoading, revalidate: revalidateFinance, refresh: refreshFinance } = useFinance();
+  // Pull-to-refresh refetches everything and remounts the page, so its
+  // entrance animations replay even if they were interrupted earlier.
+  const [refreshing, setRefreshing] = useState(false);
+  const [pageKey, setPageKey] = useState(0);
+  const pullToRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.allSettled([refreshExpenses(), refreshBudgets(), refreshFinance()]);
+    setPageKey((key) => key + 1);
+    setRefreshing(false);
+  }, [refreshBudgets, refreshExpenses, refreshFinance]);
   const { allCategories } = useCategories();
   const { displayName: profileName } = useProfile();
   const { width } = useWindowDimensions();
@@ -560,8 +570,8 @@ export function HomeScreen() {
     : 'Hold a category to customize this grid';
 
   return (
-    <Screen embedded bottomInset={bottomInset} background={false} padded={false}>
-      <View style={[styles.page, { width: dashboardWidth }]}>
+    <Screen embedded bottomInset={bottomInset} background={false} padded={false} refreshing={refreshing} onRefresh={pullToRefresh}>
+      <View key={pageKey} style={[styles.page, { width: dashboardWidth }]}>
         <FadeSlideIn index={0}>
           <View style={styles.hero}>
             <View style={styles.heroTop}>

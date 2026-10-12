@@ -50,6 +50,20 @@ export async function optimizeReceipt(image: ReceiptImage): Promise<ReceiptImage
   return { uri: result.uri, width: result.width, height: result.height, size, origin: image.origin, mimeType: 'image/jpeg', fileName: image.fileName };
 }
 
+/** Each account gets this many receipt reads in total (see migration 0009). */
+export const RECEIPT_SCAN_LIMIT = 10;
+
+/** Scans this account has left, or null when it can't be checked (offline). */
+export async function getScansRemaining(): Promise<number | null> {
+  try {
+    const { data, error } = await supabase.rpc('receipt_ocr_scans_remaining');
+    if (error || typeof data !== 'number') return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 export async function recognizeReceipt(image: ReceiptImage) {
   const imageBase64 = Platform.OS === 'web'
     ? await webUriToBase64(image.uri)

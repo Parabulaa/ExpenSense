@@ -83,6 +83,7 @@ const STEPS: TourStep[] = [
 
 /** Gives the Home screen and navigation time to lay out before measuring. */
 const START_DELAY_MS = 700;
+const REPLAY_DELAY_MS = 1100;
 const SPOTLIGHT_PADDING = 8;
 const CARD_GAP = 14;
 const SCREEN_MARGIN = 16;
@@ -119,7 +120,10 @@ export function AppTourProvider({ children }: PropsWithChildren) {
 
   const replay = useCallback(() => {
     setReplayRequested(true);
-    router.dismissTo('/home');
+    // Close back to the existing app shell, then switch its tab. dismissTo
+    // could stack a second shell when FAQ was opened from another tab.
+    if (router.canDismiss()) router.dismissAll();
+    router.replace('/home');
   }, []);
 
   // Runs once per person the first time they land on Home. The auth guard
@@ -129,10 +133,12 @@ export function AppTourProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (pathname !== '/home' || step !== null) return;
     if (!replayRequested && !shouldAutoStart) return;
+    // A replay also waits out the screen transition back to Home, so the
+    // overlay never opens while Home is still animating in.
     const id = setTimeout(() => {
       setReplayRequested(false);
       setStep(0);
-    }, START_DELAY_MS);
+    }, replayRequested ? REPLAY_DELAY_MS : START_DELAY_MS);
     return () => clearTimeout(id);
   }, [pathname, replayRequested, shouldAutoStart, step]);
 
