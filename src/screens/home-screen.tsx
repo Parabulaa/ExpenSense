@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, TextInput, useWindowDimensions, View } from 'react-native';
+import { Pressable, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
@@ -48,7 +48,8 @@ import { useFinance } from '@/features/finance/FinanceProvider';
 import { useBudgets } from '@/features/budget/BudgetProvider';
 import { useCategories } from '@/features/categories/CategoriesProvider';
 import { useProfile } from '@/features/profile/ProfileProvider';
-import { chat, type ChatContext, type ChatMemory } from '@/features/adviser/chatbot/engine';
+import type { ChatContext } from '@/features/adviser/chatbot/engine';
+import { AdviserChat } from '@/features/adviser/AdviserChat';
 import { adviserFacts, adviserPersona, adviserSeed } from '@/features/adviser/personas';
 import { useSettings } from '@/features/settings/SettingsProvider';
 import { consumeSkippedPanelRefresh } from '@/lib/panel-refresh';
@@ -408,11 +409,6 @@ export function HomeScreen() {
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const [insightIndex, setInsightIndex] = useState(0);
   const [assistantOpen, setAssistantOpen] = useState(false);
-  const [assistantInput, setAssistantInput] = useState('');
-  const [assistantMemory, setAssistantMemory] = useState<ChatMemory>({});
-  const [assistantMessages, setAssistantMessages] = useState<{ role: 'user' | 'assistant'; text: string }[]>([
-    { role: 'assistant', text: 'Ask me about your spending or budget. I work locally using the data already in ExpenSense.' },
-  ]);
   const [drag, setDrag] = useState<{ id: string; target: number } | null>(null);
 
   // Reads the shared profile cache so editing the name in Settings updates the
@@ -488,17 +484,8 @@ export function HomeScreen() {
     const current = analyticsForMonth(expenses, allCategories, selectedMonthId);
     const previous = analyticsForMonth(expenses, allCategories, previousMonth(selectedMonthId));
     const today = todayLocalDate();
-    return { expenses, categories: allCategories, budget: savedBudget, current, previous, today, facts: adviserFacts({ current, previous, categories: allCategories, budget: savedBudget, today }) };
-  }, [allCategories, expenses, savedBudget, selectedMonthId]);
-  const askAssistant = (suggestion?: string) => {
-    const question = (suggestion ?? assistantInput).trim();
-    if (!question) return;
-    // Same on-device chatbot as the Adviser screen, condensed to one bubble here.
-    const reply = chat(question, assistantContext, assistantMemory, persona.id, adviserSeed(assistantMessages.length));
-    setAssistantMemory(reply.memory);
-    setAssistantMessages((current) => [...current, { role: 'user', text: question }, { role: 'assistant', text: reply.bubbles.join(' ') }]);
-    setAssistantInput('');
-  };
+    return { expenses, categories: allCategories, budget: savedBudget, current, previous, today, userName: firstName, facts: adviserFacts({ current, previous, categories: allCategories, budget: savedBudget, today }) };
+  }, [allCategories, expenses, firstName, savedBudget, selectedMonthId]);
   const mascotDrift = useDrift({ x: 8, y: 10, rotate: 1.5, scale: 0.018, duration: 7200 });
   const mood = useMemo(() => mascotMood({
     loading: expensesLoading || budgetsLoading,
@@ -848,16 +835,8 @@ export function HomeScreen() {
           <PressableScale accessibilityRole="button" accessibilityLabel="Change your financial adviser" onPress={() => { setAssistantOpen(false); router.push('/adviser' as never); }} style={styles.assistantRefresh}><AppIcon name="account-tie-voice-outline" size={20} /></PressableScale>
           <PressableScale accessibilityLabel="Show another quick insight" onPress={() => setInsightIndex((current) => current + 1)} style={styles.assistantRefresh}><AppIcon name="refresh" size={20} /></PressableScale>
         </View>
-        <ScrollView style={styles.assistantMessages} contentContainerStyle={styles.assistantMessagesContent} keyboardShouldPersistTaps="handled">
-          {assistantMessages.map((message, index) => <View key={`${message.role}-${index}`} style={[styles.assistantMessage, message.role === 'user' ? styles.assistantUser : styles.assistantReply]}><AppText style={message.role === 'user' ? styles.assistantUserText : undefined}>{message.text}</AppText></View>)}
-        </ScrollView>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.assistantSuggestions}>
-          {['How much is left?', 'Top category?', 'Compare last month', 'How can I save?'].map((prompt) => <PressableScale key={prompt} onPress={() => askAssistant(prompt)} style={styles.assistantSuggestion}><AppText variant="small" style={styles.assistantSuggestionText}>{prompt}</AppText></PressableScale>)}
-        </ScrollView>
-        <View style={styles.assistantComposer}>
-          <TextInput accessibilityLabel="Ask about your budget" value={assistantInput} onChangeText={setAssistantInput} onSubmitEditing={() => askAssistant()} returnKeyType="send" placeholder="Ask about your spending…" placeholderTextColor={colors.muted} style={styles.assistantInput} />
-          <PressableScale accessibilityRole="button" accessibilityLabel="Send question" onPress={() => askAssistant()} style={styles.assistantSend}><AppIcon name="arrow-up" color={colors.surface} /></PressableScale>
-        </View>
+        {/* Same chat as the Adviser screen; remounts per persona and each time the sheet opens. */}
+        {assistantOpen ? <AdviserChat key={persona.id} persona={persona} context={assistantContext} compact /> : null}
       </DraggableBottomSheet>
     </Screen>
   );

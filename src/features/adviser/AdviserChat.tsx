@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { useEffect, useRef, useState } from 'react';
-import { Keyboard, TextInput, View } from 'react-native';
+import { Keyboard, ScrollView, TextInput, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp, LinearTransition, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
 import { PressableScale } from '@/components/common/motion';
@@ -20,7 +20,8 @@ type Choice = { label: string; intent?: Intent };
 /** How long each persona "types" before a bubble appears. */
 const TYPING_MS: Record<AdviserPersona['id'], number> = { classic: 450, mom: 750, chill: 1000, bestie: 500, sergeant: 300, butler: 1200 };
 
-export function AdviserChat({ persona, context }: { persona: AdviserPersona; context: ChatContext }) {
+/** `compact` drops the header and scrolls the thread, for the Home sheet. */
+export function AdviserChat({ persona, context, compact = false }: { persona: AdviserPersona; context: ChatContext; compact?: boolean }) {
   const colors = useColors();
   const s = useStyles();
   const { tint, ink } = useAdaptiveColor();
@@ -33,6 +34,7 @@ export function AdviserChat({ persona, context }: { persona: AdviserPersona; con
   const nextId = useRef(0);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const lastQuestion = useRef('');
+  const scroller = useRef<ScrollView>(null);
 
   const clearTimers = () => { timers.current.forEach(clearTimeout); timers.current = []; };
 
@@ -90,7 +92,7 @@ export function AdviserChat({ persona, context }: { persona: AdviserPersona; con
 
   return (
     <View style={s.wrap}>
-      <View style={s.header}>
+      {compact ? null : <View style={s.header}>
         <View>
           <Image source={mascotImage[mood]} contentFit="contain" transition={200} style={s.avatar} />
           <View style={[s.badge, { backgroundColor: tint(persona.accent) }]}><AppIcon name={persona.icon} size={11} color={ink('#173D2B')} /></View>
@@ -99,16 +101,16 @@ export function AdviserChat({ persona, context }: { persona: AdviserPersona; con
           <AppText variant="h3">Chat with {persona.id === 'classic' ? 'your adviser' : persona.name}</AppText>
           <AppText variant="small" style={s.status}>{typing ? 'typing…' : 'On-device · uses your real numbers'}</AppText>
         </View>
-      </View>
+      </View>}
 
-      <View style={s.thread}>
+      <ScrollView ref={scroller} style={compact ? s.compactThread : undefined} contentContainerStyle={s.thread} keyboardShouldPersistTaps="handled" scrollEnabled={compact} onContentSizeChange={() => scroller.current?.scrollToEnd({ animated: true })}>
         {messages.map((message) => (
           <Animated.View key={message.id} entering={(message.role === 'user' ? FadeInUp : FadeInDown).duration(220).springify().damping(16)} layout={LinearTransition} style={[s.bubble, message.role === 'user' ? s.user : s.adviser]}>
             <AppText style={message.role === 'user' ? s.userText : s.adviserText}>{message.text}</AppText>
           </Animated.View>
         ))}
         {typing ? <TypingDots /> : null}
-      </View>
+      </ScrollView>
 
       {choices.length ? (
         <Animated.View entering={FadeInDown.duration(220)} style={s.chips}>
@@ -157,6 +159,7 @@ const useStyles = makeStyles((colors) => ({
   badge: { position: 'absolute', right: -2, bottom: -2, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.surface },
   status: { color: colors.muted },
   thread: { gap: 6, minHeight: 60 },
+  compactThread: { maxHeight: 330, minHeight: 180 },
   bubble: { maxWidth: '86%', borderRadius: radii.lg, paddingHorizontal: spacing.md, paddingVertical: 10 },
   user: { alignSelf: 'flex-end', backgroundColor: colors.deepForest, borderBottomRightRadius: 6 },
   adviser: { alignSelf: 'flex-start', backgroundColor: colors.pale, borderBottomLeftRadius: 6 },

@@ -4,7 +4,7 @@
  * Taglish both appear, since the synonym map folds Tagalog words into English.
  */
 export type Intent =
-  | 'greeting' | 'thanks' | 'help' | 'who_are_you'
+  | 'greeting' | 'thanks' | 'help' | 'who_are_you' | 'my_name' | 'how_are_you'
   | 'spent_total' | 'budget_left' | 'category_spent' | 'top_category' | 'compare'
   | 'can_afford' | 'how_to_save' | 'transaction_count' | 'biggest_expense' | 'daily_allowance'
   | 'roast_me' | 'praise_me' | 'why' | 'out_of_scope';
@@ -13,7 +13,9 @@ export const TRAINING_DATA: Record<Intent, string[]> = {
   greeting: ['hi', 'hello', 'hey', 'good morning', 'good evening', 'yo', 'sup', 'hello there', 'hey adviser', 'hi mom', 'kumusta', 'hey whats up'],
   thanks: ['thanks', 'thank you', 'ty', 'thanks a lot', 'appreciate it', 'salamat', 'okay thanks', 'got it thanks', 'nice thank you', 'cool thanks'],
   help: ['help', 'what can you do', 'what can i ask', 'how do you work', 'what do you know', 'show me what you can do', 'options', 'commands', 'how to use this'],
-  who_are_you: ['who are you', 'what are you', 'are you a bot', 'are you real', 'whats your name', 'who am i talking to', 'are you ai'],
+  who_are_you: ['who are you', 'what are you', 'are you a bot', 'are you real', 'whats your name', 'who am i talking to', 'are you ai', 'what is your name', 'your name', 'who made you', 'what should i call you', 'introduce yourself', 'who is this'],
+  my_name: ['whats my name', 'what is my name', 'do you know my name', 'who am i', 'do you know who i am', 'say my name', 'remember my name', 'ano pangalan ko', 'my name', 'tell me my name', 'who am i to you', 'what am i called', 'do you remember me', 'you know me'],
+  how_are_you: ['how are you', 'how are you doing', 'hows it going', 'are you okay', 'how was your day', 'whats up with you', 'you good'],
   spent_total: ['how much did i spend', 'how much have i spent', 'total spending', 'what is my total', 'how much this month', 'my expenses this month', 'how much money did i use', 'total expenses', 'how much did i spend this week', 'how much did i spend today', 'spending so far', 'how much spent last month'],
   budget_left: ['how much budget is left', 'budget left', 'how much is left', 'remaining budget', 'how much can i still spend', 'am i over budget', 'budget status', 'whats left in my budget', 'do i still have budget', 'is my budget okay', 'how much left'],
   category_spent: ['how much on food', 'how much did i spend on transport', 'food spending', 'shopping total', 'how much for bills', 'what did i spend on groceries', 'how much on entertainment', 'category spending', 'how much is food left', 'food budget'],

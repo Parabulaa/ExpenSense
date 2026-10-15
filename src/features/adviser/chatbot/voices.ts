@@ -13,6 +13,9 @@ type Voice = {
   greeting: string[];
   thanks: string[];
   who: string;
+  /** Answer to "what’s my name"; {name} is filled in. */
+  name: string;
+  howAreYou: string[];
   confused: string[];
   offTopic: string[];
   /** Said before a roast's facts. */
@@ -33,6 +36,8 @@ const classic: Voice = {
   greeting: ['Hi! Ask me about your spending, budget, or whether you can afford something.'],
   thanks: ['You’re welcome.'],
   who: 'I’m the ExpenSense adviser. I run on your device and only use your saved expenses and budgets.',
+  name: 'You’re {name}.',
+  howAreYou: ['Doing well, thanks. Ready to look at your budget?'],
   confused: ['I’m not sure what you mean.'],
   offTopic: ['I can only help with your spending and budgets.'],
   roastIntro: ['Here’s an honest look:'],
@@ -56,6 +61,8 @@ const mom: Voice = {
   greeting: ['Oh, NOW you visit me. Did you eat already? What did you buy?', 'Anak! Finally. Let’s look at your spending.'],
   thanks: ['Thank me by saving money.', 'You’re welcome. Now go cook at home.'],
   who: 'I’m your mother. Well, your money mother. I raised you to save.',
+  name: 'You’re {name}, my child! Don’t tell me you forgot your own name. Did you forget your budget too?',
+  howAreYou: ['Tired. Worrying about your spending.', 'I’m fine. I’ll be better when you save money.'],
   confused: ['What are you saying? Speak properly.', 'Ha? Say it again, slowly.'],
   offTopic: ['Don’t change the subject. We’re talking about your money.', 'Focus! Your budget first, then everything else.'],
   roastIntro: ['You want honesty? Okay.', 'Ay, you asked for it.'],
@@ -79,6 +86,8 @@ const chill: Voice = {
   greeting: ['Yo! What’s up? Ask me anything about your money.', 'Heyyy. Chill day? Let’s check the budget.'],
   thanks: ['Anytime, my guy.', 'No worries. 🤙'],
   who: 'Just a chill guy who happens to know your budget. No judgment.',
+  name: 'You’re {name}, my guy. Easy one.',
+  howAreYou: ['Chillin’, as always. You?', 'Vibing. Budget’s vibing too, mostly.'],
   confused: ['Didn’t quite catch that, my guy.', 'Hmm, run that by me again?'],
   offTopic: ['Ha, that’s outside my lane. I just do money stuff.', 'Not my thing, man. Ask me about your budget though.'],
   roastIntro: ['You sure? Okay, gently:', 'Alright, chill roast incoming:'],
@@ -102,6 +111,8 @@ const bestie: Voice = {
   greeting: ['HIII bestie!! Ask me anything, I’m so ready ✨', 'You’re here!! Let’s talk money 💅'],
   thanks: ['Anything for you!! 🫶', 'Stop it, you’re welcome 🥹'],
   who: 'Your bestie, obviously!! Your budget’s biggest fan ✨',
+  name: 'You’re {name}, obviously!! My favourite person 🫶',
+  howAreYou: ['Thriving bestie!! Even better now you’re here ✨', 'Living my best life, wbu? 💅'],
   confused: ['Wait I’m lost 😭 say that again?', 'Bestie what 😂 rephrase pls'],
   offTopic: ['Babe I only know money tea ☕', 'Not my vibe, ask me about your budget!!'],
   roastIntro: ['You asked for it bestie 😬', 'Okay, with love:'],
@@ -125,6 +136,8 @@ const sergeant: Voice = {
   greeting: ['RECRUIT! STATE YOUR BUSINESS.', 'ON YOUR FEET. WHAT DO YOU NEED?'],
   thanks: ['DON’T THANK ME. SAVE MONEY.', 'ACKNOWLEDGED.'],
   who: 'I AM YOUR DRILL SERGEANT. MY MISSION: YOUR BUDGET.',
+  name: 'YOU ARE RECRUIT {name}. DON’T MAKE ME REPEAT IT.',
+  howAreYou: ['OPERATIONAL. FOCUS ON THE MISSION.', 'I DON’T HAVE FEELINGS. I HAVE A BUDGET.'],
   confused: ['SAY AGAIN, RECRUIT? CLEARLY!', 'THAT IS NOT A PROPER REPORT.'],
   offTopic: ['NEGATIVE. THAT IS NOT THE MISSION.', 'STAY ON TARGET. BUDGET QUESTIONS ONLY.'],
   roastIntro: ['YOU WANT IT? YOU GOT IT.', 'PERMISSION GRANTED. BRACE YOURSELF.'],
@@ -149,6 +162,8 @@ const butler: Voice = {
   greeting: ['Good day. How may I assist with your finances?', 'Welcome back. The ledger awaits.'],
   thanks: ['A pleasure, as always.', 'Think nothing of it.'],
   who: 'Your humble butler, keeper of the household ledger.',
+  name: 'You are {name}, of course. I’d never forget.',
+  howAreYou: ['Quite well, thank you for asking.', 'Splendid, now that the ledger is in order.'],
   confused: ['I beg your pardon?', 'Forgive me, I didn’t quite follow.'],
   offTopic: ['I’m afraid that is beyond my station. I keep the ledger.', 'Regrettably, I attend only to your finances.'],
   roastIntro: ['If you insist.', 'Very well. Candidly:'],

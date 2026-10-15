@@ -24,6 +24,8 @@ export type ChatContext = {
   previous: MonthAnalytics;
   facts: AdviserFacts;
   today: string;
+  /** First name, for "what’s my name". */
+  userName?: string;
 };
 
 export type ChatMemory = { lastIntent?: Intent; lastCategoryId?: string; awaitingAmount?: boolean; why?: string };
@@ -120,6 +122,10 @@ function answer(intent: Intent, question: string, ctx: ChatContext, memory: Chat
     case 'greeting': return { tone: 'neutral', lines: [pick(voice.greeting, seed)], suggestions: ['Budget left?', 'Roast me', 'Can I afford ₱1,500 shoes?'] };
     case 'thanks': return { tone: 'good', lines: [pick(voice.thanks, seed)], mood: 'success', suggestions: ['How can I save?', 'Am I doing well?'] };
     case 'who_are_you': return { tone: 'neutral', lines: [voice.who, 'I run on your phone and only use your saved expenses and budgets.'] };
+    case 'my_name': return ctx.userName
+      ? { tone: 'good', lines: [voice.name.replace('{name}', ctx.userName)], mood: 'success', suggestions: ['Budget left?', 'Roast me'] }
+      : { tone: 'neutral', lines: ['I don’t know your name yet. Add it in Profile → Account Information.'], mood: 'confused' };
+    case 'how_are_you': return { tone: 'neutral', lines: [pick(voice.howAreYou, seed)], suggestions: ['How am I doing?', 'Budget left?'] };
     case 'help': return { tone: 'neutral', lines: ['Try asking: how much is left, where your money goes, whether you can afford something, how to save, or ask me to roast you.'], suggestions: ['Where does my money go?', 'Can I afford ₱2,000?', 'Roast me'] };
     case 'out_of_scope': return { tone: 'neutral', lines: [pick(voice.offTopic, seed)], mood: 'confused', suggestions: ['Budget left?', 'How can I save?'] };
 
@@ -278,7 +284,7 @@ export function chat(question: string, ctx: ChatContext, memory: ChatMemory, per
   }
 
   const result = answer(intent, question, ctx, memory, persona, seed);
-  const conversational = ['greeting', 'thanks', 'who_are_you', 'out_of_scope', 'help'].includes(intent) || Boolean(result.memory?.awaitingAmount);
+  const conversational = ['greeting', 'thanks', 'who_are_you', 'my_name', 'how_are_you', 'out_of_scope', 'help'].includes(intent) || Boolean(result.memory?.awaitingAmount);
   const open = conversational || intent === 'roast_me' || intent === 'praise_me' ? '' : pick(voice.open[result.tone], seed);
   const close = conversational ? '' : pick(voice.close[result.tone], seed + 1);
   let bubbles = voice.chatty ? [open, ...result.lines, close].filter(Boolean) : [result.lines.join(' ')];

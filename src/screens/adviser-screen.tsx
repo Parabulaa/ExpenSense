@@ -17,6 +17,7 @@ import { useBudgets } from '@/features/budget/BudgetProvider';
 import { useCategories } from '@/features/categories/CategoriesProvider';
 import { useExpenses } from '@/features/expenses/ExpensesProvider';
 import { todayLocalDate } from '@/features/expenses/validation';
+import { useProfile } from '@/features/profile/ProfileProvider';
 import { makeStyles, useAdaptiveColor, useColors } from '@/features/settings/ThemeProvider';
 import { formatPeso, percentOf } from '@/lib/format';
 import { selectionFeedback } from '@/lib/haptics';
@@ -44,6 +45,7 @@ export function AdviserScreen() {
   const { expenses, loading, revalidate } = useExpenses();
   const { allCategories } = useCategories();
   const { revalidate: revalidateBudgets } = useBudgets();
+  const { displayName } = useProfile();
   const [seed, setSeed] = useState(() => adviserSeed());
   const drift = useDrift({ x: 6, y: 8, rotate: 1.5, scale: 0.02, duration: 6400 });
 
@@ -61,7 +63,7 @@ export function AdviserScreen() {
     })
     .sort((a, b) => b.used - a.used), [allCategories, budget, current.expenses]);
 
-  const chatContext = useMemo<ChatContext>(() => ({ expenses, categories: allCategories, budget, current, previous, facts, today: todayLocalDate() }), [allCategories, budget, current, expenses, facts, previous]);
+  const chatContext = useMemo<ChatContext>(() => ({ expenses, categories: allCategories, budget, current, previous, facts, today: todayLocalDate(), userName: displayName.trim().split(/\s+/)[0] || undefined }), [allCategories, budget, current, displayName, expenses, facts, previous]);
 
   const choose = (next: AdviserPersona) => {
     if (next.id === persona.id) return;
