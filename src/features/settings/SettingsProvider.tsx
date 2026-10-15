@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DEFAULT_ADVISER, isAdviserPersonaId, type AdviserPersonaId } from '@/features/adviser/personas';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 
 const STORAGE_KEY = 'expensense.settings.v1';
@@ -15,6 +16,8 @@ export type AppSettings = {
   themeMode: ThemeMode;
   /** True once the user has picked an appearance themselves. */
   themeChosen: boolean;
+  /** Voice the mascot speaks in across the app. */
+  adviserPersona: AdviserPersonaId;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -26,6 +29,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   // a fresh install start light and then flip to dark on screen.
   themeMode: 'light',
   themeChosen: false,
+  adviserPersona: DEFAULT_ADVISER,
 };
 
 type SettingsContextValue = {
@@ -54,6 +58,7 @@ function parseSettings(raw: string | null): AppSettings {
         ? parsed.themeMode
         : DEFAULT_SETTINGS.themeMode,
       themeChosen: parsed.themeChosen === true,
+      adviserPersona: isAdviserPersonaId(parsed.adviserPersona) ? parsed.adviserPersona : DEFAULT_ADVISER,
     };
   } catch {
     // Corrupt or hand-edited storage shouldn't brick the settings screen.

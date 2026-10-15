@@ -49,6 +49,8 @@ import { useBudgets } from '@/features/budget/BudgetProvider';
 import { useCategories } from '@/features/categories/CategoriesProvider';
 import { useProfile } from '@/features/profile/ProfileProvider';
 import { answerBudgetQuestion, type BudgetAssistantMemory } from '@/features/assistant/offline-budget-assistant';
+import { adviserFacts, adviserPersona, adviserSeed } from '@/features/adviser/personas';
+import { useSettings } from '@/features/settings/SettingsProvider';
 import { consumeSkippedPanelRefresh } from '@/lib/panel-refresh';
 
 const GRID_GAP = 10;
@@ -387,6 +389,7 @@ export function HomeScreen() {
   }, [refreshBudgets, refreshExpenses, refreshFinance]);
   const { allCategories } = useCategories();
   const { displayName: profileName } = useProfile();
+  const persona = adviserPersona(useSettings().settings.adviserPersona);
   const { width } = useWindowDimensions();
   const bottomInset = useBottomNavInset();
   const [period, setPeriod] = useState<DashboardPeriod>('Month');
@@ -464,7 +467,10 @@ export function HomeScreen() {
     // that isn't pinned to the grid still has a real name.
     const current = analyticsForMonth(expenses, allCategories, selectedMonthId);
     const prior = analyticsForMonth(expenses, allCategories, previousMonth(selectedMonthId));
-    const primary = mascotInsight(current, prior, allCategories, savedBudget);
+    // The chosen adviser voices the headline; the plain voice keeps the original wording.
+    const primary = persona.id === 'classic'
+      ? mascotInsight(current, prior, allCategories, savedBudget)
+      : persona.say(adviserFacts({ current, previous: prior, categories: allCategories, budget: savedBudget, today: todayLocalDate() }), adviserSeed());
     const messages = [primary];
     if (current.expenses.length) {
       messages.push(`You recorded ${current.expenses.length} expense${current.expenses.length === 1 ? '' : 's'} this month.`);
@@ -476,7 +482,7 @@ export function HomeScreen() {
       }
     }
     return [...new Set(messages)];
-  }, [allCategories, budgetsLoading, expenses, expensesLoading, savedBudget, selectedMonthId]);
+  }, [allCategories, budgetsLoading, expenses, expensesLoading, persona, savedBudget, selectedMonthId]);
   const insight = insights[insightIndex % insights.length];
   const assistantContext = useMemo(() => ({
     current: analyticsForMonth(expenses, allCategories, selectedMonthId),
@@ -489,7 +495,7 @@ export function HomeScreen() {
     if (!question) return;
     const answer = answerBudgetQuestion(question, assistantContext, assistantMemory);
     setAssistantMemory(answer.memory);
-    setAssistantMessages((current) => [...current, { role: 'user', text: question }, { role: 'assistant', text: answer.text }]);
+    setAssistantMessages((current) => [...current, { role: 'user', text: question }, { role: 'assistant', text: persona.answer(answer.text, adviserSeed(current.length)) }]);
     setAssistantInput('');
   };
   const mascotDrift = useDrift({ x: 8, y: 10, rotate: 1.5, scale: 0.018, duration: 7200 });
@@ -837,7 +843,8 @@ export function HomeScreen() {
       </>}</DraggableBottomSheet>
       <DraggableBottomSheet visible={assistantOpen} onClose={() => setAssistantOpen(false)}>
         <View style={styles.assistantHeader}>
-          <View style={{ flex: 1 }}><AppText variant="h2">Ask ExpenSense</AppText><AppText variant="small" style={styles.assistantOffline}>Offline · selected month context</AppText></View>
+          <View style={{ flex: 1 }}><AppText variant="h2">{persona.id === 'classic' ? 'Ask ExpenSense' : `Ask ${persona.name}`}</AppText><AppText variant="small" style={styles.assistantOffline}>Offline · selected month context</AppText></View>
+          <PressableScale accessibilityRole="button" accessibilityLabel="Change your financial adviser" onPress={() => { setAssistantOpen(false); router.push('/adviser' as never); }} style={styles.assistantRefresh}><AppIcon name="account-tie-voice-outline" size={20} /></PressableScale>
           <PressableScale accessibilityLabel="Show another quick insight" onPress={() => setInsightIndex((current) => current + 1)} style={styles.assistantRefresh}><AppIcon name="refresh" size={20} /></PressableScale>
         </View>
         <ScrollView style={styles.assistantMessages} contentContainerStyle={styles.assistantMessagesContent} keyboardShouldPersistTaps="handled">

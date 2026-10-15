@@ -29,6 +29,7 @@ import { AttachmentField, PhotoViewer, type PickedPhoto } from '@/components/com
 import { uploadAttachment } from '@/features/expenses/attachment-service';
 import { walletTypeMeta } from '@/features/finance/wallet-presentation';
 import type { ReceiptKind } from '@/features/receipts/types';
+import { useAdviserReaction } from '@/features/adviser/AdviserProvider';
 import { selectionFeedback } from '@/lib/haptics';
 import { formatPeso } from '@/lib/format';
 import { skipNextPanelRefresh } from '@/lib/panel-refresh';
@@ -151,6 +152,7 @@ export function ManualExpenseScreen() {
   const styles = useStyles();
   const { findCategory } = useCategories();
   const { createExpense } = useExpenses();
+  const { reactToExpense } = useAdviserReaction();
   const { wallets, refresh: refreshFinance } = useFinance();
   const { showToast } = useToast();
   const submitting = useRef(false);
@@ -209,6 +211,7 @@ export function ManualExpenseScreen() {
     const category = findCategory(result.data.categoryId);
     const amount = (result.data.amountCents / 100).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     showToast(result.queued ? `Saved offline · ₱${amount} to ${category?.fullLabel ?? 'Expenses'}. It will sync when you are back online.` : `Expense added · ₱${amount} to ${category?.fullLabel ?? 'Expenses'}.`, { icon: result.queued ? 'cloud-off-outline' : 'check-circle-outline' });
+    reactToExpense(result.data);
     router.replace('/transactions');
   };
 
@@ -403,6 +406,7 @@ export function ReceiptReviewScreen() {
   const styles = useStyles();
   const { draft, updateDraft, save, saving, reset } = useReceipt();
   const { expenses, refresh } = useExpenses();
+  const { reactToExpense } = useAdviserReaction();
   const { findCategory } = useCategories();
   const { budgets } = useBudgets();
   const { wallets, refresh: refreshFinance } = useFinance();
@@ -449,6 +453,8 @@ export function ReceiptReviewScreen() {
     if (problem) { showToast(problem, { tone: 'warning' }); return; }
     const result = await save();
     if (!result.ok) { showToast(result.message, { tone: 'warning' }); return; }
+    // Before the refresh, so the new row is counted exactly once.
+    if (kind === 'expense') reactToExpense({ id: 'pending', amountCents: draft.totalCents, merchant: draft.merchant, categoryId: draft.categoryId, transactionDate: draft.transactionDate });
     await Promise.all([refresh(), refreshFinance()]);
     reset();
     showToast(kind === 'expense' ? 'Receipt expense saved.' : kind === 'cash_in' ? 'Cash-in saved to your wallet.' : 'Transfer saved.', { icon: 'check-circle-outline' });

@@ -28,6 +28,7 @@ import { NotificationsProvider } from '@/features/notifications/NotificationsPro
 import { ProfileProvider } from '@/features/profile/ProfileProvider';
 import { ReceiptProvider } from '@/features/receipts/ReceiptProvider';
 import { SettingsProvider } from '@/features/settings/SettingsProvider';
+import { AdviserReactionProvider } from '@/features/adviser/AdviserProvider';
 import { AppTourProvider } from '@/features/tour/AppTour';
 import { OfflineSync } from '@/lib/offline/OfflineSync';
 
@@ -59,11 +60,13 @@ export default function RootLayout() {
                       <NotificationsProvider>
                         <ToastProvider>
                           <OfflineSync />
+                          <AdviserReactionProvider>
                           <AddExpenseOverlayProvider>
                             <AppTourProvider>
                               <RootNavigation />
                             </AppTourProvider>
                           </AddExpenseOverlayProvider>
+                          </AdviserReactionProvider>
                         </ToastProvider>
                       </NotificationsProvider>
                     </DashboardCategoriesProvider>

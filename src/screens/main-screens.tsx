@@ -1026,6 +1026,7 @@ export function CategoriesScreen() {
 const SETTINGS_ROWS = [
   { icon: 'account-outline', label: 'Account Information', route: '/settings/account' },
   { icon: 'lock-outline', label: 'Change Password', route: '/settings/change-password' },
+  { icon: 'account-tie-voice-outline', label: 'Financial Adviser', route: '/adviser' },
   { icon: 'bell-outline', label: 'Notifications', route: '/settings/notifications' },
   { icon: 'palette-outline', label: 'Appearance', route: '/settings/appearance' },
   { icon: 'shield-check-outline', label: 'Privacy & Data', route: '/settings/privacy' },
