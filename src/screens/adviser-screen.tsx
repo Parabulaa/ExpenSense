@@ -1,8 +1,8 @@
 import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Keyboard, TextInput, View } from 'react-native';
-import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
+import { View } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { FadeSlideIn, PressableScale, useDrift } from '@/components/common/motion';
 import { Screen } from '@/components/common/screen';
@@ -11,7 +11,8 @@ import { radii, spacing } from '@/constants/theme';
 import { useAdviser } from '@/features/adviser/AdviserProvider';
 import { ADVISER_PERSONAS, adviserSeed, type AdviserFacts, type AdviserPersona } from '@/features/adviser/personas';
 import { mascotImage, mascotMood } from '@/features/analytics/mascot-mood';
-import { answerBudgetQuestion, type BudgetAssistantMemory } from '@/features/assistant/offline-budget-assistant';
+import { AdviserChat } from '@/features/adviser/AdviserChat';
+import type { ChatContext } from '@/features/adviser/chatbot/engine';
 import { useBudgets } from '@/features/budget/BudgetProvider';
 import { useCategories } from '@/features/categories/CategoriesProvider';
 import { useExpenses } from '@/features/expenses/ExpensesProvider';
@@ -19,8 +20,6 @@ import { todayLocalDate } from '@/features/expenses/validation';
 import { makeStyles, useAdaptiveColor, useColors } from '@/features/settings/ThemeProvider';
 import { formatPeso, percentOf } from '@/lib/format';
 import { selectionFeedback } from '@/lib/haptics';
-
-const SUGGESTIONS = ['How much have I spent?', 'Budget left?', 'Where does my money go?', 'Compare to last month'];
 
 /** How calm the adviser is, 0–100, with a word for it. */
 function moodMeter(facts: AdviserFacts): { value: number; label: string } {
@@ -46,9 +45,6 @@ export function AdviserScreen() {
   const { allCategories } = useCategories();
   const { revalidate: revalidateBudgets } = useBudgets();
   const [seed, setSeed] = useState(() => adviserSeed());
-  const [question, setQuestion] = useState('');
-  const [memory, setMemory] = useState<BudgetAssistantMemory>({});
-  const [chat, setChat] = useState<{ role: 'user' | 'adviser'; text: string }[]>([]);
   const drift = useDrift({ x: 6, y: 8, rotate: 1.5, scale: 0.02, duration: 6400 });
 
   useFocusEffect(useCallback(() => { void revalidate(); void revalidateBudgets(); }, [revalidate, revalidateBudgets]));
@@ -65,21 +61,12 @@ export function AdviserScreen() {
     })
     .sort((a, b) => b.used - a.used), [allCategories, budget, current.expenses]);
 
-  const ask = (text?: string) => {
-    const value = (text ?? question).trim();
-    if (!value) return;
-    Keyboard.dismiss();
-    const reply = answerBudgetQuestion(value, { current, previous, categories: allCategories, budget }, memory);
-    setMemory(reply.memory);
-    setChat((items) => [...items.slice(-6), { role: 'user', text: value }, { role: 'adviser', text: persona.answer(reply.text, seed + items.length) }]);
-    setQuestion('');
-  };
+  const chatContext = useMemo<ChatContext>(() => ({ expenses, categories: allCategories, budget, current, previous, facts, today: todayLocalDate() }), [allCategories, budget, current, expenses, facts, previous]);
 
   const choose = (next: AdviserPersona) => {
     if (next.id === persona.id) return;
     selectionFeedback();
     void setPersona(next.id);
-    setChat([]);
   };
 
   return (
@@ -161,26 +148,8 @@ export function AdviserScreen() {
         </FadeSlideIn>
 
         <FadeSlideIn index={4}>
-          <Card style={s.section}>
-            <AppText variant="h3">Ask {persona.id === 'classic' ? 'your adviser' : persona.name}</AppText>
-            {chat.map((message, index) => (
-              <Animated.View key={index} entering={FadeIn.duration(200)} layout={LinearTransition} style={[s.message, message.role === 'user' ? s.userMessage : s.adviserMessage]}>
-                <AppText style={message.role === 'user' ? s.userText : undefined}>{message.text}</AppText>
-              </Animated.View>
-            ))}
-            <View style={s.chips}>
-              {SUGGESTIONS.map((item) => (
-                <PressableScale key={item} accessibilityRole="button" onPress={() => ask(item)} style={s.chip}>
-                  <AppText variant="small" style={s.chipText}>{item}</AppText>
-                </PressableScale>
-              ))}
-            </View>
-            <View style={s.inputRow}>
-              <TextInput value={question} onChangeText={setQuestion} onSubmitEditing={() => ask()} returnKeyType="send" placeholder="Can I afford new shoes?" placeholderTextColor={colors.muted} style={s.input} />
-              <PressableScale accessibilityRole="button" accessibilityLabel="Send question" onPress={() => ask()} style={s.send}>
-                <AppIcon name="send" size={20} color={colors.surface} />
-              </PressableScale>
-            </View>
+          <Card>
+            <AdviserChat key={persona.id} persona={persona} context={chatContext} />
           </Card>
         </FadeSlideIn>
 
@@ -237,16 +206,6 @@ const useStyles = makeStyles((colors) => ({
   dots: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   dot: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: colors.lightGreen },
   dotDone: { backgroundColor: colors.success, borderColor: colors.success },
-  message: { maxWidth: '88%', borderRadius: radii.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  userMessage: { alignSelf: 'flex-end', backgroundColor: colors.deepForest },
-  adviserMessage: { alignSelf: 'flex-start', backgroundColor: colors.pale },
-  userText: { color: colors.surface },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  chip: { borderRadius: radii.pill, borderWidth: 1, borderColor: colors.line, paddingHorizontal: spacing.md, paddingVertical: 6, backgroundColor: colors.surface },
-  chipText: { color: colors.deepForest, fontFamily: 'JakartaSemiBold' },
-  inputRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  input: { flex: 1, minHeight: 48, borderRadius: radii.md, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.pale, paddingHorizontal: spacing.md, color: colors.text, fontFamily: 'JakartaRegular', fontSize: 14 },
-  send: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.deepForest, alignItems: 'center', justifyContent: 'center' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   gridItem: { width: '47.5%', flexGrow: 1 },
   personaCard: { gap: 4, padding: spacing.md, borderRadius: radii.lg, borderWidth: 2, borderColor: colors.line, backgroundColor: colors.surface, minHeight: 172 },

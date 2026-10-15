@@ -48,7 +48,7 @@ import { useFinance } from '@/features/finance/FinanceProvider';
 import { useBudgets } from '@/features/budget/BudgetProvider';
 import { useCategories } from '@/features/categories/CategoriesProvider';
 import { useProfile } from '@/features/profile/ProfileProvider';
-import { answerBudgetQuestion, type BudgetAssistantMemory } from '@/features/assistant/offline-budget-assistant';
+import { chat, type ChatContext, type ChatMemory } from '@/features/adviser/chatbot/engine';
 import { adviserFacts, adviserPersona, adviserSeed } from '@/features/adviser/personas';
 import { useSettings } from '@/features/settings/SettingsProvider';
 import { consumeSkippedPanelRefresh } from '@/lib/panel-refresh';
@@ -409,7 +409,7 @@ export function HomeScreen() {
   const [insightIndex, setInsightIndex] = useState(0);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantInput, setAssistantInput] = useState('');
-  const [assistantMemory, setAssistantMemory] = useState<BudgetAssistantMemory>({});
+  const [assistantMemory, setAssistantMemory] = useState<ChatMemory>({});
   const [assistantMessages, setAssistantMessages] = useState<{ role: 'user' | 'assistant'; text: string }[]>([
     { role: 'assistant', text: 'Ask me about your spending or budget. I work locally using the data already in ExpenSense.' },
   ]);
@@ -484,18 +484,19 @@ export function HomeScreen() {
     return [...new Set(messages)];
   }, [allCategories, budgetsLoading, expenses, expensesLoading, persona, savedBudget, selectedMonthId]);
   const insight = insights[insightIndex % insights.length];
-  const assistantContext = useMemo(() => ({
-    current: analyticsForMonth(expenses, allCategories, selectedMonthId),
-    previous: analyticsForMonth(expenses, allCategories, previousMonth(selectedMonthId)),
-    categories: allCategories,
-    budget: savedBudget,
-  }), [allCategories, expenses, savedBudget, selectedMonthId]);
+  const assistantContext = useMemo<ChatContext>(() => {
+    const current = analyticsForMonth(expenses, allCategories, selectedMonthId);
+    const previous = analyticsForMonth(expenses, allCategories, previousMonth(selectedMonthId));
+    const today = todayLocalDate();
+    return { expenses, categories: allCategories, budget: savedBudget, current, previous, today, facts: adviserFacts({ current, previous, categories: allCategories, budget: savedBudget, today }) };
+  }, [allCategories, expenses, savedBudget, selectedMonthId]);
   const askAssistant = (suggestion?: string) => {
     const question = (suggestion ?? assistantInput).trim();
     if (!question) return;
-    const answer = answerBudgetQuestion(question, assistantContext, assistantMemory);
-    setAssistantMemory(answer.memory);
-    setAssistantMessages((current) => [...current, { role: 'user', text: question }, { role: 'assistant', text: persona.answer(answer.text, adviserSeed(current.length)) }]);
+    // Same on-device chatbot as the Adviser screen, condensed to one bubble here.
+    const reply = chat(question, assistantContext, assistantMemory, persona.id, adviserSeed(assistantMessages.length));
+    setAssistantMemory(reply.memory);
+    setAssistantMessages((current) => [...current, { role: 'user', text: question }, { role: 'assistant', text: reply.bubbles.join(' ') }]);
     setAssistantInput('');
   };
   const mascotDrift = useDrift({ x: 8, y: 10, rotate: 1.5, scale: 0.018, duration: 7200 });
