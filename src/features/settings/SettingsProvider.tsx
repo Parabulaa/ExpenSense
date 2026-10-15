@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { DEFAULT_ADVISER, isAdviserPersonaId, type AdviserPersonaId } from '@/features/adviser/personas';
+import { DEFAULT_ADVISER, isAdviserPersonaId, type AdviserIntensity, type AdviserPersonaId } from '@/features/adviser/personas';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 
 const STORAGE_KEY = 'expensense.settings.v1';
@@ -18,6 +18,8 @@ export type AppSettings = {
   themeChosen: boolean;
   /** Voice the mascot speaks in across the app. */
   adviserPersona: AdviserPersonaId;
+  /** How hard the adviser goes: gentle, normal or savage. */
+  adviserIntensity: AdviserIntensity;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -30,6 +32,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   themeMode: 'light',
   themeChosen: false,
   adviserPersona: DEFAULT_ADVISER,
+  adviserIntensity: 'medium',
 };
 
 type SettingsContextValue = {
@@ -59,6 +62,7 @@ function parseSettings(raw: string | null): AppSettings {
         : DEFAULT_SETTINGS.themeMode,
       themeChosen: parsed.themeChosen === true,
       adviserPersona: isAdviserPersonaId(parsed.adviserPersona) ? parsed.adviserPersona : DEFAULT_ADVISER,
+      adviserIntensity: parsed.adviserIntensity === 'low' || parsed.adviserIntensity === 'high' ? parsed.adviserIntensity : 'medium',
     };
   } catch {
     // Corrupt or hand-edited storage shouldn't brick the settings screen.

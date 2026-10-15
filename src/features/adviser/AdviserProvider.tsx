@@ -6,7 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon, AppText } from '@/components/common/ui';
 import { radii, shadow, spacing } from '@/constants/theme';
-import { adviserFacts, adviserPersona, adviserSeed, reactionFacts, type AdviserPersona } from '@/features/adviser/personas';
+import { withIntensity } from '@/features/adviser/intensity';
+import { adviserFacts, adviserPersona, adviserSeed, reactionFacts, type AdviserIntensity, type AdviserPersona } from '@/features/adviser/personas';
 import { analyticsForMonth, previousMonth } from '@/features/analytics/analytics';
 import { mascotImage, type MascotMood } from '@/features/analytics/mascot-mood';
 import { useBudgets } from '@/features/budget/BudgetProvider';
@@ -31,7 +32,16 @@ export function useAdviser(month = todayLocalDate().slice(0, 7)) {
   const current = useMemo(() => analyticsForMonth(expenses, allCategories, month), [allCategories, expenses, month]);
   const previous = useMemo(() => analyticsForMonth(expenses, allCategories, previousMonth(month)), [allCategories, expenses, month]);
   const facts = useMemo(() => adviserFacts({ current, previous, categories: allCategories, budget, today: todayLocalDate() }), [allCategories, budget, current, previous]);
-  return { persona, facts, current, previous, budget, setPersona: (id: AdviserPersona['id']) => updateSettings({ adviserPersona: id }) };
+  return {
+    persona,
+    intensity: settings.adviserIntensity,
+    facts,
+    current,
+    previous,
+    budget,
+    setPersona: (id: AdviserPersona['id']) => updateSettings({ adviserPersona: id }),
+    setIntensity: (value: AdviserIntensity) => updateSettings({ adviserIntensity: value }),
+  };
 }
 
 type Reaction = { key: number; persona: AdviserPersona; text: string; mood: MascotMood };
@@ -57,8 +67,10 @@ export function AdviserReactionProvider({ children }: PropsWithChildren) {
     const facts = reactionFacts({ expense, expenses, categories: allCategories, budget: budgets.find((item) => item.month === expense.transactionDate.slice(0, 7)) });
     const mood: MascotMood = facts.pushedOver || facts.big ? 'warning' : facts.small ? 'success' : 'tip';
     if (mood === 'warning') warningFeedback();
-    setReaction({ key: Date.now(), persona, text: persona.react(facts, adviserSeed(expense.amountCents)), mood });
-  }, [allCategories, budgets, expenses, settings.adviserPersona]);
+    const seed = adviserSeed(expense.amountCents);
+    const text = withIntensity(persona.react(facts, seed), persona.id, settings.adviserIntensity, facts.pushedOver || facts.big, seed);
+    setReaction({ key: Date.now(), persona, text, mood });
+  }, [allCategories, budgets, expenses, settings.adviserIntensity, settings.adviserPersona]);
 
   const dismiss = useCallback((key: number) => setReaction((current) => (current?.key === key ? null : current)), []);
   const value = useMemo(() => ({ reactToExpense }), [reactToExpense]);

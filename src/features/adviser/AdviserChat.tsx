@@ -9,7 +9,8 @@ import { radii, spacing } from '@/constants/theme';
 import { chat, type ChatContext, type ChatMemory } from '@/features/adviser/chatbot/engine';
 import { loadLearnedExamples, teach } from '@/features/adviser/chatbot/learning';
 import type { Intent } from '@/features/adviser/chatbot/training-data';
-import { adviserSeed, type AdviserPersona } from '@/features/adviser/personas';
+import { withIntensity } from '@/features/adviser/intensity';
+import { adviserSeed, isHarshSituation, type AdviserIntensity, type AdviserPersona } from '@/features/adviser/personas';
 import { mascotImage, type MascotMood } from '@/features/analytics/mascot-mood';
 import { makeStyles, useAdaptiveColor, useColors } from '@/features/settings/ThemeProvider';
 import { selectionFeedback, successFeedback, warningFeedback } from '@/lib/haptics';
@@ -21,7 +22,7 @@ type Choice = { label: string; intent?: Intent };
 const TYPING_MS: Record<AdviserPersona['id'], number> = { classic: 450, mom: 750, chill: 1000, bestie: 500, sergeant: 300, butler: 1200 };
 
 /** `compact` drops the header and scrolls the thread, for the Home sheet. */
-export function AdviserChat({ persona, context, compact = false }: { persona: AdviserPersona; context: ChatContext; compact?: boolean }) {
+export function AdviserChat({ persona, context, intensity, compact = false }: { persona: AdviserPersona; context: ChatContext; intensity: AdviserIntensity; compact?: boolean }) {
   const colors = useColors();
   const s = useStyles();
   const { tint, ink } = useAdaptiveColor();
@@ -63,8 +64,9 @@ export function AdviserChat({ persona, context, compact = false }: { persona: Ad
   // component per persona, so switching advisers starts a fresh chat.
   useEffect(() => {
     void loadLearnedExamples();
-    const opener = chat('hello', context, {}, persona.id, adviserSeed());
-    deliver([persona.say(context.facts, adviserSeed()), ...opener.bubbles.slice(0, 1)], opener.mood, opener.suggestions.map((label) => ({ label })));
+    const opener = chat('hello', context, {}, persona.id, adviserSeed(), undefined, intensity);
+    const headline = withIntensity(persona.say(context.facts, adviserSeed()), persona.id, intensity, isHarshSituation(context.facts.situation), adviserSeed());
+    deliver([headline, ...opener.bubbles.slice(0, 1)], opener.mood, opener.suggestions.map((label) => ({ label })));
     return clearTimers;
     // Runs once on mount; later data changes don't restart the conversation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -79,7 +81,7 @@ export function AdviserChat({ persona, context, compact = false }: { persona: Ad
     setMessages((items) => [...items.slice(-20), { id: (nextId.current += 1), role: 'user', text: value }]);
     setQuestion('');
     setChoices([]);
-    const reply = chat(forced ? lastQuestion.current : value, context, memory.current, persona.id, adviserSeed(nextId.current), forced);
+    const reply = chat(forced ? lastQuestion.current : value, context, memory.current, persona.id, adviserSeed(nextId.current), forced, intensity);
     memory.current = reply.memory;
     deliver(reply.bubbles, reply.mood, reply.didYouMean?.length ? reply.didYouMean : reply.suggestions.map((label) => ({ label })));
   };

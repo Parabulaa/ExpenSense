@@ -6,10 +6,12 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { FadeSlideIn, PressableScale, useDrift } from '@/components/common/motion';
 import { Screen } from '@/components/common/screen';
+import { SegmentedControl } from '@/components/common/segmented-control';
 import { AppIcon, AppText, BackButton, Card, ProgressBar } from '@/components/common/ui';
 import { radii, spacing } from '@/constants/theme';
 import { useAdviser } from '@/features/adviser/AdviserProvider';
-import { ADVISER_PERSONAS, adviserSeed, type AdviserFacts, type AdviserPersona } from '@/features/adviser/personas';
+import { INTENSITY_OPTIONS, withIntensity } from '@/features/adviser/intensity';
+import { ADVISER_PERSONAS, adviserSeed, isHarshSituation, type AdviserFacts, type AdviserPersona } from '@/features/adviser/personas';
 import { mascotImage, mascotMood } from '@/features/analytics/mascot-mood';
 import { AdviserChat } from '@/features/adviser/AdviserChat';
 import type { ChatContext } from '@/features/adviser/chatbot/engine';
@@ -41,7 +43,7 @@ export function AdviserScreen() {
   const s = useStyles();
   const { tint, ink } = useAdaptiveColor();
   const month = todayLocalDate().slice(0, 7);
-  const { persona, facts, current, previous, budget, setPersona } = useAdviser(month);
+  const { persona, intensity, facts, current, previous, budget, setPersona, setIntensity } = useAdviser(month);
   const { expenses, loading, revalidate } = useExpenses();
   const { allCategories } = useCategories();
   const { revalidate: revalidateBudgets } = useBudgets();
@@ -53,7 +55,7 @@ export function AdviserScreen() {
 
   const mood = mascotMood({ loading: loading && expenses.length === 0, current, previous, budget });
   const meter = moodMeter(facts);
-  const line = persona.say(facts, seed);
+  const line = withIntensity(persona.say(facts, seed), persona.id, intensity, isHarshSituation(facts.situation), seed);
   const challenge = useMemo(() => persona.challenge(expenses, todayLocalDate(), facts), [expenses, facts, persona]);
   const categoryRows = useMemo(() => (budget?.categoryBudgets ?? [])
     .filter((limit) => limit.amountCents > 0)
@@ -109,6 +111,15 @@ export function AdviserScreen() {
               <View style={s.speechTail} />
               <AppText variant="bodyMedium" style={s.speechText}>“{line}”</AppText>
             </Animated.View>
+            {persona.id === 'classic' ? null : (
+              <View style={s.intensity}>
+                <View style={s.intensityHead}>
+                  <AppText variant="small" style={s.kicker}>Intensity</AppText>
+                  <AppText variant="small" style={s.muted}>{intensity === 'low' ? 'Gentle, kind endings' : intensity === 'high' ? 'Savage, extra jabs' : 'As written'}</AppText>
+                </View>
+                <SegmentedControl size="sm" accessibilityLabel="Adviser intensity" options={INTENSITY_OPTIONS} value={intensity} onChange={(value) => { selectionFeedback(); void setIntensity(value); }} />
+              </View>
+            )}
           </Card>
         </FadeSlideIn>
 
@@ -151,7 +162,7 @@ export function AdviserScreen() {
 
         <FadeSlideIn index={4}>
           <Card>
-            <AdviserChat key={persona.id} persona={persona} context={chatContext} />
+            <AdviserChat key={`${persona.id}-${intensity}`} persona={persona} context={chatContext} intensity={intensity} />
           </Card>
         </FadeSlideIn>
 
@@ -199,6 +210,8 @@ const useStyles = makeStyles((colors) => ({
   speechTail: { position: 'absolute', top: -8, left: 44, width: 16, height: 16, backgroundColor: colors.pale, transform: [{ rotate: '45deg' }] },
   speechText: { fontSize: 16, lineHeight: 23, color: colors.text },
   section: { gap: spacing.md },
+  intensity: { gap: spacing.sm },
+  intensityHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   catRow: { gap: 6 },
   catHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   face: { fontSize: 18, lineHeight: 22 },

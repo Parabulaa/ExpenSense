@@ -10,6 +10,8 @@ import { formatPeso, percentOf } from '@/lib/format';
  */
 export type AdviserPersonaId = 'classic' | 'mom' | 'chill' | 'bestie' | 'sergeant' | 'butler';
 
+export type { AdviserIntensity } from '@/features/adviser/intensity';
+
 export type AdviserSituation = 'empty' | 'over' | 'near' | 'jump' | 'improving' | 'steady';
 
 export type AdviserFacts = {
@@ -318,6 +320,9 @@ export const ADVISER_PERSONAS: AdviserPersona[] = [classic, mom, chill, bestie, 
 export const DEFAULT_ADVISER: AdviserPersonaId = 'classic';
 export const isAdviserPersonaId = (value: unknown): value is AdviserPersonaId => ADVISER_PERSONAS.some((persona) => persona.id === value);
 export const adviserPersona = (id: AdviserPersonaId) => ADVISER_PERSONAS.find((persona) => persona.id === id) ?? classic;
+
+/** Situations where the adviser is delivering bad news. */
+export const isHarshSituation = (situation: AdviserSituation) => situation === 'over' || situation === 'jump' || situation === 'near';
 
 /** Changes a few times a day so lines vary without flickering on every render. */
 export const adviserSeed = (salt = 0) => Math.floor(Date.now() / (1000 * 60 * 60 * 3)) + salt;

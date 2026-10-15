@@ -1,3 +1,4 @@
+import { calmShouting, GENTLE, SAVAGE, softenLine, type AdviserIntensity } from '@/features/adviser/intensity';
 import type { AdviserFacts, AdviserPersonaId } from '@/features/adviser/personas';
 import type { MonthAnalytics } from '@/features/analytics/analytics';
 import type { MascotMood } from '@/features/analytics/mascot-mood';
@@ -112,7 +113,7 @@ function categoryStatus(ctx: ChatContext, categoryId: string) {
 
 /* ---------- answers ---------- */
 
-function answer(intent: Intent, question: string, ctx: ChatContext, memory: ChatMemory, persona: AdviserPersonaId, seed: number): Answer {
+function answer(intent: Intent, question: string, ctx: ChatContext, memory: ChatMemory, persona: AdviserPersonaId, seed: number, intensity: AdviserIntensity = 'medium'): Answer {
   const voice = VOICES[persona];
   const f = ctx.facts;
   const category = extractCategory(question, ctx.categories);
@@ -242,7 +243,7 @@ function answer(intent: Intent, question: string, ctx: ChatContext, memory: Chat
       if (small.length >= 5) points.push(`${small.length} tiny purchases. ${peso(sum(small))} gone, one small "treat" at a time.`);
       if (f.top && f.top.percent >= 40) points.push(`${f.top.percent}% of your money goes to ${f.top.label}. Just one category!`);
       if (!points.length) return { tone: 'good', mood: 'success', lines: [pick(voice.roastClean, seed)], suggestions: ['Am I doing well?', 'How can I save?'] };
-      return { tone: 'bad', mood: 'warning', lines: [pick(voice.roastIntro, seed), ...points.slice(0, 2)], suggestions: ['Roast me harder', 'How can I save?', 'Am I doing well?'] };
+      return { tone: 'bad', mood: 'warning', lines: [pick(voice.roastIntro, seed), ...points.slice(0, intensity === 'high' ? 3 : intensity === 'low' ? 1 : 2)], suggestions: ['Roast me harder', 'How can I save?', 'Am I doing well?'] };
     }
 
     case 'praise_me': {
@@ -261,7 +262,7 @@ function answer(intent: Intent, question: string, ctx: ChatContext, memory: Chat
 
 /* ---------- conversation ---------- */
 
-export function chat(question: string, ctx: ChatContext, memory: ChatMemory, persona: AdviserPersonaId, seed: number, forced?: Intent): ChatReply {
+export function chat(question: string, ctx: ChatContext, memory: ChatMemory, persona: AdviserPersonaId, seed: number, forced?: Intent, intensity: AdviserIntensity = 'medium'): ChatReply {
   const voice = VOICES[persona];
   const prediction = classifier().predict(question);
   const amount = extractAmount(question);
@@ -283,14 +284,20 @@ export function chat(question: string, ctx: ChatContext, memory: ChatMemory, per
     return { bubbles: [pick(voice.confused, seed), 'Did you mean one of these?'], mood: 'confused', memory, suggestions: [], didYouMean, intent: 'out_of_scope' };
   }
 
-  const result = answer(intent, question, ctx, memory, persona, seed);
+  const result = answer(intent, question, ctx, memory, persona, seed, intensity);
+  const dial = persona === 'classic' ? 'medium' : intensity;
+  const bad = result.tone === 'bad';
   const conversational = ['greeting', 'thanks', 'who_are_you', 'my_name', 'how_are_you', 'out_of_scope', 'help'].includes(intent) || Boolean(result.memory?.awaitingAmount);
-  const open = conversational || intent === 'roast_me' || intent === 'praise_me' ? '' : pick(voice.open[result.tone], seed);
-  const close = conversational ? '' : pick(voice.close[result.tone], seed + 1);
-  let bubbles = voice.chatty ? [open, ...result.lines, close].filter(Boolean) : [result.lines.join(' ')];
+  // Low swaps harsh openers and closers for kind ones; High adds an extra jab.
+  const openTone: Tone = dial === 'low' && bad ? 'neutral' : result.tone;
+  const open = conversational || intent === 'roast_me' || intent === 'praise_me' ? '' : pick(voice.open[openTone], seed);
+  const close = conversational ? '' : dial === 'low' && bad ? pick(GENTLE[persona], seed + 1) : pick(voice.close[result.tone], seed + 1);
+  const jab = dial === 'high' && bad && !conversational ? pick(SAVAGE[persona], seed + 2) : '';
+  let bubbles = voice.chatty ? [open, ...result.lines, jab, close].filter(Boolean) : [result.lines.join(' ')];
   // Keep it to a few bubbles: merge the opener into the first fact when long.
-  if (bubbles.length > 4) bubbles = [`${bubbles[0]} ${bubbles[1]}`, ...bubbles.slice(2)];
-  if (voice.shout) bubbles = bubbles.map((text) => text.toUpperCase());
+  while (bubbles.length > (dial === 'high' ? 5 : 4)) bubbles = [`${bubbles[0]} ${bubbles[1]}`, ...bubbles.slice(2)];
+  if (dial === 'low') bubbles = bubbles.map((text) => softenLine(calmShouting(text)));
+  else if (voice.shout) bubbles = bubbles.map((text) => text.toUpperCase());
 
   return {
     bubbles,
