@@ -12,7 +12,7 @@ import { useAdviser } from '@/features/adviser/AdviserProvider';
 import { INTENSITY_OPTIONS, withIntensity } from '@/features/adviser/intensity';
 import { adviserSeed, isHarshSituation, type AdviserFacts, type AdviserPersona } from '@/features/adviser/personas';
 import { PersonaMascot } from '@/features/adviser/PersonaMascot';
-import { PersonaPicker } from '@/features/adviser/PersonaPicker';
+import { PersonaPickerSheet } from '@/features/adviser/PersonaPicker';
 import { mascotMood } from '@/features/analytics/mascot-mood';
 import { AdviserChat } from '@/features/adviser/AdviserChat';
 import type { ChatContext } from '@/features/adviser/chatbot/engine';
@@ -49,6 +49,7 @@ export function AdviserScreen() {
   const { revalidate: revalidateBudgets } = useBudgets();
   const { displayName } = useProfile();
   const [seed, setSeed] = useState(() => adviserSeed());
+  const [pickerOpen, setPickerOpen] = useState(false);
   const drift = useDrift({ x: 6, y: 8, rotate: 1.5, scale: 0.02, duration: 6400 });
 
   useFocusEffect(useCallback(() => { void revalidate(); void revalidateBudgets(); }, [revalidate, revalidateBudgets]));
@@ -81,13 +82,9 @@ export function AdviserScreen() {
             <BackButton />
             <View style={{ flex: 1 }}>
               <AppText variant="title" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>Your Adviser</AppText>
-              <AppText style={s.muted}>Pick who keeps your spending honest.</AppText>
+              <AppText style={s.muted}>Your money coach, with attitude.</AppText>
             </View>
           </View>
-        </FadeSlideIn>
-
-        <FadeSlideIn index={1}>
-          <PersonaPicker value={persona.id} onChange={choose} />
         </FadeSlideIn>
 
         <FadeSlideIn index={2}>
@@ -100,7 +97,13 @@ export function AdviserScreen() {
                 </Animated.View>
               </PressableScale>
               <View style={{ flex: 1, gap: 2 }}>
-                <AppText variant="h2">{persona.name}</AppText>
+                <View style={s.nameRow}>
+                  <AppText variant="h2" numberOfLines={1} style={{ flexShrink: 1 }}>{persona.name}</AppText>
+                  <PressableScale accessibilityRole="button" accessibilityLabel="Change adviser" onPress={() => { selectionFeedback(); setPickerOpen(true); }} style={s.changeButton}>
+                    <AppIcon name="swap-horizontal" size={16} color={colors.deepForest} />
+                    <AppText variant="small" style={s.changeText}>Change</AppText>
+                  </PressableScale>
+                </View>
                 <AppText variant="small" style={s.muted}>{persona.tagline}</AppText>
                 <View style={s.meterRow}>
                   <AppText variant="small" style={s.meterLabel}>Mood</AppText>
@@ -169,6 +172,7 @@ export function AdviserScreen() {
 
         <AppText variant="small" style={[s.muted, { textAlign: 'center' }]}>All advisers use the same numbers. Only the attitude changes.</AppText>
       </View>
+      <PersonaPickerSheet visible={pickerOpen} value={persona.id} onChange={choose} onClose={() => setPickerOpen(false)} />
     </Screen>
   );
 }
@@ -188,6 +192,9 @@ const useStyles = makeStyles((colors) => ({
   speechTail: { position: 'absolute', top: -8, left: 44, width: 16, height: 16, backgroundColor: colors.pale, transform: [{ rotate: '45deg' }] },
   speechText: { fontSize: 16, lineHeight: 23, color: colors.text },
   section: { gap: spacing.md },
+  nameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  changeButton: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.pale, paddingHorizontal: 10, paddingVertical: 5 },
+  changeText: { color: colors.deepForest, fontFamily: 'JakartaBold' },
   intensity: { gap: spacing.sm },
   intensityHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   catRow: { gap: 6 },

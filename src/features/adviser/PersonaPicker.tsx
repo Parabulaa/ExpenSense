@@ -1,39 +1,51 @@
 import { useEffect, useRef } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import Animated, { interpolateColor, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { FadeInDown, interpolateColor, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 
+import { DraggableBottomSheet } from '@/components/common/draggable-bottom-sheet';
 import { AppText } from '@/components/common/ui';
 import { radii, spacing } from '@/constants/theme';
 import { ADVISER_PERSONAS, type AdviserPersona, type AdviserPersonaId } from '@/features/adviser/personas';
 import { PersonaMascot } from '@/features/adviser/PersonaMascot';
 import { makeStyles, useAdaptiveColor, useColors } from '@/features/settings/ThemeProvider';
 
-const CARD_WIDTH = 150;
-const GAP = spacing.md;
+/** Long enough to see the new choice light up before the panel closes. */
+const CLOSE_DELAY_MS = 320;
 
 /**
- * Horizontal persona picker for the top of the Adviser screen. The chosen
- * card springs up and lights its border; the row scrolls it into view.
+ * The panel for switching advisers. The current one is marked; tapping
+ * another springs it up, lights its border, then closes the panel.
  */
-export function PersonaPicker({ value, onChange }: { value: AdviserPersonaId; onChange: (persona: AdviserPersona) => void }) {
+export function PersonaPickerSheet({ visible, value, onChange, onClose }: { visible: boolean; value: AdviserPersonaId; onChange: (persona: AdviserPersona) => void; onClose: () => void }) {
   const s = useStyles();
-  const scroller = useRef<ScrollView>(null);
-  const index = ADVISER_PERSONAS.findIndex((item) => item.id === value);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current); }, []);
 
-  useEffect(() => {
-    scroller.current?.scrollTo({ x: Math.max(0, index * (CARD_WIDTH + GAP) - CARD_WIDTH / 2), animated: true });
-  }, [index]);
+  const choose = (persona: AdviserPersona) => {
+    if (persona.id === value) { onClose(); return; }
+    onChange(persona);
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(onClose, CLOSE_DELAY_MS);
+  };
 
   return (
-    <ScrollView ref={scroller} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.row} accessibilityRole="radiogroup" accessibilityLabel="Choose your adviser">
-      {ADVISER_PERSONAS.map((persona) => (
-        <PersonaCard key={persona.id} persona={persona} selected={persona.id === value} onPress={() => onChange(persona)} />
-      ))}
-    </ScrollView>
+    <DraggableBottomSheet visible={visible} onClose={onClose}>
+      <View style={s.head}>
+        <AppText variant="h2">Choose your adviser</AppText>
+        <AppText variant="small" style={s.muted}>Same numbers, different attitude.</AppText>
+      </View>
+      <ScrollView style={s.list} contentContainerStyle={s.listContent} showsVerticalScrollIndicator={false} accessibilityRole="radiogroup">
+        {visible ? ADVISER_PERSONAS.map((persona, index) => (
+          <Animated.View key={persona.id} entering={FadeInDown.delay(index * 45).duration(260)}>
+            <PersonaOption persona={persona} selected={persona.id === value} onPress={() => choose(persona)} />
+          </Animated.View>
+        )) : null}
+      </ScrollView>
+    </DraggableBottomSheet>
   );
 }
 
-function PersonaCard({ persona, selected, onPress }: { persona: AdviserPersona; selected: boolean; onPress: () => void }) {
+function PersonaOption({ persona, selected, onPress }: { persona: AdviserPersona; selected: boolean; onPress: () => void }) {
   const s = useStyles();
   const colors = useColors();
   const { tint } = useAdaptiveColor();
@@ -47,12 +59,12 @@ function PersonaCard({ persona, selected, onPress }: { persona: AdviserPersona; 
 
   const line = colors.line;
   const ring = colors.success;
-  const cardStyle = useAnimatedStyle(() => ({
+  const rowStyle = useAnimatedStyle(() => ({
     borderColor: interpolateColor(active.value, [0, 1], [line, ring]),
-    transform: [{ translateY: active.value * -4 }, { scale: 1 + active.value * 0.03 - pressed.value * 0.04 }],
+    transform: [{ scale: 1 + active.value * 0.015 - pressed.value * 0.03 }],
   }));
-  const mascotStyle = useAnimatedStyle(() => ({ transform: [{ scale: 0.9 + active.value * 0.12 }, { rotate: `${active.value * -4}deg` }] }));
-  const checkStyle = useAnimatedStyle(() => ({ opacity: active.value, transform: [{ scale: 0.4 + active.value * 0.6 }] }));
+  const mascotStyle = useAnimatedStyle(() => ({ transform: [{ scale: 0.92 + active.value * 0.1 }, { rotate: `${active.value * -5}deg` }] }));
+  const checkStyle = useAnimatedStyle(() => ({ opacity: active.value, transform: [{ scale: 0.5 + active.value * 0.5 }] }));
 
   return (
     <Pressable
@@ -63,29 +75,37 @@ function PersonaCard({ persona, selected, onPress }: { persona: AdviserPersona; 
       onPressIn={() => { pressed.value = withTiming(1, { duration: 90 }); }}
       onPressOut={() => { pressed.value = withTiming(0, { duration: 160 }); }}
     >
-      <Animated.View style={[s.card, cardStyle]}>
+      <Animated.View style={[s.option, rowStyle]}>
         <View style={[s.portrait, { backgroundColor: tint(persona.accent) }]}>
           <Animated.View style={mascotStyle}>
-            <PersonaMascot persona={persona.id} mood="tip" size={84} />
-          </Animated.View>
-          <Animated.View style={[s.check, checkStyle]}>
-            <AppText variant="small" style={s.checkText}>Selected</AppText>
+            <PersonaMascot persona={persona.id} mood="tip" size={72} />
           </Animated.View>
         </View>
-        <AppText variant="h3" numberOfLines={1}>{persona.name}</AppText>
-        <AppText variant="small" style={s.tagline} numberOfLines={2}>{persona.tagline}</AppText>
-        <AppText variant="small" style={s.sample} numberOfLines={3}>“{persona.sample}”</AppText>
+        <View style={s.copy}>
+          <View style={s.titleRow}>
+            <AppText variant="h3" numberOfLines={1} style={{ flexShrink: 1 }}>{persona.name}</AppText>
+            <Animated.View style={[s.check, checkStyle]}>
+              <AppText variant="small" style={s.checkText}>Current</AppText>
+            </Animated.View>
+          </View>
+          <AppText variant="small" style={s.muted} numberOfLines={1}>{persona.tagline}</AppText>
+          <AppText variant="small" style={s.sample} numberOfLines={2}>“{persona.sample}”</AppText>
+        </View>
       </Animated.View>
     </Pressable>
   );
 }
 
 const useStyles = makeStyles((colors) => ({
-  row: { gap: GAP, paddingVertical: spacing.sm, paddingHorizontal: 2 },
-  card: { width: CARD_WIDTH, minHeight: 236, gap: 4, padding: spacing.md, borderRadius: radii.lg, borderWidth: 2, backgroundColor: colors.surface },
-  portrait: { height: 96, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginBottom: 4 },
-  check: { position: 'absolute', top: 6, right: 6, borderRadius: radii.pill, backgroundColor: colors.success, paddingHorizontal: 8, paddingVertical: 2 },
+  head: { gap: 2, marginBottom: spacing.md },
+  muted: { color: colors.muted },
+  list: { maxHeight: 520 },
+  listContent: { gap: spacing.sm, paddingBottom: spacing.sm },
+  option: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.sm, borderRadius: radii.lg, borderWidth: 2, backgroundColor: colors.surface },
+  portrait: { width: 80, height: 80, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  copy: { flex: 1, gap: 2 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  check: { borderRadius: radii.pill, backgroundColor: colors.success, paddingHorizontal: 8, paddingVertical: 2 },
   checkText: { color: colors.white, fontFamily: 'JakartaBold', fontSize: 10, lineHeight: 14 },
-  tagline: { color: colors.muted },
   sample: { color: colors.forest, fontStyle: 'italic' },
 }));
