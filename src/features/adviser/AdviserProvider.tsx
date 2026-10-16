@@ -1,21 +1,21 @@
-import { Image } from 'expo-image';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 import { Pressable, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AppIcon, AppText } from '@/components/common/ui';
+import { AppText } from '@/components/common/ui';
 import { radii, shadow, spacing } from '@/constants/theme';
 import { withIntensity } from '@/features/adviser/intensity';
 import { adviserFacts, adviserPersona, adviserSeed, reactionFacts, type AdviserIntensity, type AdviserPersona } from '@/features/adviser/personas';
 import { analyticsForMonth, previousMonth } from '@/features/analytics/analytics';
-import { mascotImage, type MascotMood } from '@/features/analytics/mascot-mood';
+import { PersonaMascot } from '@/features/adviser/PersonaMascot';
+import type { MascotMood } from '@/features/analytics/mascot-mood';
 import { useBudgets } from '@/features/budget/BudgetProvider';
 import { useCategories } from '@/features/categories/CategoriesProvider';
 import { useExpenses } from '@/features/expenses/ExpensesProvider';
 import type { Expense } from '@/features/expenses/types';
 import { todayLocalDate } from '@/features/expenses/validation';
-import { makeStyles, useAdaptiveColor, useColors } from '@/features/settings/ThemeProvider';
+import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 import { useSettings } from '@/features/settings/SettingsProvider';
 import { warningFeedback } from '@/lib/haptics';
 
@@ -86,7 +86,6 @@ export function AdviserReactionProvider({ children }: PropsWithChildren) {
 function ReactionBubble({ reaction, onDismiss }: { reaction: Reaction; onDismiss: (key: number) => void }) {
   const styles = useStyles();
   const colors = useColors();
-  const { tint, ink } = useAdaptiveColor();
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
   const progress = useSharedValue(reduced ? 1 : 0);
@@ -114,10 +113,7 @@ function ReactionBubble({ reaction, onDismiss }: { reaction: Reaction; onDismiss
       <Animated.View style={[styles.card, cardStyle]}>
         <Pressable accessibilityRole="alert" accessibilityLabel={`${reaction.persona.name} says: ${reaction.text}. Tap to dismiss.`} onPress={() => onDismiss(key)} style={styles.row}>
           <Animated.View style={[styles.mascotWrap, mascotStyle]}>
-            <Image source={mascotImage[reaction.mood]} contentFit="contain" style={styles.mascot} />
-            <View style={[styles.badge, { backgroundColor: tint(reaction.persona.accent) }]}>
-              <AppIcon name={reaction.persona.icon} size={14} color={ink('#173D2B')} />
-            </View>
+            <PersonaMascot persona={reaction.persona.id} mood={reaction.mood} size={64} />
           </Animated.View>
           <View style={styles.bubble}>
             <AppText variant="small" style={[styles.name, { color: colors.muted }]}>{reaction.persona.name}</AppText>

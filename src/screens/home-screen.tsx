@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, useWindowDimensions, View } from 'react-native';
@@ -27,7 +26,8 @@ import { useBottomNavInset } from '@/components/navigation/bottom-navigation';
 import { radii, shadow, spacing } from '@/constants/theme';
 import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 import { analyticsForMonth, mascotInsight, previousMonth } from '@/features/analytics/analytics';
-import { mascotImage, mascotMood } from '@/features/analytics/mascot-mood';
+import { mascotMood } from '@/features/analytics/mascot-mood';
+import { PersonaMascot } from '@/features/adviser/PersonaMascot';
 import {
   dashboardPeriods,
   MAX_DASHBOARD_CATEGORIES,
@@ -590,7 +590,7 @@ export function HomeScreen() {
               always reserves the space the mascot occupies. The bubble takes
               the remaining width, which keeps it clear of the greeting above.
             */}
-            <View style={[styles.insightArea, { height: mascotSize }]}>
+            <TourTarget id="adviser" style={[styles.insightArea, { height: mascotSize }]}>
               <PressableScale
                 accessibilityRole="button"
                 accessibilityLabel={`${insight} Open offline budget assistant.`}
@@ -604,11 +604,11 @@ export function HomeScreen() {
               <Animated.View style={[styles.mascotWrap, { width: mascotSize, height: mascotSize }, mascotDrift]}>
                 <Pressable accessibilityRole="button" accessibilityLabel="Mascot. Tap for another insight." onPress={pokeMascot} style={styles.heroMascot}>
                   <Animated.View style={[styles.heroMascot, bounceStyle]}>
-                    <Image source={mascotImage[mood]} contentFit="contain" transition={180} style={styles.heroMascot} />
+                    <PersonaMascot persona={persona.id} mood={mood} size={mascotSize} />
                   </Animated.View>
                 </Pressable>
               </Animated.View>
-            </View>
+            </TourTarget>
           </View>
         </FadeSlideIn>
 

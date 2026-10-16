@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { View } from 'react-native';
@@ -12,7 +11,8 @@ import { radii, spacing } from '@/constants/theme';
 import { useAdviser } from '@/features/adviser/AdviserProvider';
 import { INTENSITY_OPTIONS, withIntensity } from '@/features/adviser/intensity';
 import { ADVISER_PERSONAS, adviserSeed, isHarshSituation, type AdviserFacts, type AdviserPersona } from '@/features/adviser/personas';
-import { mascotImage, mascotMood } from '@/features/analytics/mascot-mood';
+import { PersonaMascot } from '@/features/adviser/PersonaMascot';
+import { mascotMood } from '@/features/analytics/mascot-mood';
 import { AdviserChat } from '@/features/adviser/AdviserChat';
 import type { ChatContext } from '@/features/adviser/chatbot/engine';
 import { useBudgets } from '@/features/budget/BudgetProvider';
@@ -91,10 +91,7 @@ export function AdviserScreen() {
             <View style={s.heroTop}>
               <PressableScale accessibilityRole="button" accessibilityLabel={`${persona.name}. Tap for another line.`} onPress={() => { selectionFeedback(); setSeed((value) => value + 1); }}>
                 <Animated.View style={[s.mascotWrap, drift]}>
-                  <Image source={mascotImage[mood]} contentFit="contain" transition={180} style={s.mascot} />
-                  <View style={[s.badge, { backgroundColor: tint(persona.accent) }]}>
-                    <AppIcon name={persona.icon} size={18} color={ink('#173D2B')} />
-                  </View>
+                  <PersonaMascot persona={persona.id} mood={mood} size={108} />
                 </Animated.View>
               </PressableScale>
               <View style={{ flex: 1, gap: 2 }}>
@@ -177,7 +174,7 @@ export function AdviserScreen() {
                 <PressableScale accessibilityRole="radio" accessibilityState={{ selected }} accessibilityLabel={`${item.name}. ${item.tagline}`} onPress={() => choose(item)} style={[s.personaCard, selected && s.personaSelected]}>
                   <View style={s.personaHead}>
                     <View style={[s.personaIcon, { backgroundColor: tint(item.accent) }]}>
-                      <AppIcon name={item.icon} size={20} color={ink('#173D2B')} />
+                      <PersonaMascot persona={item.id} mood="tip" size={68} />
                     </View>
                     {selected ? <AppIcon name="check-circle" size={20} color={colors.success} /> : null}
                   </View>
@@ -226,6 +223,6 @@ const useStyles = makeStyles((colors) => ({
   personaCard: { gap: 4, padding: spacing.md, borderRadius: radii.lg, borderWidth: 2, borderColor: colors.line, backgroundColor: colors.surface, minHeight: 172 },
   personaSelected: { borderColor: colors.success },
   personaHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  personaIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  personaIcon: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   sample: { color: colors.forest, fontStyle: 'italic', marginTop: 4 },
 }));

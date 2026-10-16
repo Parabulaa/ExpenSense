@@ -34,6 +34,7 @@ import { selectionFeedback } from '@/lib/haptics';
 import { appTourSeen, markAppTourSeen } from './tour-status';
 
 export type TourTargetId =
+  | 'adviser'
   | 'summary'
   | 'nav-scan'
   | 'nav-transactions'
@@ -54,6 +55,12 @@ const STEPS: TourStep[] = [
     title: 'Welcome to ExpenSense',
     body: 'Here’s a quick tour of where everything lives. It takes about 30 seconds.',
     mascot: assets.mascotSuccess,
+  },
+  {
+    target: 'adviser',
+    title: 'Meet your Financial Adviser',
+    body: 'Tap the mascot’s speech bubble to chat about your money. Pick a personality like Strict Mom or Chill Guy, and set how intense they are, in Profile → Financial Adviser.',
+    mascot: assets.mascotTip,
   },
   {
     target: 'summary',

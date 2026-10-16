@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import { useEffect, useRef, useState } from 'react';
 import { Keyboard, ScrollView, TextInput, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp, LinearTransition, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
@@ -11,8 +10,9 @@ import { loadLearnedExamples, teach } from '@/features/adviser/chatbot/learning'
 import type { Intent } from '@/features/adviser/chatbot/training-data';
 import { withIntensity } from '@/features/adviser/intensity';
 import { adviserSeed, isHarshSituation, type AdviserIntensity, type AdviserPersona } from '@/features/adviser/personas';
-import { mascotImage, type MascotMood } from '@/features/analytics/mascot-mood';
-import { makeStyles, useAdaptiveColor, useColors } from '@/features/settings/ThemeProvider';
+import { PersonaMascot } from '@/features/adviser/PersonaMascot';
+import type { MascotMood } from '@/features/analytics/mascot-mood';
+import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 import { selectionFeedback, successFeedback, warningFeedback } from '@/lib/haptics';
 
 type Message = { id: number; role: 'user' | 'adviser'; text: string };
@@ -25,7 +25,6 @@ const TYPING_MS: Record<AdviserPersona['id'], number> = { classic: 450, mom: 750
 export function AdviserChat({ persona, context, intensity, compact = false }: { persona: AdviserPersona; context: ChatContext; intensity: AdviserIntensity; compact?: boolean }) {
   const colors = useColors();
   const s = useStyles();
-  const { tint, ink } = useAdaptiveColor();
   const [messages, setMessages] = useState<Message[]>([]);
   const [typing, setTyping] = useState(false);
   const [mood, setMood] = useState<MascotMood>('tip');
@@ -95,10 +94,7 @@ export function AdviserChat({ persona, context, intensity, compact = false }: { 
   return (
     <View style={s.wrap}>
       {compact ? null : <View style={s.header}>
-        <View>
-          <Image source={mascotImage[mood]} contentFit="contain" transition={200} style={s.avatar} />
-          <View style={[s.badge, { backgroundColor: tint(persona.accent) }]}><AppIcon name={persona.icon} size={11} color={ink('#173D2B')} /></View>
-        </View>
+        <PersonaMascot persona={persona.id} mood={mood} size={52} />
         <View style={{ flex: 1 }}>
           <AppText variant="h3">Chat with {persona.id === 'classic' ? 'your adviser' : persona.name}</AppText>
           <AppText variant="small" style={s.status}>{typing ? 'typing…' : 'On-device · uses your real numbers'}</AppText>
