@@ -440,9 +440,24 @@ export function HomeScreen() {
     return largest === 0 ? totals : totals.map((total) => Math.max(0.12, total / largest));
   }, [periodExpenses, range.buckets]);
   // Budgets are monthly category limits. A month uses its own; a year adds up
-  // each of its months; a week has no budget of its own.
+  // each of its months; a week gets each day's share of its month's limits.
   const budget = useMemo(() => {
-    if (period === 'Week') return null;
+    if (period === 'Week') {
+      let limitCents = 0;
+      const [y, m, d] = range.start.split('-').map(Number);
+      for (let day = 0; day < 7; day += 1) {
+        const date = new Date(y, m - 1, d + day);
+        const monthId = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+        limitCents += budgetUsage(budgets.find((item) => item.month === monthId), []).limitCents / daysInMonth;
+      }
+      // Spending counts against the limits of the month it fell in.
+      const spentCents = periodExpenses.reduce((sum, expense) => {
+        const limited = budgets.find((item) => item.month === expense.transactionDate.slice(0, 7))?.categoryBudgets.some((limit) => limit.categoryId === expense.categoryId && limit.amountCents > 0);
+        return limited ? sum + expense.amountCents : sum;
+      }, 0);
+      return { limitCents: Math.round(limitCents), spentCents };
+    }
     const months = period === 'Month' ? [range.month] : Array.from({ length: 12 }, (_, index) => `${range.start.slice(0, 4)}-${String(index + 1).padStart(2, '0')}`);
     return months.reduce((total, monthId) => {
       const usage = budgetUsage(budgets.find((item) => item.month === monthId), periodExpenses.filter((expense) => expense.transactionDate.startsWith(monthId)));
@@ -452,11 +467,9 @@ export function HomeScreen() {
   const hasBudget = Boolean(budget && budget.limitCents > 0);
   const usage = budget && hasBudget ? percentOf(budget.spentCents, budget.limitCents) ?? 0 : 0;
   const remainingCents = budget ? budget.limitCents - budget.spentCents : 0;
-  const budgetCaption = period === 'Week'
-      ? 'Category budgets are tracked monthly'
-      : hasBudget && budget
-        ? `${formatCents(budget.spentCents)} of ${formatCents(budget.limitCents)} budgeted`
-        : 'No category budgets set';
+  const budgetCaption = hasBudget && budget
+    ? `${formatCents(budget.spentCents)} of ${formatCents(budget.limitCents)} ${period === 'Week' ? 'weekly share' : 'budgeted'}`
+    : 'No category budgets set';
   // Shares the Phase 7 analytics pipeline with the Insights screen, so the
   // mascot can never contradict what Analytics reports.
   const insights = useMemo(() => {
@@ -665,14 +678,13 @@ export function HomeScreen() {
               <SparkBars key={`${period}-${offset}`} bars={bars} />
             </SlideSwap>
 
-            {hasBudget && !budgetsLoading && !expensesLoading ? (
-              <View style={styles.progressRow}>
-                <ProgressBar value={Math.min(100, usage)} height={14} />
-                <AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit style={[styles.usageText, usage > 100 && { color: colors.danger }]}>
-                  {usage > 100 ? `Over by ${formatCents(Math.abs(remainingCents))}` : `${usage}% used`}
-                </AppText>
-              </View>
-            ) : null}
+            {/* Always rendered so Week, Month and Year keep the same card height. */}
+            <View style={styles.progressRow}>
+              <ProgressBar value={hasBudget && !budgetsLoading && !expensesLoading ? Math.min(100, usage) : 0} height={14} />
+              <AppText variant="h3" numberOfLines={1} adjustsFontSizeToFit style={[styles.usageText, hasBudget && usage > 100 && { color: colors.danger }]}>
+                {budgetsLoading || expensesLoading ? '' : !hasBudget ? 'No budget' : usage > 100 ? `Over by ${formatCents(Math.abs(remainingCents))}` : `${usage}% used`}
+              </AppText>
+            </View>
             {loadError ? <AppText variant="small" style={styles.dataError}>Expense data could not be refreshed.</AppText> : null}
           </Card>
           </TourTarget>

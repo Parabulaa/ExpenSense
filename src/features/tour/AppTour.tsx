@@ -248,9 +248,10 @@ function TourOverlay({
     onNext();
   };
 
-  // Buttons get a circle centred on them; the wide summary card keeps a
-  // rounded rectangle, since a circle around it would cover half the screen.
-  const round = current.target !== 'summary';
+  // Buttons get a circle centred on them; the wide summary card and the
+  // adviser's bubble-and-mascot keep a snug rounded rectangle, since a circle
+  // around them would cover half the screen.
+  const round = current.target !== 'summary' && current.target !== 'adviser';
   let spot: (Rect & { radius: number }) | null = null;
   if (hole && round) {
     const diameter = Math.max(hole.width, hole.height) + SPOTLIGHT_PADDING * 2;
