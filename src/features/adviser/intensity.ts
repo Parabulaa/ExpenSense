@@ -8,9 +8,9 @@ import type { AdviserPersonaId } from '@/features/adviser/personas';
 export type AdviserIntensity = 'low' | 'medium' | 'high';
 
 export const INTENSITY_OPTIONS: { value: AdviserIntensity; label: string }[] = [
-  { value: 'low', label: '🔈 Low' },
-  { value: 'medium', label: '🔉 Medium' },
-  { value: 'high', label: '🔊 High' },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
 ];
 
 /** Ends bad news gently at Low. */
@@ -18,7 +18,7 @@ export const GENTLE: Record<AdviserPersonaId, string[]> = {
   classic: ['You can get back on track.'],
   mom: ['But I know you’ll do better, anak.', 'It’s okay. We fix it together.', 'Eat well and try again tomorrow.'],
   chill: ['Totally fixable, no pressure.', 'Small steps, you got this.'],
-  bestie: ['Still proud of you though 🫶', 'We’ll bounce back, promise.'],
+  bestie: ['Still proud of you though', 'We’ll bounce back, promise.'],
   sergeant: ['Regroup and try again, recruit.', 'Mistakes happen. Learn and move on.'],
   butler: ['Nothing that cannot be remedied.', 'A minor setback, easily corrected.'],
 };
@@ -28,7 +28,7 @@ export const SAVAGE: Record<AdviserPersonaId, string[]> = {
   classic: ['This needs attention now.'],
   mom: ['I’m telling your Tita at the reunion.', 'This is why we can’t have nice things!', 'When I was your age I saved EVERYTHING.', 'Don’t talk to me until you cook at home.'],
   chill: ['Okay, not gonna lie, that one stung a little.', 'Even I can’t chill about this one.'],
-  bestie: ['Bestie this is NOT the plot 💀', 'I’m screaming. Crying. Throwing up. 😭', 'Your wallet just filed a complaint.'],
+  bestie: ['Bestie this is NOT the plot', 'I’m screaming. Crying. Throwing up.', 'Your wallet just filed a complaint.'],
   sergeant: ['YOU CALL THAT DISCIPLINE?!', 'I’VE SEEN BETTER BUDGETS FROM A GOLDFISH!', 'GIVE ME FIFTY NO-SPEND DAYS!'],
   butler: ['I’ve taken the liberty of hiding your credit card.', 'Even the silverware is disappointed.', 'Shall I sell the second car, then?'],
 };

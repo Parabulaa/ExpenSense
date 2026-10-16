@@ -222,7 +222,7 @@ const chill: AdviserPersona = {
     ? pick([`That nudged ${r.categoryLabel} over the limit. No stress, just maybe pause it there.`], seed)
     : r.big ? pick([`${peso(r.amountCents)} at ${r.merchant}. Treat yourself… once.`, 'Big one. Hope it sparks joy.'], seed)
     : pick(['Logged. Easy.', `Got it. ${r.categoryLeftCents !== null ? `${peso(r.categoryLeftCents)} left in ${r.categoryLabel}.` : 'We cool.'}`, 'Noted, my guy.'], seed),
-  answer: (text, seed) => `${pick(['So, ', 'Alright, ', 'Okay so, '], seed)}${text.charAt(0).toLowerCase()}${text.slice(1)} ${pick(['No stress.', 'All good.', '🤙'], seed + 1)}`,
+  answer: (text, seed) => `${pick(['So, ', 'Alright, ', 'Okay so, '], seed)}${text.charAt(0).toLowerCase()}${text.slice(1)} ${pick(['No stress.', 'All good.', 'Easy.'], seed + 1)}`,
   challenge: (expenses, today) => ({ title: 'Log 5 days this week', detail: 'Just keep tabs. Record something on 5 of the last 7 days.', icon: 'notebook-check-outline', goal: 5, progress: Math.min(5, daysWith(expenses, lastDays(today, 7)).size) }),
 };
 
@@ -235,20 +235,20 @@ const bestie: AdviserPersona = {
   sample: 'WAIT you stayed under budget?? Main character energy 💅',
   say: (f, seed) => {
     switch (f.situation) {
-      case 'empty': return pick(['New month, new us!! Let’s gooo ✨', 'Fresh start bestie, we are SO ready.'], seed);
-      case 'over': return f.over[0] ? pick([`Okay bestie, ${f.over[0].label} is ${peso(f.over[0].overCents)} over. Not a slay. Comeback arc starts NOW 💪`, `${f.over[0].label} went over but I still believe in you!! Reset time.`], seed) : 'We went over a lil. Villain era is over, savings era begins!';
-      case 'jump': return pick([`Spending’s up ${f.changePercent}%… babe, we talked about this 😭`, `${f.changePercent}% more than last month?? Let’s be so for real.`], seed);
-      case 'near': return pick([`${f.near[0].label} is at ${f.near[0].usedPercent}%! Hold the line queen 👑`], seed);
-      case 'improving': return pick([`${Math.abs(f.changePercent ?? 0)}% less than last month?!? ICONIC. Obsessed.`, 'Spending LESS than last month. Main character energy 💅'], seed);
-      default: return f.budget ? pick([`${peso(f.budget.remainingCents)} still left! You’re literally thriving.`, 'Budget looking cute today ✨'], seed) : `${peso(f.totalCents)} this month and you’re still serving.`;
+      case 'empty': return pick(['New month, new us!! Let’s gooo', 'Fresh start bestie, we are SO ready.'], seed);
+      case 'over': return f.over[0] ? pick([`Okay bestie, ${f.over[0].label} is ${peso(f.over[0].overCents)} over. Not a slay. Comeback arc starts NOW`, `${f.over[0].label} went over but I still believe in you!! Reset time.`], seed) : 'We went over a lil. Villain era is over, savings era begins!';
+      case 'jump': return pick([`Spending’s up ${f.changePercent}%… babe, we talked about this`, `${f.changePercent}% more than last month?? Let’s be so for real.`], seed);
+      case 'near': return pick([`${f.near[0].label} is at ${f.near[0].usedPercent}%! Hold the line queen`], seed);
+      case 'improving': return pick([`${Math.abs(f.changePercent ?? 0)}% less than last month?!? ICONIC. Obsessed.`, 'Spending LESS than last month. Main character energy'], seed);
+      default: return f.budget ? pick([`${peso(f.budget.remainingCents)} still left! You’re literally thriving.`, 'Budget looking cute today'], seed) : `${peso(f.totalCents)} this month and you’re still serving.`;
     }
   },
   react: (r, seed) => r.pushedOver
-    ? pick([`NOOO ${r.categoryLabel} just went over 😭 It’s okay, we bounce back.`], seed)
-    : r.big ? pick([`${peso(r.amountCents)}?! Bestie… was it at least cute? 👀`, `Okay big spender at ${r.merchant}!! Let’s chill after this one.`], seed)
-    : r.small ? pick(['Tiny spend, huge discipline. Slay.', 'Smallest purchase ever, I’m so proud 🥹'], seed)
+    ? pick([`NOOO ${r.categoryLabel} just went over It’s okay, we bounce back.`], seed)
+    : r.big ? pick([`${peso(r.amountCents)}?! Bestie… was it at least cute?`, `Okay big spender at ${r.merchant}!! Let’s chill after this one.`], seed)
+    : r.small ? pick(['Tiny spend, huge discipline. Slay.', 'Smallest purchase ever, I’m so proud'], seed)
     : pick(['Logged!! You’re so organized it’s hot.', `${r.categoryLeftCents !== null ? `${peso(r.categoryLeftCents)} left in ${r.categoryLabel}, ` : ''}we’re doing amazing sweetie.`], seed),
-  answer: (text, seed) => `${pick(['Okay bestie!!', 'Omg ok so', 'Spill time:'], seed)} ${text} ${pick(['✨', 'You got this 💅', 'Love that for you.'], seed + 1)}`,
+  answer: (text, seed) => `${pick(['Okay bestie!!', 'Omg ok so', 'Spill time:'], seed)} ${text} ${pick(['Slay.', 'You got this.', 'Love that for you.'], seed + 1)}`,
   challenge: (expenses, today) => {
     const week = lastDays(today, 7);
     const wins = expenses.filter((item) => week.includes(item.transactionDate) && item.amountCents <= 20_000).length;

@@ -36,7 +36,16 @@ function faceTransform(mood: MascotMood | 'neutral') {
 /** `face` follows the pig's face; `free` stays put in the frame. */
 type Costume = { face: string; free?: string };
 
-/** Strict Mom: reading glasses, and a wooden sandok raised in the corner. */
+/** Curly bangs: a row of downward bumps from right to left along the hairline. */
+function bangs(fromX: number, toX: number, y: number, bumps: number) {
+  const step = (fromX - toX) / bumps;
+  return Array.from({ length: bumps }, (_, index) => `A${step / 2} ${step / 2.4} 0 0 1 ${fromX - step * (index + 1)} ${y}`).join(' ');
+}
+
+const HAIR = '#3B2418';
+const HAIR_LIGHT = '#6B4430';
+
+/** Strict Mom: a curly bob with a top bun, pearl earrings, reading glasses and a raised sandok. */
 const mom: Costume = {
   free: `
   <g transform="rotate(-20 140 420)">
@@ -45,6 +54,15 @@ const mom: Costume = {
     <ellipse cx="140" cy="262" rx="44" ry="62" fill="#B9773D" opacity="0.55"/>
   </g>`,
   face: `
+  <circle cx="640" cy="215" r="120" fill="${HAIR}" stroke="${INK}" stroke-width="22"/>
+  <path d="M585 170 Q640 130 700 175" fill="none" stroke="${HAIR_LIGHT}" stroke-width="18" stroke-linecap="round"/>
+  <circle cx="150" cy="760" r="80" fill="${HAIR}" stroke="${INK}" stroke-width="22"/>
+  <circle cx="1140" cy="760" r="80" fill="${HAIR}" stroke="${INK}" stroke-width="22"/>
+  <path d="M90 690 Q70 540 170 460 Q300 290 640 270 Q980 290 1110 470 Q1210 560 1195 690 ${bangs(1195, 90, 690, 9)} Z" fill="${HAIR}" stroke="${INK}" stroke-width="24" stroke-linejoin="round"/>
+  <path d="M300 470 Q380 400 470 420 M800 400 Q900 410 960 480 M560 360 Q640 330 720 355" fill="none" stroke="${HAIR_LIGHT}" stroke-width="20" stroke-linecap="round"/>
+  <ellipse cx="640" cy="318" rx="130" ry="42" fill="#E85D8A" stroke="${INK}" stroke-width="20"/>
+  <circle cx="215" cy="925" r="26" fill="#FFFFFF" stroke="${INK}" stroke-width="12"/>
+  <circle cx="1075" cy="925" r="26" fill="#FFFFFF" stroke="${INK}" stroke-width="12"/>
   <circle cx="465" cy="875" r="100" fill="#FFFFFF" fill-opacity="0.22" stroke="${INK}" stroke-width="22"/>
   <circle cx="822" cy="875" r="100" fill="#FFFFFF" fill-opacity="0.22" stroke="${INK}" stroke-width="22"/>
   <path d="M565 860 Q643 815 722 860" fill="none" stroke="${INK}" stroke-width="22" stroke-linecap="round"/>

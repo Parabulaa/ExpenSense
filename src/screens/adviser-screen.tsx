@@ -10,8 +10,9 @@ import { AppIcon, AppText, BackButton, Card, ProgressBar } from '@/components/co
 import { radii, spacing } from '@/constants/theme';
 import { useAdviser } from '@/features/adviser/AdviserProvider';
 import { INTENSITY_OPTIONS, withIntensity } from '@/features/adviser/intensity';
-import { ADVISER_PERSONAS, adviserSeed, isHarshSituation, type AdviserFacts, type AdviserPersona } from '@/features/adviser/personas';
+import { adviserSeed, isHarshSituation, type AdviserFacts, type AdviserPersona } from '@/features/adviser/personas';
 import { PersonaMascot } from '@/features/adviser/PersonaMascot';
+import { PersonaPicker } from '@/features/adviser/PersonaPicker';
 import { mascotMood } from '@/features/analytics/mascot-mood';
 import { AdviserChat } from '@/features/adviser/AdviserChat';
 import type { ChatContext } from '@/features/adviser/chatbot/engine';
@@ -36,7 +37,6 @@ function moodMeter(facts: AdviserFacts): { value: number; label: string } {
   }
 }
 
-const usageFace = (used: number) => (used > 100 ? '😤' : used >= 80 ? '😬' : used >= 50 ? '🙂' : '😊');
 
 export function AdviserScreen() {
   const colors = useColors();
@@ -87,8 +87,13 @@ export function AdviserScreen() {
         </FadeSlideIn>
 
         <FadeSlideIn index={1}>
+          <PersonaPicker value={persona.id} onChange={choose} />
+        </FadeSlideIn>
+
+        <FadeSlideIn index={2}>
           <Card style={s.hero}>
-            <View style={s.heroTop}>
+            {/* Cross-fades whenever a different adviser is picked. */}
+            <Animated.View key={persona.id} entering={FadeIn.duration(320)} style={s.heroTop}>
               <PressableScale accessibilityRole="button" accessibilityLabel={`${persona.name}. Tap for another line.`} onPress={() => { selectionFeedback(); setSeed((value) => value + 1); }}>
                 <Animated.View style={[s.mascotWrap, drift]}>
                   <PersonaMascot persona={persona.id} mood={mood} size={108} />
@@ -103,7 +108,7 @@ export function AdviserScreen() {
                   <AppText variant="small" style={s.meterLabel}>{meter.label}</AppText>
                 </View>
               </View>
-            </View>
+            </Animated.View>
             <Animated.View key={`${persona.id}-${seed}`} entering={FadeIn.duration(260)} style={s.speech}>
               <View style={s.speechTail} />
               <AppText variant="bodyMedium" style={s.speechText}>“{line}”</AppText>
@@ -129,7 +134,6 @@ export function AdviserScreen() {
                   <View style={s.catHead}>
                     <AppText variant="bodyMedium" style={{ flex: 1 }} numberOfLines={1}>{row.label}</AppText>
                     <AppText variant="small" style={[s.muted, row.used > 100 && { color: colors.danger }]}>{formatPeso(row.spent)} / {formatPeso(row.limit)} · {row.used}%</AppText>
-                    <AppText style={s.face}>{usageFace(row.used)}</AppText>
                   </View>
                   <ProgressBar value={row.used} height={8} />
                 </View>
@@ -151,7 +155,7 @@ export function AdviserScreen() {
                 {Array.from({ length: challenge.goal }, (_, index) => (
                   <View key={index} style={[s.dot, index < challenge.progress && s.dotDone]} />
                 ))}
-                <AppText variant="small" style={s.muted}>{challenge.progress >= challenge.goal ? 'Done! 🎉' : `${challenge.progress}/${challenge.goal}`}</AppText>
+                <AppText variant="small" style={s.muted}>{challenge.progress >= challenge.goal ? 'Done!' : `${challenge.progress}/${challenge.goal}`}</AppText>
               </View>
             </View>
           </Card>
@@ -163,29 +167,6 @@ export function AdviserScreen() {
           </Card>
         </FadeSlideIn>
 
-        <FadeSlideIn index={5}>
-          <AppText variant="h2" style={{ marginTop: spacing.sm }}>Choose your adviser</AppText>
-        </FadeSlideIn>
-        <View style={s.grid}>
-          {ADVISER_PERSONAS.map((item, index) => {
-            const selected = item.id === persona.id;
-            return (
-              <FadeSlideIn key={item.id} index={6 + index} style={s.gridItem}>
-                <PressableScale accessibilityRole="radio" accessibilityState={{ selected }} accessibilityLabel={`${item.name}. ${item.tagline}`} onPress={() => choose(item)} style={[s.personaCard, selected && s.personaSelected]}>
-                  <View style={s.personaHead}>
-                    <View style={[s.personaIcon, { backgroundColor: tint(item.accent) }]}>
-                      <PersonaMascot persona={item.id} mood="tip" size={68} />
-                    </View>
-                    {selected ? <AppIcon name="check-circle" size={20} color={colors.success} /> : null}
-                  </View>
-                  <AppText variant="h3">{item.name}</AppText>
-                  <AppText variant="small" style={s.muted}>{item.tagline}</AppText>
-                  <AppText variant="small" style={s.sample}>“{item.sample}”</AppText>
-                </PressableScale>
-              </FadeSlideIn>
-            );
-          })}
-        </View>
         <AppText variant="small" style={[s.muted, { textAlign: 'center' }]}>All advisers use the same numbers. Only the attitude changes.</AppText>
       </View>
     </Screen>
@@ -211,18 +192,10 @@ const useStyles = makeStyles((colors) => ({
   intensityHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   catRow: { gap: 6 },
   catHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  face: { fontSize: 18, lineHeight: 22 },
   challenge: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' },
   challengeIcon: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
   kicker: { color: colors.forest, fontFamily: 'JakartaBold', textTransform: 'uppercase', letterSpacing: 0.6 },
   dots: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   dot: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: colors.lightGreen },
   dotDone: { backgroundColor: colors.success, borderColor: colors.success },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
-  gridItem: { width: '47.5%', flexGrow: 1 },
-  personaCard: { gap: 4, padding: spacing.md, borderRadius: radii.lg, borderWidth: 2, borderColor: colors.line, backgroundColor: colors.surface, minHeight: 172 },
-  personaSelected: { borderColor: colors.success },
-  personaHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  personaIcon: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  sample: { color: colors.forest, fontStyle: 'italic', marginTop: 4 },
 }));
