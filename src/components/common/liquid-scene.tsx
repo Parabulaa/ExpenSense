@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, { FadeIn, Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
 import { assets, DARK_DECOR_OPACITY } from '@/constants/theme';
@@ -12,7 +12,11 @@ import { useAppTheme } from '@/features/settings/ThemeProvider';
 type Scene = 'splash' | 'onboarding';
 
 export function LiquidScene({ scene }: { scene: Scene }) {
-  const { width, height } = useWindowDimensions();
+  // Size from the scene's own frame, not the window: on the web the app sits in a
+  // phone-width column, and window-sized shapes came out stretched and cropped.
+  const windowSize = useWindowDimensions();
+  const [frame, setFrame] = useState<{ width: number; height: number } | null>(null);
+  const { width, height } = frame ?? windowSize;
   const reducedMotion = useReducedMotion();
   const { scheme } = useAppTheme();
   // The mascot wears the adviser the user picked, same as everywhere else in the app.
@@ -82,7 +86,7 @@ export function LiquidScene({ scene }: { scene: Scene }) {
   const mascotSize = scene === 'splash' ? (height < 700 ? 205 : 250) : scene === 'onboarding' ? 224 : 215;
 
   return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.clip]} onLayout={(event) => { const { width: w, height: h } = event.nativeEvent.layout; if (w && h && (w !== frame?.width || h !== frame?.height)) setFrame({ width: w, height: h }); }}>
       <View pointerEvents="none" style={decor}>
         {scene === 'splash' && <Animated.Image source={assets.shape3} resizeMode="contain" style={[styles.topSplash, { width: width * 0.8, height: height * 0.25 }, topAccent]} />}
         {scene === 'onboarding' && <Image source={assets.shape1} contentFit="contain" style={styles.topOnboarding} />}
@@ -104,6 +108,7 @@ export function LiquidScene({ scene }: { scene: Scene }) {
 }
 
 const styles = StyleSheet.create({
+  clip: { overflow: 'hidden' },
   fill: { width: '100%', height: '100%' },
   liquid: { position: 'absolute', left: '-35%' },
   mascot: { position: 'absolute', left: '50%' },
