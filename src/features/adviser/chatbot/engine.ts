@@ -53,12 +53,43 @@ const sum = (items: Expense[]) => items.reduce((total, item) => total + item.amo
 
 /* ---------- entities ---------- */
 
-/** "₱2,500", "2500", "1.5k" → cents. */
+/** Words that put a plain number right after them in price position: "for 2500", "costs 800". */
+const PRICE_LEAD = /\b(?:for|cost|costs|costing|price|priced|worth|at|around|about|pay|paying|spend|spending|is|be)\s*$/;
+
+/**
+ * "₱2,500", "2500 pesos", "1.5k", "for 800" → cents. Strict on purpose: a number
+ * next to a thing ("iPhone 17", "17 iphones", "buy 3 shirts") is a model or a
+ * quantity, never a price, so it returns null and the adviser asks for the price.
+ */
 export function extractAmount(text: string): number | null {
-  const match = text.toLowerCase().replace(/,/g, '').match(/(?:₱|php|p)?\s*(\d+(?:\.\d{1,2})?)\s*(k)?\b/);
-  if (!match) return null;
-  const value = Number(match[1]) * (match[2] ? 1000 : 1);
-  return value > 0 ? Math.round(value * 100) : null;
+  const lower = text.toLowerCase().trim();
+  const toCents = (raw: string, thousands = false) => {
+    const value = Number(raw.replace(/,/g, '')) * (thousands ? 1000 : 1);
+    return value > 0 && Number.isFinite(value) ? Math.round(value * 100) : null;
+  };
+  const number = String.raw`(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?`;
+  const joined = (m: RegExpMatchArray) => (m[2] ? `${m[1]}.${m[2]}` : m[1]);
+
+  // A bare reply like "2500" or "₱2,500?" — the whole message is the price.
+  const bare = lower.match(new RegExp(String.raw`^(?:₱|php|p)?\s*${number}\s*(k)?\s*(?:pesos?|php)?\s*[?.!]*$`));
+  if (bare) return toCents(joined(bare), Boolean(bare[3]));
+
+  // Explicit money: a peso sign/prefix, a "pesos"/"php" suffix, or a "k" suffix.
+  const prefixed = lower.match(new RegExp(String.raw`(?:₱|\bphp|(?:^|\s)p)\s*${number}\s*(k\b)?`));
+  if (prefixed) return toCents(joined(prefixed), Boolean(prefixed[3]));
+  const suffixed = lower.match(new RegExp(String.raw`(?:^|[^\w.])${number}\s*(k|pesos?|php)\b`));
+  if (suffixed) return toCents(joined(suffixed), suffixed[3] === 'k');
+  // Comma thousands ("2,500") only show up in prices.
+  const grouped = lower.match(/(?:^|[^\w.])(\d{1,3}(?:,\d{3})+)(?:\.(\d{1,2}))?(?![\w,])/);
+  if (grouped) return toCents(joined(grouped));
+
+  // A plain number only counts in price position ("for 800") with no item word after it.
+  for (const m of lower.matchAll(/(?:^|[^\w.])(\d+)(?:\.(\d{1,2}))?(?![\w.])\s*(\S*)/g)) {
+    const before = lower.slice(0, m.index! + m[0].indexOf(m[1]));
+    const after = m[3];
+    if (PRICE_LEAD.test(before) && !/^[a-z]/.test(after)) return toCents(joined(m));
+  }
+  return null;
 }
 
 /** Everyday words that point at a built-in category. */

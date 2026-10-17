@@ -61,7 +61,8 @@ function PersonaOption({ persona, selected, onPress }: { persona: AdviserPersona
   const ring = colors.success;
   const rowStyle = useAnimatedStyle(() => ({
     borderColor: interpolateColor(active.value, [0, 1], [line, ring]),
-    transform: [{ scale: 1 + active.value * 0.015 - pressed.value * 0.03 }],
+    // Only shrink on press: growing the selected card pushed its edge past the list and clipped it.
+    transform: [{ scale: 1 - pressed.value * 0.03 }],
   }));
   const mascotStyle = useAnimatedStyle(() => ({ transform: [{ scale: 0.92 + active.value * 0.1 }, { rotate: `${active.value * -5}deg` }] }));
   const checkStyle = useAnimatedStyle(() => ({ opacity: active.value, transform: [{ scale: 0.5 + active.value * 0.5 }] }));
