@@ -2,6 +2,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DEFAULT_ADVISER, isAdviserPersonaId, type AdviserIntensity, type AdviserPersonaId } from '@/features/adviser/personas';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 
+import { useAuth } from '@/features/auth/AuthProvider';
+import { supabase } from '@/lib/supabase';
+
 const STORAGE_KEY = 'expensense.settings.v1';
 
 export type BudgetAlertThreshold = 80 | 90 | 100;
@@ -70,10 +73,21 @@ function parseSettings(raw: string | null): AppSettings {
   }
 }
 
+type AdviserRow = { adviser_persona: string | null; adviser_intensity: string | null };
+
+/** The adviser fields stored on the profile, or nothing when the row has none yet. */
+function adviserFromRow(row: AdviserRow | null | undefined): Partial<AppSettings> {
+  if (!row) return {};
+  const patch: Partial<AppSettings> = {};
+  if (isAdviserPersonaId(row.adviser_persona)) patch.adviserPersona = row.adviser_persona;
+  if (row.adviser_intensity === 'low' || row.adviser_intensity === 'medium' || row.adviser_intensity === 'high') patch.adviserIntensity = row.adviser_intensity;
+  return patch;
+}
+
 /**
- * These are device-local display preferences, not account data — there is no
- * push infrastructure behind them yet, so they deliberately live in
- * AsyncStorage rather than in Supabase where they'd imply server behaviour.
+ * Display preferences live in AsyncStorage on each device. The adviser persona
+ * and intensity also follow the account: they are written to the profile and
+ * pushed back over Supabase Realtime, so web and phone stay in step live.
  */
 export function SettingsProvider({ children }: PropsWithChildren) {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -96,6 +110,34 @@ export function SettingsProvider({ children }: PropsWithChildren) {
     };
   }, []);
 
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+
+  // Pull the account's adviser choice, then keep listening for changes made on other devices.
+  useEffect(() => {
+    if (!userId || !ready) return;
+    let active = true;
+    const apply = (row: AdviserRow | null | undefined) => {
+      const patch = adviserFromRow(row);
+      if (!active || !Object.keys(patch).length) return;
+      setSettings((current) => {
+        const next = { ...current, ...patch };
+        void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => undefined);
+        return next;
+      });
+    };
+    void supabase.from('profiles').select('adviser_persona,adviser_intensity').eq('id', userId).maybeSingle()
+      .then(({ data }) => apply(data as AdviserRow | null), () => undefined);
+    const channel = supabase
+      .channel(`adviser-settings-${userId}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, (payload) => apply(payload.new as AdviserRow))
+      .subscribe();
+    return () => {
+      active = false;
+      void supabase.removeChannel(channel);
+    };
+  }, [ready, userId]);
+
   const updateSettings = useCallback(async (patch: Partial<AppSettings>) => {
     let next = DEFAULT_SETTINGS;
     setSettings((current) => {
@@ -105,11 +147,18 @@ export function SettingsProvider({ children }: PropsWithChildren) {
 
     try {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      if (userId && (patch.adviserPersona || patch.adviserIntensity)) {
+        const row: Partial<AdviserRow> = {};
+        if (patch.adviserPersona) row.adviser_persona = patch.adviserPersona;
+        if (patch.adviserIntensity) row.adviser_intensity = patch.adviserIntensity;
+        // Best effort: the choice is already saved on this device.
+        await supabase.from('profiles').update(row).eq('id', userId).then(() => undefined, () => undefined);
+      }
       return true;
     } catch {
       return false;
     }
-  }, []);
+  }, [userId]);
 
   const value = useMemo<SettingsContextValue>(() => ({ settings, ready, updateSettings }), [ready, settings, updateSettings]);
 

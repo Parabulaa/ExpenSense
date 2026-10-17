@@ -1,8 +1,9 @@
-import { View } from 'react-native';
+import { useState } from 'react';
+import { TextInput, View } from 'react-native';
 
 import { PressableScale } from '@/components/common/motion';
 import { AppIcon, AppText } from '@/components/common/ui';
-import { radii } from '@/constants/theme';
+import { radii, type } from '@/constants/theme';
 import { makeStyles, useColors } from '@/features/settings/ThemeProvider';
 import { selectionFeedback } from '@/lib/haptics';
 
@@ -11,8 +12,9 @@ function pad(value: number) {
 }
 
 /**
- * Hour / minute steppers with an AM–PM switch. Built from plain primitives so
- * it behaves the same on iOS, Android and web, and always yields `HH:MM`.
+ * Hour / minute steppers with an AM–PM switch. The hour and minute can also be
+ * typed for an exact time. Built from plain primitives so it behaves the same
+ * on iOS, Android and web, and always yields `HH:MM`.
  */
 export function TimeSelector({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const styles = useStyles();
@@ -28,13 +30,15 @@ export function TimeSelector({ value, onChange }: { value: string; onChange: (va
   };
   const stepHour = (delta: number) => set(safeHours + delta, safeMinutes);
   const stepMinute = (delta: number) => set(safeHours, safeMinutes + delta);
+  const typeHour = (hour12: number) => set((hour12 % 12) + (pm ? 12 : 0), safeMinutes);
+  const typeMinute = (minute: number) => set(safeHours, minute);
   const setMeridiem = (toPm: boolean) => { if (toPm !== pm) set(safeHours + (toPm ? 12 : -12), safeMinutes); };
 
   return (
     <View style={styles.row} accessibilityLabel={`Time ${hours12}:${pad(safeMinutes)} ${pm ? 'PM' : 'AM'}`}>
-      <Stepper label="Hour" display={String(hours12)} onDown={() => stepHour(-1)} onUp={() => stepHour(1)} />
+      <Stepper label="Hour" display={String(hours12)} min={1} max={12} onType={typeHour} onDown={() => stepHour(-1)} onUp={() => stepHour(1)} />
       <AppText variant="h2" style={styles.colon}>:</AppText>
-      <Stepper label="Minute" display={pad(safeMinutes)} onDown={() => stepMinute(-5)} onUp={() => stepMinute(5)} />
+      <Stepper label="Minute" display={pad(safeMinutes)} min={0} max={59} onType={typeMinute} onDown={() => stepMinute(-5)} onUp={() => stepMinute(5)} />
       <View style={styles.meridiem}>
         {(['AM', 'PM'] as const).map((option) => {
           const active = (option === 'PM') === pm;
@@ -49,15 +53,40 @@ export function TimeSelector({ value, onChange }: { value: string; onChange: (va
   );
 }
 
-function Stepper({ label, display, onDown, onUp }: { label: string; display: string; onDown: () => void; onUp: () => void }) {
+function Stepper({ label, display, min, max, onType, onDown, onUp }: { label: string; display: string; min: number; max: number; onType: (value: number) => void; onDown: () => void; onUp: () => void }) {
   const colors = useColors();
   const styles = useStyles();
+  const [text, setText] = useState(display);
+  const [editing, setEditing] = useState(false);
+  // Out-of-range or empty input snaps back to the last valid value.
+  const commit = (raw: string) => {
+    const value = Number(raw);
+    if (raw !== '' && Number.isInteger(value) && value >= min && value <= max) onType(value);
+    else setText(display);
+  };
   return (
     <View style={styles.stepper}>
       <PressableScale accessibilityRole="button" accessibilityLabel={`${label} up`} hitSlop={6} onPress={onUp} style={styles.stepButton}>
         <AppIcon name="chevron-up" size={20} color={colors.deepForest} />
       </PressableScale>
-      <AppText variant="h2" style={styles.value}>{display}</AppText>
+      <TextInput
+        accessibilityLabel={label}
+        value={editing ? text : display}
+        keyboardType="number-pad"
+        inputMode="numeric"
+        maxLength={2}
+        selectTextOnFocus
+        onFocus={() => { setText(display); setEditing(true); }}
+        onChangeText={(next) => {
+          const digits = next.replace(/D/g, '');
+          setText(digits);
+          // Commit as soon as two digits are in so the summary updates live.
+          if (digits.length === 2) commit(digits);
+        }}
+        onBlur={() => { setEditing(false); commit(text); }}
+        onSubmitEditing={() => commit(text)}
+        style={[styles.value, styles.input]}
+      />
       <PressableScale accessibilityRole="button" accessibilityLabel={`${label} down`} hitSlop={6} onPress={onDown} style={styles.stepButton}>
         <AppIcon name="chevron-down" size={20} color={colors.deepForest} />
       </PressableScale>
@@ -71,6 +100,7 @@ const useStyles = makeStyles((colors) => ({
   stepper: { alignItems: 'center', gap: 2 },
   stepButton: { width: 44, height: 32, borderRadius: radii.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.pale },
   value: { minWidth: 44, textAlign: 'center' },
+  input: { ...type.h2, color: colors.deepForest, minWidth: 56, paddingVertical: 4, paddingHorizontal: 6, borderRadius: radii.sm, borderWidth: 1, borderColor: colors.lightGreen, backgroundColor: colors.surface },
   meridiem: { marginLeft: 8, gap: 6 },
   meridiemOption: { minWidth: 52, minHeight: 36, borderRadius: radii.pill, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.lightGreen, backgroundColor: colors.surface },
   meridiemActive: { backgroundColor: colors.deepForest, borderColor: colors.deepForest },
