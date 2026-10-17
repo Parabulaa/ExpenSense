@@ -19,6 +19,7 @@ import type { ChatContext } from '@/features/adviser/chatbot/engine';
 import { useBudgets } from '@/features/budget/BudgetProvider';
 import { useCategories } from '@/features/categories/CategoriesProvider';
 import { useExpenses } from '@/features/expenses/ExpensesProvider';
+import { useFinance } from '@/features/finance/FinanceProvider';
 import { todayLocalDate } from '@/features/expenses/validation';
 import { useProfile } from '@/features/profile/ProfileProvider';
 import { makeStyles, useAdaptiveColor, useColors } from '@/features/settings/ThemeProvider';
@@ -45,6 +46,8 @@ export function AdviserScreen() {
   const month = todayLocalDate().slice(0, 7);
   const { persona, intensity, facts, current, previous, budget, setPersona, setIntensity } = useAdviser(month);
   const { expenses, loading, revalidate } = useExpenses();
+  const { wallets } = useFinance();
+  const walletBalanceCents = useMemo(() => (wallets.length ? wallets.reduce((sum, item) => sum + item.balanceCents, 0) : undefined), [wallets]);
   const { allCategories } = useCategories();
   const { revalidate: revalidateBudgets } = useBudgets();
   const { displayName } = useProfile();
@@ -66,7 +69,7 @@ export function AdviserScreen() {
     })
     .sort((a, b) => b.used - a.used), [allCategories, budget, current.expenses]);
 
-  const chatContext = useMemo<ChatContext>(() => ({ expenses, categories: allCategories, budget, current, previous, facts, today: todayLocalDate(), userName: displayName.trim().split(/\s+/)[0] || undefined }), [allCategories, budget, current, displayName, expenses, facts, previous]);
+  const chatContext = useMemo<ChatContext>(() => ({ expenses, categories: allCategories, budget, current, previous, facts, today: todayLocalDate(), userName: displayName.trim().split(/\s+/)[0] || undefined, walletBalanceCents }), [allCategories, budget, current, displayName, expenses, facts, previous, walletBalanceCents]);
 
   const choose = (next: AdviserPersona) => {
     if (next.id === persona.id) return;

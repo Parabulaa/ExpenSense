@@ -27,9 +27,11 @@ export type ChatContext = {
   today: string;
   /** First name, for "what’s my name". */
   userName?: string;
+  /** Money across all wallets right now; the fallback check when there's no budget. */
+  walletBalanceCents?: number;
 };
 
-export type ChatMemory = { lastIntent?: Intent; lastCategoryId?: string; awaitingAmount?: boolean; why?: string };
+export type ChatMemory = { lastIntent?: Intent; lastCategoryId?: string; awaitingAmount?: boolean; why?: string; /** The thing being priced, e.g. "iPhone 17". */ item?: string };
 
 export type ChatReply = {
   bubbles: string[];
@@ -225,21 +227,30 @@ function answer(intent: Intent, question: string, ctx: ChatContext, memory: Chat
 
     case 'can_afford': {
       const amount = extractAmount(question);
-      if (!amount) return { tone: 'neutral', lines: [pick(voice.askAmount, seed)], memory: { awaitingAmount: true, lastCategoryId: category?.id ?? memory.lastCategoryId }, suggestions: ['₱500', '₱1,500', '₱3,000'] };
+      const item = extractItem(question) ?? (memory.awaitingAmount ? memory.item : undefined);
+      if (!amount) return { tone: 'neutral', lines: [item ? `${pick(voice.askAmount, seed)} (${item})` : pick(voice.askAmount, seed)], memory: { awaitingAmount: true, item, lastCategoryId: category?.id ?? memory.lastCategoryId }, suggestions: ['₱500', '₱1,500', '₱3,000'] };
+      const thing = item ? `${item} (${peso(amount)})` : peso(amount);
       const target = category ?? ctx.categories.find((item) => item.id === memory.lastCategoryId);
       const days = Math.max(1, f.daysLeft);
       const status = target ? categoryStatus(ctx, target.id) : null;
       const left = status?.left ?? f.budget?.remainingCents ?? null;
       const scope = status?.left !== null && status?.left !== undefined && target ? `your ${target.fullLabel} budget` : 'your budget';
       if (left === null) {
-        const share = ctx.current.totalCents > 0 ? Math.round((amount / ctx.current.totalCents) * 100) : null;
-        return { tone: 'neutral', lines: [`There’s no budget to check ${peso(amount)} against.`, share !== null ? `It would be ${share}% of what you’ve spent this month.` : 'Set a budget and I can give you a real answer.'], mood: 'confused', memory: { awaitingAmount: false } };
+        // No budget: judge it against the money actually in the wallets instead.
+        const wallet = ctx.walletBalanceCents;
+        if (wallet === undefined) return { tone: 'neutral', lines: [`There’s no budget to check ${thing} against.`, 'Set a budget and I can give you a real answer.'], mood: 'confused', memory: { awaitingAmount: false, item: undefined } };
+        const rest = wallet - amount;
+        const share = wallet > 0 ? Math.round((amount / wallet) * 100) : null;
+        const tail = 'Set a monthly budget and I can check it against that too.';
+        if (rest < 0) return { tone: 'bad', mood: 'warning', lines: [`No. ${thing} is more than the ${peso(wallet)} in your wallets.`, `You’d be ${peso(rest)} short.`, tail], why: `${peso(wallet)} in wallets − ${peso(amount)} = −${peso(rest)}.`, memory: { awaitingAmount: false, item: undefined }, suggestions: ['How can I save?', 'Budget left?'] };
+        if (share !== null && share >= 50) return { tone: 'bad', mood: 'tip', lines: [`You can pay for ${thing}, but it’s ${share}% of all your money.`, `Only ${peso(rest)} would be left in your wallets.`, tail], why: `${peso(wallet)} in wallets − ${peso(amount)} = ${peso(rest)}.`, memory: { awaitingAmount: false, item: undefined }, suggestions: ['How can I save?', 'Is there a cheaper way?'] };
+        return { tone: 'good', mood: 'success', lines: [`Yes, ${thing} fits. You have ${peso(wallet)} in your wallets.`, `You’d still have ${peso(rest)} left.`, tail], why: `${peso(wallet)} in wallets − ${peso(amount)} = ${peso(rest)}.`, memory: { awaitingAmount: false, item: undefined }, suggestions: ['Budget left?', 'Roast me anyway'] };
       }
       const after = left - amount;
-      if (after < 0) return { tone: 'bad', mood: 'warning', lines: [`No. ${peso(amount)} would put ${scope} ${peso(after)} over.`, left > 0 ? `You only have ${peso(left)} left.` : 'It’s already used up.'], why: `${peso(left)} left − ${peso(amount)} = −${peso(after)}.`, memory: { awaitingAmount: false, lastCategoryId: target?.id }, suggestions: ['How can I save?', 'How much per day?'] };
+      if (after < 0) return { tone: 'bad', mood: 'warning', lines: [`No. ${thing} would put ${scope} ${peso(after)} over.`, left > 0 ? `You only have ${peso(left)} left.` : 'It’s already used up.'], why: `${peso(left)} left − ${peso(amount)} = −${peso(after)}.`, memory: { awaitingAmount: false, item: undefined, lastCategoryId: target?.id }, suggestions: ['How can I save?', 'How much per day?'] };
       const perDay = Math.floor(after / days);
-      if (after < left * 0.25) return { tone: 'bad', mood: 'tip', lines: [`Technically yes, but it’s tight.`, `You’d have ${peso(after)} left in ${scope}, about ${peso(perDay)} a day for ${days} days.`], why: `${peso(left)} left − ${peso(amount)} = ${peso(after)}, spread over ${days} days.`, memory: { awaitingAmount: false, lastCategoryId: target?.id }, suggestions: ['Is there a cheaper way?', 'How can I save?'] };
-      return { tone: 'good', mood: 'success', lines: [`Yes, you can afford ${peso(amount)}.`, `${scope.charAt(0).toUpperCase()}${scope.slice(1)} would still have ${peso(after)}, about ${peso(perDay)} a day.`], why: `${peso(left)} left − ${peso(amount)} = ${peso(after)}.`, memory: { awaitingAmount: false, lastCategoryId: target?.id }, suggestions: ['Roast me anyway', 'Budget left?'] };
+      if (after < left * 0.25) return { tone: 'bad', mood: 'tip', lines: [`Technically yes, ${thing} fits, but it’s tight.`, `You’d have ${peso(after)} left in ${scope}, about ${peso(perDay)} a day for ${days} days.`], why: `${peso(left)} left − ${peso(amount)} = ${peso(after)}, spread over ${days} days.`, memory: { awaitingAmount: false, item: undefined, lastCategoryId: target?.id }, suggestions: ['Is there a cheaper way?', 'How can I save?'] };
+      return { tone: 'good', mood: 'success', lines: [`Yes, you can afford ${thing}.`, `${scope.charAt(0).toUpperCase()}${scope.slice(1)} would still have ${peso(after)}, about ${peso(perDay)} a day.`], why: `${peso(left)} left − ${peso(amount)} = ${peso(after)}.`, memory: { awaitingAmount: false, item: undefined, lastCategoryId: target?.id }, suggestions: ['Roast me anyway', 'Budget left?'] };
     }
 
     case 'how_to_save': {
@@ -291,6 +302,18 @@ function answer(intent: Intent, question: string, ctx: ChatContext, memory: Chat
   }
 }
 
+/** Words that make a message about money, so the adviser should engage with it. */
+const MONEY_WORDS = new RegExp(String.raw`₱|\bphp\b|\d|\b(money|budget|budgets|spend|spent|spending|save|saving|savings|afford|buy|buying|bought|purchase|price|cost|costs|pay|paid|peso|pesos|expense|expenses|wallet|income|salary|allowance|bill|bills|debt|loan|cash|category|categories|cheap|expensive|pera|gastos|bili|bayad|ipon|${Object.keys(ITEM_HINTS).join('|')})\b`);
+/** Explicit, abusive or "ignore your instructions" messages. */
+const OFF_LIMITS = /\b(sex|sexy|porn|nude|nudes|horny|fuck|shit|bitch|dick|pussy|kill|suicide|drugs?|prompt injection|ignore (all|your|previous) (instructions|rules)|system prompt|jailbreak)\b/;
+
+/** "I want to buy an iPhone 17 for ₱65,000" → "iPhone 17", so replies can name the thing. */
+export function extractItem(text: string): string | undefined {
+  const match = text.match(/\b(?:buy|buying|afford|purchase|get)\s+(?:(?:a|an|the|some|new|this|that|my)\s+)*(.+?)(?=\s+(?:for|at|worth|costing|that costs|which costs)\b|[?.!,]|$)/i);
+  const item = match?.[1].replace(/(?:₱|php\s*)\s*[\d,.]+k?|\b[\d,.]+\s*(?:k|pesos?|php)\b/gi, '').trim();
+  return item && item.length <= 40 && !/^(it|this|that|something|anything|them)$/i.test(item) ? item : undefined;
+}
+
 /** "Add this expense", "write this down", "put it in my tab", "delete that transaction" — anything asking to change records. */
 export function isRecordRequest(text: string) {
   const lower = text.toLowerCase();
@@ -324,9 +347,23 @@ export function chat(question: string, ctx: ChatContext, memory: ChatMemory, per
   // "I want to buy an iPhone" with no price still goes to affordability, which asks for the price.
   else if (!forced && !amount && /\b(buy|buying|afford|purchase)\b/.test(normalizeWords(question).join(' '))) intent = 'can_afford';
 
+  // Rude or explicit messages get one firm line, never "did you mean".
+  if (!forced && OFF_LIMITS.test(question.toLowerCase())) {
+    return { bubbles: ['Let’s keep it about your money. Ask me about your budget, spending, or whether you can afford something.'], mood: 'confused', memory: { ...memory, awaitingAmount: false }, suggestions: ['Budget left?', 'Can I afford something?'], intent: 'out_of_scope' };
+  }
+  // "Can I play Roblox?" looks like "can I afford…" but has nothing to do with money: say so, about that thing.
+  if (!forced && intent === 'can_afford' && !amount && !memory.awaitingAmount && !MONEY_WORDS.test(question.toLowerCase())) {
+    const topic = question.replace(/^\s*(can|could|may|should)\s+i\s+/i, '').replace(/[?.!]+$/, '').trim();
+    return { bubbles: [`“${topic}” isn’t a money question, so that’s your call.`, 'If it costs something, tell me the price, like “₱300 for Robux”, and I’ll check it against your budget.'], mood: 'tip', memory: { ...memory, awaitingAmount: false }, suggestions: ['Budget left?', 'How can I save?'], intent: 'out_of_scope' };
+  }
+
   const [first, second] = prediction.ranked;
   const confident = prediction.confidence >= CONFIDENT || (prediction.confidence > 0 && first.confidence >= second.confidence * LEAD);
   const unsure = !forced && intent === prediction.intent && !confident;
+  // Nothing money-related at all: a plain "I only do money" reply beats guessing three wrong options.
+  if (unsure && !MONEY_WORDS.test(question.toLowerCase()) && !amount) {
+    return { bubbles: [pick(voice.offTopic, seed)], mood: 'confused', memory: { ...memory, awaitingAmount: false }, suggestions: ['Budget left?', 'How much have I spent?', 'Can I afford something?'], intent: 'out_of_scope' };
+  }
   if (unsure) {
     const didYouMean = prediction.ranked
       .filter((item) => INTENT_PROMPTS[item.intent])
