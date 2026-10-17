@@ -291,10 +291,28 @@ function answer(intent: Intent, question: string, ctx: ChatContext, memory: Chat
   }
 }
 
+/** "Add this expense", "write this down", "put it in my tab", "delete that transaction" — anything asking to change records. */
+export function isRecordRequest(text: string) {
+  const lower = text.toLowerCase();
+  if (/^\s*(how|what|when|where|which|why|did|do|does|is|are)\b/.test(lower)) return false;
+  if (/\b(write|jot|note|put|mark)\s+(it|this|that|these|them)?\s*down\b/.test(lower)) return true;
+  if (/\b(put|place)\b.*\b(tab|list|wallet|records?|ledger|app|expenses?|budget)\b/.test(lower)) return true;
+  const verb = String.raw`\b(add|log|record|save|enter|input|insert|create|delete|remove|edit|change|update)\s+`;
+  const noun = String.raw`(?:(?:this|that|it|my|a|an|the|new)\s+)*(?:\S+\s+){0,3}?(expenses?|transactions?|purchases?|income|cash-?ins?|entry|entries|receipts?)\b`;
+  if (new RegExp(verb + noun).test(lower)) return true;
+  // "log ₱200 lunch", "add a ₱500 …": a record verb followed by a price.
+  if (/\b(add|log|record|enter|input|insert)\s+(?:an?\s+)?(?:₱|php\s*\d|p\d)/.test(lower)) return true;
+  return /\b(add|log|record|enter|input|insert)\s+(this|that|it|these|them)\b/.test(lower);
+}
+
 /* ---------- conversation ---------- */
 
 export function chat(question: string, ctx: ChatContext, memory: ChatMemory, persona: AdviserPersonaId, seed: number, forced?: Intent, intensity: AdviserIntensity = 'medium'): ChatReply {
   const voice = VOICES[persona];
+  // The adviser only reads money; it never adds, edits or deletes records, so those requests are turned down.
+  if (!forced && isRecordRequest(question)) {
+    return { bubbles: ['I can’t add, change or delete anything. I only look at your numbers and give advice.', 'To log it, tap + and add it yourself. Then ask me if you can afford it or how your budget looks.'], mood: 'tip', memory: { ...memory, awaitingAmount: false }, suggestions: ['Budget left?', 'How can I save?'], intent: 'out_of_scope' };
+  }
   const prediction = classifier().predict(question);
   const amount = extractAmount(question);
   let intent: Intent = forced ?? prediction.intent;
@@ -303,6 +321,8 @@ export function chat(question: string, ctx: ChatContext, memory: ChatMemory, per
   if (!forced && memory.awaitingAmount && amount && (prediction.confidence < 0.6 || normalizeWords(question).length <= 3)) intent = 'can_afford';
   // "₱2000 shoes?" reads as an affordability question even if phrased loosely.
   else if (!forced && amount && prediction.intent !== 'can_afford' && /\b(buy|afford|get|worth)\b/.test(normalizeWords(question).join(' '))) intent = 'can_afford';
+  // "I want to buy an iPhone" with no price still goes to affordability, which asks for the price.
+  else if (!forced && !amount && /\b(buy|buying|afford|purchase)\b/.test(normalizeWords(question).join(' '))) intent = 'can_afford';
 
   const [first, second] = prediction.ranked;
   const confident = prediction.confidence >= CONFIDENT || (prediction.confidence > 0 && first.confidence >= second.confidence * LEAD);
