@@ -1,8 +1,12 @@
 import { Image } from 'expo-image';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
+import Animated, { FadeIn, Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
 import { assets, DARK_DECOR_OPACITY } from '@/constants/theme';
+import { SvgXml } from 'react-native-svg';
+
+import { costumeXml } from '@/features/adviser/costumes';
+import { useSettings } from '@/features/settings/SettingsProvider';
 import { useAppTheme } from '@/features/settings/ThemeProvider';
 
 type Scene = 'splash' | 'onboarding';
@@ -11,6 +15,9 @@ export function LiquidScene({ scene }: { scene: Scene }) {
   const { width, height } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
   const { scheme } = useAppTheme();
+  // The mascot wears the adviser the user picked, same as everywhere else in the app.
+  const { settings, ready } = useSettings();
+  const costume = useMemo(() => (ready ? costumeXml(settings.adviserPersona, 'neutral') : null), [ready, settings.adviserPersona]);
   // Shapes only; the mascot keeps full strength.
   const decor = [StyleSheet.absoluteFill, scheme === 'dark' && { opacity: DARK_DECOR_OPACITY }];
 
@@ -86,6 +93,7 @@ export function LiquidScene({ scene }: { scene: Scene }) {
       {/* Mascot: STATIC — no bobbing, no rotation */}
       <View style={[styles.mascot, { top: mascotTop, width: mascotSize * scale, height: mascotSize * scale, marginLeft: -(mascotSize * scale) / 2 }]}>
         <Image source={assets.mascotNeutral} contentFit="contain" style={styles.fill} />
+        {costume ? <Animated.View key={settings.adviserPersona} entering={FadeIn.duration(220)} style={StyleSheet.absoluteFill}><SvgXml xml={costume} width="100%" height="100%" /></Animated.View> : null}
       </View>
 
       <View pointerEvents="none" style={decor}>
