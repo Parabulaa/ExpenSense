@@ -97,7 +97,7 @@ export function AdviserChat({ persona, context, intensity, compact = false }: { 
         <PersonaMascot persona={persona.id} mood={mood} size={52} />
         <View style={{ flex: 1 }}>
           <AppText variant="h3">Chat with {persona.id === 'classic' ? 'your adviser' : persona.name}</AppText>
-          <AppText variant="small" style={s.status}>{typing ? 'typing…' : 'On-device · uses your real numbers'}</AppText>
+          {typing ? <AppText variant="small" style={s.status}>typing…</AppText> : null}
         </View>
       </View>}
 

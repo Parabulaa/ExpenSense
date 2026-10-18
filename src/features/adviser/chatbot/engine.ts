@@ -337,7 +337,7 @@ export function chat(question: string, ctx: ChatContext, memory: ChatMemory, per
     return { bubbles: ['I’m really sorry you’re feeling this way. You don’t have to go through it alone.', 'Please talk to someone now: call the NCMH crisis hotline at 1553, or reach someone you trust. If you’re in danger, call 911.'], mood: 'tip', memory: { awaitingAmount: false }, suggestions: [], intent: 'out_of_scope' };
   }
   if (safety === 'blocked') {
-    return { bubbles: ['I can’t help with that. I only give advice on safe, legal spending.', 'Ask me about your budget, your spending, or whether you can afford something else.'], mood: 'warning', memory: { awaitingAmount: false }, suggestions: ['Budget left?', 'How can I save?'], intent: 'out_of_scope' };
+    return { bubbles: [pick(voice.blocked, seed)], mood: 'warning', memory: { awaitingAmount: false }, suggestions: ['Budget left?', 'How can I save?'], intent: 'out_of_scope' };
   }
   // The adviser only reads money; it never adds, edits or deletes records, so those requests are turned down.
   if (!forced && isRecordRequest(question)) {

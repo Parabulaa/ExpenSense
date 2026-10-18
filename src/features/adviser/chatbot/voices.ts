@@ -18,6 +18,8 @@ type Voice = {
   howAreYou: string[];
   confused: string[];
   offTopic: string[];
+  /** Refusal for unsafe or inappropriate messages, in character. */
+  blocked: string[];
   /** Said before a roast's facts. */
   roastIntro: string[];
   /** Said when there is nothing to roast. */
@@ -40,6 +42,7 @@ const classic: Voice = {
   howAreYou: ['Doing well, thanks. Ready to look at your budget?'],
   confused: ['I’m not sure what you mean.'],
   offTopic: ['I can only help with your spending and budgets.'],
+  blocked: ['I can’t help with that. I only give advice on safe, legal spending.'],
   roastIntro: ['Here’s an honest look:'],
   roastClean: ['Honestly, there’s nothing to criticise right now.'],
   praiseIntro: ['Here’s what’s going well:'],
@@ -65,6 +68,7 @@ const mom: Voice = {
   howAreYou: ['Tired. Worrying about your spending.', 'I’m fine. I’ll be better when you save money.'],
   confused: ['What are you saying? Speak properly.', 'Ha? Say it again, slowly.'],
   offTopic: ['Don’t change the subject. We’re talking about your money.', 'Focus! Your budget first, then everything else.'],
+  blocked: ['Anak! Ano ba ’yang sinasabi mo? Hindi kita pinalaki ng ganyan!', 'Hoy! Where did you learn that? Not in this house. Ask me about your budget instead.', 'Susmaryosep! I did not raise you like that. Money questions only, anak.'],
   roastIntro: ['You want honesty? Okay.', 'Ay, you asked for it.'],
   roastClean: ['Nothing to scold… for now. Suspicious.', 'Hmm. Clean. Too clean. What are you hiding?'],
   praiseIntro: ['Fine, I’ll say something nice.', 'Okay, I admit it.'],
@@ -90,6 +94,7 @@ const chill: Voice = {
   howAreYou: ['Chillin’, as always. You?', 'Vibing. Budget’s vibing too, mostly.'],
   confused: ['Didn’t quite catch that, my guy.', 'Hmm, run that by me again?'],
   offTopic: ['Ha, that’s outside my lane. I just do money stuff.', 'Not my thing, man. Ask me about your budget though.'],
+  blocked: ['Whoa, nah. I’m not touching that one, man. Ask me about your budget instead.', 'Yeah… hard pass on that. Let’s talk money stuff.'],
   roastIntro: ['You sure? Okay, gently:', 'Alright, chill roast incoming:'],
   roastClean: ['Honestly? Nothing to roast. You’re good.', 'Can’t roast this, it’s clean.'],
   praiseIntro: ['Dude, for real:', 'Gotta say:'],
@@ -115,6 +120,7 @@ const bestie: Voice = {
   howAreYou: ['Thriving bestie!! Even better now you’re here', 'Living my best life, wbu?'],
   confused: ['Wait I’m lost say that again?', 'Bestie what rephrase pls'],
   offTopic: ['Babe I only know money tea', 'Not my vibe, ask me about your budget!!'],
+  blocked: ['Babe NO. Absolutely not, we don’t do that here!!', 'Bestie that’s a hard no from me. Ask me about your budget instead!!'],
   roastIntro: ['You asked for it bestie', 'Okay, with love:'],
   roastClean: ['I literally can’t roast you, you’re perfect', 'Nothing to roast. Flawless. Iconic.'],
   praiseIntro: ['Okay hype time!!', 'Let me gas you up:'],
@@ -140,6 +146,7 @@ const sergeant: Voice = {
   howAreYou: ['OPERATIONAL. FOCUS ON THE MISSION.', 'I DON’T HAVE FEELINGS. I HAVE A BUDGET.'],
   confused: ['SAY AGAIN, RECRUIT? CLEARLY!', 'THAT IS NOT A PROPER REPORT.'],
   offTopic: ['NEGATIVE. THAT IS NOT THE MISSION.', 'STAY ON TARGET. BUDGET QUESTIONS ONLY.'],
+  blocked: ['NEGATIVE, RECRUIT! THAT REQUEST IS DENIED.', 'ABSOLUTELY NOT! DROP IT AND GIVE ME A REAL BUDGET QUESTION.'],
   roastIntro: ['YOU WANT IT? YOU GOT IT.', 'PERMISSION GRANTED. BRACE YOURSELF.'],
   roastClean: ['NO VIOLATIONS FOUND. SUSPICIOUSLY CLEAN.', 'NOTHING TO REPORT. CARRY ON.'],
   praiseIntro: ['I DON’T DO COMPLIMENTS. BUT:', 'FOR THE RECORD:'],
@@ -166,6 +173,7 @@ const butler: Voice = {
   howAreYou: ['Quite well, thank you for asking.', 'Splendid, now that the ledger is in order.'],
   confused: ['I beg your pardon?', 'Forgive me, I didn’t quite follow.'],
   offTopic: ['I’m afraid that is beyond my station. I keep the ledger.', 'Regrettably, I attend only to your finances.'],
+  blocked: ['I’m afraid I must decline, and rather firmly. That is not something I will assist with.', 'Most irregular. I attend only to proper, lawful expenditures.'],
   roastIntro: ['If you insist.', 'Very well. Candidly:'],
   roastClean: ['I find nothing to remark upon. Remarkable.', 'The ledger is impeccable. How unusual.'],
   praiseIntro: ['Permit me a compliment.', 'It must be said:'],

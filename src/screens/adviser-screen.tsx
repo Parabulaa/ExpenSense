@@ -173,7 +173,6 @@ export function AdviserScreen() {
           </Card>
         </FadeSlideIn>
 
-        <AppText variant="small" style={[s.muted, { textAlign: 'center' }]}>All advisers use the same numbers. Only the attitude changes.</AppText>
       </View>
       <PersonaPickerSheet visible={pickerOpen} value={persona.id} onChange={choose} onClose={() => setPickerOpen(false)} />
     </Screen>
