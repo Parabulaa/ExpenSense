@@ -8,7 +8,7 @@ import { formatPeso, percentOf } from '@/lib/format';
  * Financial adviser personalities. Every persona reads the same computed facts
  * and only changes the wording, so a joke can never get the numbers wrong.
  */
-export type AdviserPersonaId = 'classic' | 'mom' | 'chill' | 'bestie' | 'sergeant' | 'butler';
+export type AdviserPersonaId = 'classic' | 'mom' | 'chill' | 'bestie' | 'sergeant' | 'butler' | 'sensei';
 
 export type { AdviserIntensity } from '@/features/adviser/intensity';
 
@@ -40,7 +40,7 @@ export type ReactionFacts = {
 
 export type AdviserChallenge = { title: string; detail: string; icon: AdviserIcon; progress: number; goal: number };
 
-type AdviserIcon = 'leaf' | 'pot-steam' | 'sunglasses' | 'party-popper' | 'whistle' | 'bow-tie' | 'calendar-check' | 'silverware-fork-knife' | 'notebook-check-outline' | 'star-shooting-outline' | 'shield-check-outline' | 'diamond-stone';
+type AdviserIcon = 'leaf' | 'pot-steam' | 'sunglasses' | 'party-popper' | 'whistle' | 'bow-tie' | 'calendar-check' | 'silverware-fork-knife' | 'notebook-check-outline' | 'star-shooting-outline' | 'shield-check-outline' | 'diamond-stone' | 'yin-yang' | 'meditation';
 
 export type AdviserPersona = {
   id: AdviserPersonaId;
@@ -310,13 +310,42 @@ const butler: AdviserPersona = {
   },
 };
 
+const sensei: AdviserPersona = {
+  id: 'sensei',
+  name: 'Wise Sensei',
+  tagline: 'Calm words. Deep pockets.',
+  icon: 'yin-yang',
+  accent: '#F3E9CF',
+  sample: 'The river that spends all its water reaches no sea.',
+  say: (f, seed) => {
+    switch (f.situation) {
+      case 'empty': return 'An empty ledger is like a still pond. Let us keep it calm.';
+      case 'over': return f.over[0] ? pick([`${f.over[0].label} has flowed ${peso(f.over[0].overCents)} past its banks. Patience, student.`, `The ${f.over[0].label} bowl overflows by ${peso(f.over[0].overCents)}. A full cup holds nothing more.`], seed) : 'The budget has been crossed. Every master has fallen before.';
+      case 'jump': return `Spending rose ${f.changePercent}% on last month. The wind grows strong; bend, do not break.`;
+      case 'near': return `${f.near[0].label} is at ${f.near[0].usedPercent}%. The wise one stops before the edge.`;
+      case 'improving': return `Spending fell ${Math.abs(f.changePercent ?? 0)}%. The bamboo grows quietly, then all at once.`;
+      default: return f.budget ? `${peso(f.budget.remainingCents)} remains for ${f.daysLeft} days. Walk the path one step at a time.` : `${peso(f.totalCents)} spent this month. Awareness is the first lesson.`;
+    }
+  },
+  react: (r, seed) => r.pushedOver
+    ? `${r.categoryLabel} has crossed its limit. Breathe, and learn from it.`
+    : r.big ? pick([`${peso(r.amountCents)} at ${r.merchant}. Was it a need, or a want, student?`, `${peso(r.amountCents)}. A heavy stone for a small pocket.`], seed)
+    : pick(['Noted. Small steps make long journeys.', `Good. ${r.categoryLeftCents !== null ? `${peso(r.categoryLeftCents)} remains for ${r.categoryLabel}.` : ''}`.trim()], seed),
+  answer: (text, seed) => `${pick(['Listen, student.', 'Hmm.', 'Sit. Hear this.'], seed)} ${text} ${pick(['Reflect on it.', 'Such is the way.', 'Patience brings plenty.'], seed + 1)}`,
+  challenge: (expenses, today) => {
+    const days = lastDays(today, 7);
+    const calm = days.filter((day) => !expenses.some((item) => item.transactionDate === day)).length;
+    return { title: 'Two quiet days', detail: 'Spend nothing on two of the last seven days. Stillness is strength.', icon: 'meditation', goal: 2, progress: Math.min(2, calm) };
+  },
+};
+
 function topCategoryId(expenses: Expense[], today: string) {
   const totals = new Map<string, number>();
   expenses.filter((item) => item.transactionDate.startsWith(today.slice(0, 7))).forEach((item) => totals.set(item.categoryId, (totals.get(item.categoryId) ?? 0) + item.amountCents));
   return [...totals.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
 }
 
-export const ADVISER_PERSONAS: AdviserPersona[] = [classic, mom, chill, bestie, sergeant, butler];
+export const ADVISER_PERSONAS: AdviserPersona[] = [classic, mom, chill, bestie, sergeant, butler, sensei];
 export const DEFAULT_ADVISER: AdviserPersonaId = 'classic';
 export const isAdviserPersonaId = (value: unknown): value is AdviserPersonaId => ADVISER_PERSONAS.some((persona) => persona.id === value);
 export const adviserPersona = (id: AdviserPersonaId) => ADVISER_PERSONAS.find((persona) => persona.id === id) ?? classic;

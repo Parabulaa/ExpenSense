@@ -21,6 +21,7 @@ export const GENTLE: Record<AdviserPersonaId, string[]> = {
   bestie: ['Still proud of you though', 'We’ll bounce back, promise.'],
   sergeant: ['Regroup and try again, recruit.', 'Mistakes happen. Learn and move on.'],
   butler: ['Nothing that cannot be remedied.', 'A minor setback, easily corrected.'],
+  sensei: ['Even the master stumbles. Rise again.', 'Tomorrow is a new lesson.'],
 };
 
 /** An extra jab on bad news at High. */
@@ -31,6 +32,7 @@ export const SAVAGE: Record<AdviserPersonaId, string[]> = {
   bestie: ['Bestie this is NOT the plot', 'I’m screaming. Crying. Throwing up.', 'Your wallet just filed a complaint.'],
   sergeant: ['YOU CALL THAT DISCIPLINE?!', 'I’VE SEEN BETTER BUDGETS FROM A GOLDFISH!', 'GIVE ME FIFTY NO-SPEND DAYS!'],
   butler: ['I’ve taken the liberty of hiding your credit card.', 'Even the silverware is disappointed.', 'Shall I sell the second car, then?'],
+  sensei: ['Your wallet meditates. It is empty.', 'Even my beard is disappointed.', 'You must train harder, student.'],
 };
 
 const pick = (items: string[], seed: number) => items[Math.abs(seed) % items.length];

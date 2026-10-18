@@ -19,7 +19,7 @@ type Message = { id: number; role: 'user' | 'adviser'; text: string };
 type Choice = { label: string; intent?: Intent };
 
 /** How long each persona "types" before a bubble appears. */
-const TYPING_MS: Record<AdviserPersona['id'], number> = { classic: 450, mom: 750, chill: 1000, bestie: 500, sergeant: 300, butler: 1200 };
+const TYPING_MS: Record<AdviserPersona['id'], number> = { classic: 450, mom: 750, chill: 1000, bestie: 500, sergeant: 300, butler: 1200, sensei: 1100 };
 
 /** `compact` drops the header and scrolls the thread, for the Home sheet. */
 export function AdviserChat({ persona, context, intensity, compact = false }: { persona: AdviserPersona; context: ChatContext; intensity: AdviserIntensity; compact?: boolean }) {

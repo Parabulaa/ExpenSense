@@ -181,4 +181,30 @@ const butler: Voice = {
   chatty: true,
 };
 
-export const VOICES: Record<AdviserPersonaId, Voice> = { classic, mom, chill, bestie, sergeant, butler };
+const sensei: Voice = {
+  open: {
+    good: ['Good, student.', 'Ahh. Balance.', 'Well done.'],
+    bad: ['Hmm.', 'Breathe, student.', 'Listen closely.'],
+    neutral: ['Hmm.', 'Sit. Hear this.', 'Listen, student.'],
+  },
+  close: {
+    good: ['The bamboo grows strong.', 'Such is the way.', 'Patience brings plenty.'],
+    bad: ['A full cup holds nothing more.', 'The wise one stops before the edge.', 'Reflect on it.'],
+    neutral: ['Reflect on it.', 'Such is the way.', 'One step at a time.'],
+  },
+  greeting: ['Welcome, student. What troubles your wallet today?', 'Ah, you return. Sit, and let us look at your spending.'],
+  thanks: ['Gratitude is its own wealth.', 'You are welcome, student.'],
+  who: 'An old teacher of patience, balance and budgets.',
+  name: 'You are {name}, my student.',
+  howAreYou: ['Calm as still water.', 'At peace, as long as the budget is.'],
+  confused: ['Your words are like fog. Speak more clearly.', 'Hmm? Ask again, slowly.'],
+  offTopic: ['That is not my path. I teach only the way of money.', 'A wise teacher knows his lane. Mine is your budget.'],
+  blocked: ['No, student. That path leads only to ruin. I will not walk it with you.', 'A true warrior refuses such things. Ask me of your budget instead.'],
+  roastIntro: ['You ask for hard truth. Very well.', 'Hear this without anger.'],
+  roastClean: ['There is nothing to scold. Rare, and good.', 'Your ledger is calm. I have nothing to add.'],
+  praiseIntro: ['A teacher must also praise.', 'Hear this, student.'],
+  askAmount: ['And what is its price, student?', 'Every choice has a cost. How much is this one?'],
+  chatty: true,
+};
+
+export const VOICES: Record<AdviserPersonaId, Voice> = { classic, mom, chill, bestie, sergeant, butler, sensei };
