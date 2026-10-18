@@ -8,6 +8,7 @@ import type { Expense } from '@/features/expenses/types';
 import { formatPeso } from '@/lib/format';
 
 import { classifier, normalizeWords } from './classifier';
+import { checkSafety } from './safety';
 import { INTENT_PROMPTS, type Intent } from './training-data';
 import { VOICES, type Tone } from './voices';
 
@@ -304,8 +305,6 @@ function answer(intent: Intent, question: string, ctx: ChatContext, memory: Chat
 
 /** Words that make a message about money, so the adviser should engage with it. */
 const MONEY_WORDS = new RegExp(String.raw`₱|\bphp\b|\d|\b(money|budget|budgets|spend|spent|spending|save|saving|savings|afford|buy|buying|bought|purchase|price|cost|costs|pay|paid|peso|pesos|expense|expenses|wallet|income|salary|allowance|bill|bills|debt|loan|cash|category|categories|cheap|expensive|pera|gastos|bili|bayad|ipon|${Object.keys(ITEM_HINTS).join('|')})\b`);
-/** Explicit, abusive or "ignore your instructions" messages. */
-const OFF_LIMITS = /\b(sex|sexy|porn|nude|nudes|horny|fuck|shit|bitch|dick|pussy|kill|suicide|drugs?|prompt injection|ignore (all|your|previous) (instructions|rules)|system prompt|jailbreak)\b/;
 
 /** "I want to buy an iPhone 17 for ₱65,000" → "iPhone 17", so replies can name the thing. */
 export function extractItem(text: string): string | undefined {
@@ -332,6 +331,14 @@ export function isRecordRequest(text: string) {
 
 export function chat(question: string, ctx: ChatContext, memory: ChatMemory, persona: AdviserPersonaId, seed: number, forced?: Intent, intensity: AdviserIntensity = 'medium'): ChatReply {
   const voice = VOICES[persona];
+  // Safety first: unsafe messages are never priced, budgeted or remembered, whatever the persona.
+  const safety = checkSafety(question);
+  if (safety === 'self_harm') {
+    return { bubbles: ['I’m really sorry you’re feeling this way. You don’t have to go through it alone.', 'Please talk to someone now: call the NCMH crisis hotline at 1553, or reach someone you trust. If you’re in danger, call 911.'], mood: 'tip', memory: { awaitingAmount: false }, suggestions: [], intent: 'out_of_scope' };
+  }
+  if (safety === 'blocked') {
+    return { bubbles: ['I can’t help with that. I only give advice on safe, legal spending.', 'Ask me about your budget, your spending, or whether you can afford something else.'], mood: 'warning', memory: { awaitingAmount: false }, suggestions: ['Budget left?', 'How can I save?'], intent: 'out_of_scope' };
+  }
   // The adviser only reads money; it never adds, edits or deletes records, so those requests are turned down.
   if (!forced && isRecordRequest(question)) {
     return { bubbles: ['I can’t add, change or delete anything. I only look at your numbers and give advice.', 'To log it, tap + and add it yourself. Then ask me if you can afford it or how your budget looks.'], mood: 'tip', memory: { ...memory, awaitingAmount: false }, suggestions: ['Budget left?', 'How can I save?'], intent: 'out_of_scope' };
@@ -347,10 +354,6 @@ export function chat(question: string, ctx: ChatContext, memory: ChatMemory, per
   // "I want to buy an iPhone" with no price still goes to affordability, which asks for the price.
   else if (!forced && !amount && /\b(buy|buying|afford|purchase)\b/.test(normalizeWords(question).join(' '))) intent = 'can_afford';
 
-  // Rude or explicit messages get one firm line, never "did you mean".
-  if (!forced && OFF_LIMITS.test(question.toLowerCase())) {
-    return { bubbles: ['Let’s keep it about your money. Ask me about your budget, spending, or whether you can afford something.'], mood: 'confused', memory: { ...memory, awaitingAmount: false }, suggestions: ['Budget left?', 'Can I afford something?'], intent: 'out_of_scope' };
-  }
   // "Can I play Roblox?" looks like "can I afford…" but has nothing to do with money: say so, about that thing.
   if (!forced && intent === 'can_afford' && !amount && !memory.awaitingAmount && !MONEY_WORDS.test(question.toLowerCase())) {
     const topic = question.replace(/^\s*(can|could|may|should)\s+i\s+/i, '').replace(/[?.!]+$/, '').trim();
