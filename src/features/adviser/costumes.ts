@@ -33,8 +33,11 @@ function faceTransform(mood: MascotMood | 'neutral') {
   return `translate(${r((cx + dx) / 2)} ${r((cy + dy) / 2)}) rotate(${r(angle)}) scale(${r(scale)}) translate(${-(ax + bx) / 2} ${-(ay + by) / 2})`;
 }
 
-/** `face` follows the pig's face; `free` stays put in the frame. */
-type Costume = { face: string; free?: string };
+/**
+ * `face` follows the pig's face; `free` stays put in the frame. `bare` draws
+ * the costume on the capless art, for hats and hair that replace the cap.
+ */
+type Costume = { face: string; free?: string; bare?: boolean };
 
 /** Curly bangs: a row of downward bumps from right to left along the hairline. */
 function bangs(fromX: number, toX: number, y: number, bumps: number) {
@@ -47,6 +50,7 @@ const HAIR_LIGHT = '#6B4430';
 
 /** Strict Mom: a curly bob with a top bun, pearl earrings, reading glasses and a raised sandok. */
 const mom: Costume = {
+  bare: true,
   free: `
   <g transform="rotate(-20 140 420)">
     <rect x="118" y="330" width="44" height="300" rx="22" fill="#B9773D" stroke="${INK}" stroke-width="20"/>
@@ -99,6 +103,7 @@ const bestie: Costume = {
 
 /** Drill Sergeant: a combat helmet and furious brows. */
 const sergeant: Costume = {
+  bare: true,
   face: `
   <path d="M70 725 Q60 610 160 585 Q225 225 640 205 Q1075 225 1150 590 Q1240 610 1230 725 Z" fill="#5E6B3B" stroke="${INK}" stroke-width="24" stroke-linejoin="round"/>
   <path d="M160 655 Q640 600 1150 655" fill="none" stroke="${INK}" stroke-width="18"/>
@@ -107,22 +112,19 @@ const sergeant: Costume = {
   <path d="M385 770 L545 815 M905 770 L745 815" stroke="${INK}" stroke-width="34" stroke-linecap="round"/>`,
 };
 
-/** The Butler: slicked, side-parted hair over the cap, a top hat and a gold monocle. */
+/** The Butler: neatly slicked, side-parted hair, a top hat and a gold monocle. */
 const BUTLER_HAIR = '#2A2A30';
-/** The pig's own skin tone, to paint a forehead where the cap was. */
-const SKIN = '#FCF2DD';
 const butler: Costume = {
+  bare: true,
   face: `
-  <path d="M228 705 Q225 500 640 480 Q1155 500 1152 695 Q640 775 228 705 Z" fill="${SKIN}"/>
-  <path d="M70 725 Q50 560 160 465 Q300 280 640 262 Q985 280 1115 465 Q1225 560 1210 715 Q1165 705 1150 650 Q1120 560 1000 545 Q820 520 640 540 Q470 555 330 600 Q250 635 238 705 Q170 700 70 725 Z" fill="${BUTLER_HAIR}" stroke="${INK}" stroke-width="24" stroke-linejoin="round"/>
-  <path d="M470 575 Q520 430 680 380 Q850 340 1010 420" fill="none" stroke="${INK}" stroke-width="14" stroke-linecap="round"/>
-  <path d="M560 480 Q700 410 920 450 M260 560 Q330 450 450 410" fill="none" stroke="#6A6A78" stroke-width="14" stroke-linecap="round"/>
-  <path d="M700 330 Q820 320 930 360" fill="none" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="20" stroke-linecap="round"/>
-  <g transform="rotate(-8 720 300)">
-    <rect x="560" y="0" width="320" height="300" rx="18" fill="#1E1E24" stroke="${INK}" stroke-width="22"/>
-    <rect x="560" y="225" width="320" height="58" fill="#8E2B2B" stroke="${INK}" stroke-width="18"/>
-    <ellipse cx="720" cy="310" rx="250" ry="48" fill="#1E1E24" stroke="${INK}" stroke-width="22"/>
-    <path d="M600 50 L600 200" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="22" stroke-linecap="round"/>
+  <path d="M200 725 Q188 600 300 555 Q450 512 640 508 Q840 512 990 555 Q1180 600 1180 722 Q1125 705 1105 665 Q1010 622 810 626 Q640 632 520 652 Q430 642 335 664 Q262 684 248 728 Z" fill="${BUTLER_HAIR}" stroke="${INK}" stroke-width="22" stroke-linejoin="round"/>
+  <path d="M500 650 Q560 560 720 540 Q880 530 1000 575" fill="none" stroke="${INK}" stroke-width="12" stroke-linecap="round"/>
+  <path d="M600 600 Q740 565 930 590 M300 640 Q360 580 450 565" fill="none" stroke="#6A6A78" stroke-width="12" stroke-linecap="round"/>
+  <g transform="rotate(-6 700 520)">
+    <rect x="545" y="240" width="310" height="290" rx="18" fill="#1E1E24" stroke="${INK}" stroke-width="22"/>
+    <rect x="545" y="455" width="310" height="56" fill="#8E2B2B" stroke="${INK}" stroke-width="18"/>
+    <ellipse cx="700" cy="535" rx="235" ry="42" fill="#1E1E24" stroke="${INK}" stroke-width="22"/>
+    <path d="M585 285 L585 420" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="22" stroke-linecap="round"/>
   </g>
   <circle cx="822" cy="875" r="108" fill="#FFFFFF" fill-opacity="0.18" stroke="#C9A227" stroke-width="20"/>
   <circle cx="822" cy="875" r="108" fill="none" stroke="${INK}" stroke-width="6"/>
@@ -133,6 +135,7 @@ const butler: Costume = {
 const STRAW = '#E2C47A';
 const BEARD = '#F4F1EA';
 const sensei: Costume = {
+  bare: true,
   face: `
   <path d="M640 1240 Q520 1150 505 1035 Q640 1075 775 1035 Q760 1150 640 1240 Z" fill="${BEARD}" stroke="${INK}" stroke-width="20" stroke-linejoin="round"/>
   <path d="M600 1080 Q620 1150 640 1200 M680 1080 Q660 1150 640 1200" fill="none" stroke="#D6D0C2" stroke-width="10" stroke-linecap="round"/>
@@ -150,6 +153,9 @@ const sensei: Costume = {
 };
 
 const COSTUMES: Record<AdviserPersonaId, Costume | null> = { classic: null, mom, chill, bestie, sergeant, butler, sensei };
+
+/** Whether the persona wears its costume on the capless art. */
+export const usesBareHead = (persona: AdviserPersonaId) => Boolean(COSTUMES[persona]?.bare);
 
 /** Full SVG for a persona's costume on a given expression, or null for none. */
 export function costumeXml(persona: AdviserPersonaId, mood: MascotMood | 'neutral' = 'neutral') {

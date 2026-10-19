@@ -33,3 +33,12 @@ export const mascotImage: Record<MascotMood, number> = {
   tip: assets.mascotTip,
   success: assets.mascotSuccess,
 };
+
+/** The capless art, under costumes that bring their own hat or hair. */
+export const bareMascotImage: Record<MascotMood, number> = {
+  scanning: assets.mascotScanningBare,
+  confused: assets.mascotConfusedBare,
+  warning: assets.mascotWarningBare,
+  tip: assets.mascotTipBare,
+  success: assets.mascotSuccessBare,
+};

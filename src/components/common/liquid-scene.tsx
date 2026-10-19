@@ -5,7 +5,7 @@ import Animated, { FadeIn, Easing, useAnimatedStyle, useReducedMotion, useShared
 import { assets, DARK_DECOR_OPACITY } from '@/constants/theme';
 import { SvgXml } from 'react-native-svg';
 
-import { costumeXml } from '@/features/adviser/costumes';
+import { costumeXml, usesBareHead } from '@/features/adviser/costumes';
 import { useSettings } from '@/features/settings/SettingsProvider';
 import { useAppTheme } from '@/features/settings/ThemeProvider';
 
@@ -96,7 +96,7 @@ export function LiquidScene({ scene }: { scene: Scene }) {
 
       {/* Mascot: STATIC — no bobbing, no rotation */}
       <View style={[styles.mascot, { top: mascotTop, width: mascotSize * scale, height: mascotSize * scale, marginLeft: -(mascotSize * scale) / 2 }]}>
-        <Image source={assets.mascotNeutral} contentFit="contain" style={styles.fill} />
+        <Image source={ready && usesBareHead(settings.adviserPersona) ? assets.mascotNeutralBare : assets.mascotNeutral} contentFit="contain" style={styles.fill} />
         {costume ? <Animated.View key={settings.adviserPersona} entering={FadeIn.duration(220)} style={StyleSheet.absoluteFill}><SvgXml xml={costume} width="100%" height="100%" /></Animated.View> : null}
       </View>
 

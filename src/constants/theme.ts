@@ -42,6 +42,10 @@ export const assets = {
   mascotNeutral: require('../../assets/Mascot/Mascot_Neutral.png'), mascotScanning: require('../../assets/Mascot/Mascot_Scanning.png'),
   mascotSuccess: require('../../assets/Mascot/Mascot_Success.png'), mascotConfused: require('../../assets/Mascot/Mascot_Confused.png'),
   mascotTip: require('../../assets/Mascot/Mascot_Tip.png'), mascotWarning: require('../../assets/Mascot/Mascot_Warning.png'),
+  // The same art without the green cap, for advisers whose hat or hair replaces it.
+  mascotNeutralBare: require('../../assets/Mascot/Mascot_Neutral_Bare.png'), mascotScanningBare: require('../../assets/Mascot/Mascot_Scanning_Bare.png'),
+  mascotSuccessBare: require('../../assets/Mascot/Mascot_Success_Bare.png'), mascotConfusedBare: require('../../assets/Mascot/Mascot_Confused_Bare.png'),
+  mascotTipBare: require('../../assets/Mascot/Mascot_Tip_Bare.png'), mascotWarningBare: require('../../assets/Mascot/Mascot_Warning_Bare.png'),
   shape1: require('../../assets/organic-shapes/Organic_Shape_01.png'), shape2: require('../../assets/organic-shapes/Organic_Shape_02.png'),
   shape3: require('../../assets/organic-shapes/Organic_Shape_03.png'), shape4: require('../../assets/organic-shapes/Organic_Shape_04.png'),
   shape5: require('../../assets/organic-shapes/Organic_Shape_05.png'), shape6: require('../../assets/organic-shapes/Organic_Shape_06.png'),
